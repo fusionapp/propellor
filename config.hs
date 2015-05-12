@@ -43,7 +43,7 @@ standardSystem hn suite arch =
   & Systemd.installed
   & Systemd.persistentJournal
   & Cron.runPropellor (Cron.Times "30 * * * *")
-  -- & Ssh.passwordAuthentication False
+  & Ssh.passwordAuthentication False
   & Ssh.randomHostKeys
   & Ssh.permitRootLogin True
   & Apt.installed ["sudo"]
