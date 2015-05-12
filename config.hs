@@ -45,11 +45,12 @@ standardSystem hn suite arch =
   & Cron.runPropellor (Cron.Times "30 * * * *")
   -- & Ssh.passwordAuthentication False
   & Ssh.randomHostKeys
-  & Ssh.permitRootLogin False
+  & Ssh.permitRootLogin True
   & Apt.installed ["sudo"]
   & propertyList "admin accounts" (map User.accountFor admins
                                    ++ map Sudo.enabledFor admins
                                    ++ map User.lockedPassword admins)
+  & adminKeys (User "root")
   & tristanKeys (User "tristan")
   where admins = map User ["tristan", "jj", "darren"]
 
@@ -58,3 +59,8 @@ tristanKeys user = propertyList "keys for tristan" (map (Ssh.authorizedKey user)
                  [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTItuXoGILFK8Y7+y07e5pomUwNfsvptD/jiep8MA8ChcVYZMe/Pl++eBXPz71fjGUWR8H86chPYa5omMLaaJQ0KNjmqzyp27GKVxrSYxt3pkv34xkxkN0HYoGRR6a7JiV2vjOI7Av71lh6WOMA315I+y7vpIenLU/kWiy/YkRO6fe7Bh9ZbMCspmREupsnHH8Zxu13xakQFZ2OzxhbDjWDHG42zZnbR3KCEVAE5/IM+RREZfFGiqTlbCEe2pCRKAntk2CS9E9f360KxMerRJAoQtHzuF1EZ+A1rn2lNLm9KW7n99EyuUt5W1E0dnB0Au7uYs7tUyAKjIZIg9OrHjR cardno:000603011845"
                  , "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOg4PwvtqWHhan0rGxKAQn+n1IIKJJ0JsTMFdZiTFeOj mithrandi@lorien"
                  ])
+
+adminKeys :: User -> Property NoInfo
+adminKeys user = propertyList "admin keys" . map ($ user) $
+                 [ tristanKeys
+                 ]
