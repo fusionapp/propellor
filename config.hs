@@ -47,9 +47,11 @@ standardSystem hn suite arch =
   & Ssh.randomHostKeys
   & Ssh.permitRootLogin True
   & Apt.installed ["sudo"]
-  & propertyList "admin accounts" (map User.accountFor admins
-                                   ++ map User.lockedPassword admins
-                                   ++ map Sudo.enabledFor admins)
+  & propertyList "admin accounts" (concatMap (`map` admins)
+                                   [ User.accountFor
+                                   , User.lockedPassword
+                                   , Sudo.enabledFor
+                                   ])
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
   where admins = map User ["tristan", "jj", "darren"]
