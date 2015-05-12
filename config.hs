@@ -38,7 +38,7 @@ standardSystem hn suite arch =
   & Hostname.searchDomain
   & Apt.stdSourcesList
   & Apt.unattendedUpgrades
-  & Apt.installed ["openssh-server", "openssh-client"]
+  & Apt.installed ["openssh-server", "openssh-client", "git"]
   & Apt.serviceInstalledRunning "ntp"
   & Systemd.installed
   & Systemd.persistentJournal
