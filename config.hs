@@ -38,7 +38,11 @@ standardSystem hn suite arch =
   & Hostname.searchDomain
   & Apt.stdSourcesList
   & Apt.unattendedUpgrades
-  & Apt.installed ["openssh-server", "openssh-client", "git"]
+  & Apt.installed [ "openssh-server"
+                  , "openssh-client"
+                  , "git"
+                  , "kexec-tools"
+                  ]
   & Apt.serviceInstalledRunning "ntp"
   & Systemd.installed
   & Systemd.persistentJournal
@@ -57,6 +61,11 @@ standardSystem hn suite arch =
     [ "net.core.default_qdisc=fq"
     , "net.ipv4.tcp_ecn=1"
     ]
+  -- Useful utilities
+  & Apt.installed [ "ethtool"
+                  , "htop"
+                  , "less"
+                  ]
   where admins = map User ["tristan", "jj", "darren"]
 
 tristanKeys :: User -> Property NoInfo
