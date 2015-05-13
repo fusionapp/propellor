@@ -53,6 +53,10 @@ standardSystem hn suite arch =
                                    ] <*> admins)
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
+  & File.hasContent "/etc/sysctl.d/local-net.conf"
+    [ "net.core.default_qdisc=fq"
+    , "net.ipv4.tcp_ecn=1"
+    ]
   where admins = map User ["tristan", "jj", "darren"]
 
 tristanKeys :: User -> Property NoInfo
