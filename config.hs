@@ -3,6 +3,7 @@
 
 import           Propellor
 import           Propellor.CmdLine
+import           System.Posix.Files
 --import Propellor.Property.Scheduled
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
@@ -29,6 +30,10 @@ scarlet :: Host
 scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
+          & File.dirExists "/srv/private"
+          & File.ownerGroup "/srv/private" (User "root") (Group "root")
+          & File.mode "/srv/private" ownerModes
+          & Apt.installed ["mercurial"]
 
 standardSystem :: HostName -> DebianSuite -> Architecture -> Host
 standardSystem hn suite arch =
@@ -47,7 +52,6 @@ standardSystem hn suite arch =
   & Systemd.installed
   & Systemd.persistentJournal
   & Cron.runPropellor (Cron.Times "30 * * * *")
-  & Ssh.passwordAuthentication False
   & Ssh.randomHostKeys
   & Ssh.permitRootLogin True
   & Apt.installed ["sudo"]
@@ -57,6 +61,7 @@ standardSystem hn suite arch =
                                    ] <*> admins)
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
+  & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
     , "net.ipv4.tcp_ecn=1"
