@@ -69,6 +69,7 @@ standardSystem hn suite arch =
                   , "htop"
                   , "less"
                   , "curl"
+                  , "dstat"
                   ]
   where admins = map User ["tristan", "jj", "darren"]
 
