@@ -57,6 +57,7 @@ standardSystem hn suite arch =
                                    , User.lockedPassword
                                    , Sudo.enabledFor
                                    , flip User.hasGroup (Group "systemd-journal")
+                                   , flip User.hasGroup (Group "adm")
                                    ] <*> admins)
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
