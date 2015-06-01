@@ -72,6 +72,7 @@ standardSystem hn suite arch =
                   , "less"
                   , "curl"
                   , "dstat"
+                  , "vim-nox"
                   ]
   where admins = map User ["tristan", "jj", "darren"]
 
