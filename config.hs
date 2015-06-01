@@ -74,6 +74,7 @@ standardSystem hn suite arch =
                   , "dstat"
                   , "vim-nox"
                   , "atool"
+                  , "sqlite3"
                   ]
   where admins = map User ["tristan", "jj", "darren"]
 
