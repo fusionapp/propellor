@@ -3,55 +3,6 @@ configuration management system using Haskell and Git.
 Each system has a list of properties, which Propellor ensures
 are satisfied.
 
-Propellor is configured via a git repository, which typically lives
-in `~/.propellor/` on your development machine. Propellor clones the
-repository to each host it manages, in a 
-[secure](http://propellor.branchable.com/security/) way. See [[components]]
-for details.
-
-Properties are defined using Haskell. Edit `~/.propellor/config.hs`
-to get started. There is fairly complete 
-[API documentation](http://hackage.haskell.org/package/propellor/),
-which includes many built-in Properties for dealing with
-[Apt](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Apt.html)
-and
-[Apache](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Apache.html)
-,
-[Cron](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Cron.html)
-and
-[Commands](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Cmd.html)
-,
-[Dns](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Dns.html)
-and
-[Docker](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Docker.html), etc.
-
-There is no special language as used in puppet, chef, ansible, etc.. just
-the full power of Haskell. Hopefully that power can be put to good use in
-making declarative properties that are powerful, nicely idempotent, and
-easy to adapt to a system's special needs!
-
-If using Haskell to configure Propellor seems intimidating,
-see [configuration for the Haskell newbie](https://propellor.branchable.com/haskell_newbie/).
-
-## quick start
-
-1. Get propellor installed on your development machine (ie, laptop).
-     `cabal install propellor`
-          or
-     `apt-get install propellor`
-2. Run `propellor` for the first time. It will set up a `~/.propellor/` git
-   repository for you.
-3. If you don't have a gpg private key already, generate one: `gpg --gen-key`
-4. Run: `propellor --add-key $KEYID`, which will make propellor trust
-   your gpg key, and will sign your `~/.propellor` repository using it.
-5. Edit `~/.propellor/config.hs`, and add a host you want to manage.
-   You can start by not adding any properties, or only a few.
-6. Run: `propellor --spin $HOST`
-7. Now you have a simple propellor deployment, but it doesn't do
-   much to the host yet, besides installing propellor.  
-   So, edit `~/.propellor/config.hs` to configure the host, add some
-   properties to it, and re-run step 6.  
-   Repeat until happy and move on to the next host. :)
-8. Optionally, set up a [centralized git repository](https://propellor.branchable.com/centralized_git_repository/)
-   so that multiple hosts can be updated with a simple `git commit -S; git push`
-9. Write some neat new properties and send patches!
+This repository contains the Propellor configuration for
+[Fusion](https://fusionapp.com/) infrastructure, and is probably not of
+interest to anyone else.
