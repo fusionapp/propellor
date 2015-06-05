@@ -3,7 +3,7 @@
 
 import           Propellor
 import           Propellor.CmdLine
-import           System.Posix.Files
+--import           System.Posix.Files
 --import Propellor.Property.Scheduled
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
