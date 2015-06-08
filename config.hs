@@ -45,6 +45,7 @@ standardSystem hn suite arch =
                   , "openssh-client"
                   , "git"
                   , "kexec-tools"
+                  , "needrestart"
                   ]
   & Apt.serviceInstalledRunning "ntp"
   & Systemd.installed
