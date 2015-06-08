@@ -59,6 +59,7 @@ standardSystem hn suite arch =
                                    , Sudo.enabledFor
                                    , flip User.hasGroup (Group "systemd-journal")
                                    , flip User.hasGroup (Group "adm")
+                                   , flip User.hasGroup (Group "docker")
                                    ] <*> admins)
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
