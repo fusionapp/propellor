@@ -36,7 +36,7 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & Apt.installed ["mercurial"]
           & propertyList "admin docker access"
           (flip User.hasGroup (Group "docker") <$> admins)
-          & Docker.configured
+          & Docker.installed
           & Docker.garbageCollected `period` Daily
 
 
