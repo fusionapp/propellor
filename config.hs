@@ -4,7 +4,7 @@
 import           Propellor
 import           Propellor.CmdLine
 --import           System.Posix.Files
---import Propellor.Property.Scheduled
+import Propellor.Property.Scheduled
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
 --import qualified Propellor.Property.Network as Network
@@ -15,10 +15,11 @@ import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.User as User
 import qualified Propellor.Property.Hostname as Hostname
 --import qualified Propellor.Property.Tor as Tor
---import qualified Propellor.Property.Docker as Docker
+import qualified Propellor.Property.Docker as Docker
 
 main :: IO ()
 main = defaultMain hosts
+
 
 -- The hosts propellor knows about.
 -- Edit this to configure propellor!
@@ -26,12 +27,18 @@ hosts :: [Host]
 hosts = [ scarlet
         ]
 
+
 scarlet :: Host
 scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
           & Ssh.keyImported SshRsa (User "root") hostContext
           & Apt.installed ["mercurial"]
+          & propertyList "admin docker access"
+          (flip User.hasGroup (Group "docker") <$> admins)
+          & Docker.configured
+          & Docker.garbageCollected `period` Daily
+
 
 standardSystem :: HostName -> DebianSuite -> Architecture -> Host
 standardSystem hn suite arch =
@@ -59,7 +66,6 @@ standardSystem hn suite arch =
                                    , Sudo.enabledFor
                                    , flip User.hasGroup (Group "systemd-journal")
                                    , flip User.hasGroup (Group "adm")
-                                   , flip User.hasGroup (Group "docker")
                                    ] <*> admins)
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
@@ -81,7 +87,11 @@ standardSystem hn suite arch =
                   , "sqlite3"
                   , "fish"
                   ]
-  where admins = map User ["tristan", "jj", "darren"]
+
+
+admins :: [User]
+admins = map User ["tristan", "jj", "darren"]
+
 
 tristanKeys :: User -> Property NoInfo
 tristanKeys user = propertyList "keys for tristan" $ map (Ssh.authorizedKey user)
