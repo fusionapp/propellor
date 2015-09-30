@@ -37,7 +37,6 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & propertyList "admin docker access"
           (flip User.hasGroup (Group "docker") <$> admins)
           & Docker.installed
-          & Docker.garbageCollected `period` Daily
 
 
 standardSystem :: HostName -> DebianSuite -> Architecture -> Host
