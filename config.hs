@@ -4,7 +4,6 @@
 import           Propellor
 import           Propellor.CmdLine
 --import           System.Posix.Files
-import Propellor.Property.Scheduled
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
 --import qualified Propellor.Property.Network as Network
@@ -58,7 +57,7 @@ standardSystem hn suite arch =
   & Systemd.persistentJournal
   & Cron.runPropellor (Cron.Times "30 * * * *")
   & Ssh.randomHostKeys
-  & Ssh.permitRootLogin True
+  & Ssh.permitRootLogin Ssh.WithoutPassword
   & Apt.installed ["sudo"]
   & propertyList "admin accounts" ([ User.accountFor
                                    , User.lockedPassword
