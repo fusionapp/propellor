@@ -10,7 +10,15 @@ type Line = String
 
 -- | Replaces all the content of a file.
 hasContent :: FilePath -> [Line] -> Property NoInfo
-f `hasContent` newcontent = fileProperty ("replace " ++ f)
+f `hasContent` newcontent = fileProperty
+	("replace " ++ f)
+	(\_oldcontent -> newcontent) f
+
+-- | Replaces all the content of a file, ensuring that its modes do not
+-- allow it to be read or written by anyone other than the current user
+hasContentProtected :: FilePath -> [Line] -> Property NoInfo
+f `hasContentProtected` newcontent = fileProperty' writeFileProtected 
+	("replace " ++ f)
 	(\_oldcontent -> newcontent) f
 
 -- | Ensures a file has contents that comes from PrivData.
@@ -40,7 +48,7 @@ hasPrivContent' writer source f context =
 	withPrivData source context $ \getcontent -> 
 		property desc $ getcontent $ \privcontent -> 
 			ensureProperty $ fileProperty' writer desc
-				(\_oldcontent -> lines privcontent) f
+				(\_oldcontent -> privDataLines privcontent) f
   where
 	desc = "privcontent " ++ f
 
@@ -103,5 +111,5 @@ ownerGroup f (User owner) (Group group) = property (f ++ " owner " ++ og) $ do
 -- | Ensures that a file/dir has the specfied mode.
 mode :: FilePath -> FileMode -> Property NoInfo
 mode f v = property (f ++ " mode " ++ show v) $ do
-	liftIO $ modifyFileMode f (\_old -> v)
+	liftIO $ modifyFileMode f (const v)
 	noChange

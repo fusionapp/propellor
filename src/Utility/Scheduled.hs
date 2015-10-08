@@ -32,7 +32,6 @@ import Utility.QuickCheck
 import Utility.PartialPrelude
 import Utility.Misc
 
-import Control.Applicative
 import Data.List
 import Data.Time.Clock
 import Data.Time.LocalTime
@@ -41,6 +40,8 @@ import Data.Time.Calendar.WeekDate
 import Data.Time.Calendar.OrdinalDate
 import Data.Tuple.Utils
 import Data.Char
+import Control.Applicative
+import Prelude
 
 {- Some sort of scheduled event. -}
 data Schedule = Schedule Recurrance ScheduledTime
@@ -285,7 +286,7 @@ fromScheduledTime AnyTime = "any time"
 fromScheduledTime (SpecificTime h m) = 
 	show h' ++ (if m > 0 then ":" ++ pad 2 (show m) else "") ++ " " ++ ampm
   where
-	pad n s = take (n - length s) (repeat '0') ++ s
+	pad n s = replicate (n - length s) '0' ++ s
 	(h', ampm)
 		| h == 0 = (12, "AM")
 		| h < 12 = (h, "AM")

@@ -1,6 +1,11 @@
 module Propellor.Types.PrivData where
 
 import Propellor.Types.OS
+import Utility.PartialPrelude
+import Utility.FileSystemEncoding
+
+import Data.Maybe
+import qualified Data.ByteString.Lazy as L
 
 -- | Note that removing or changing constructors or changing types will
 -- break the serialized privdata files, so don't do that!
@@ -56,7 +61,7 @@ instance IsPrivDataSource PrivDataSource where
 newtype Context = Context String
 	deriving (Read, Show, Ord, Eq)
 
--- | A context that varies depending on the HostName where it's used.
+-- | A context that may vary depending on the HostName where it's used.
 newtype HostContext = HostContext { mkHostContext :: HostName -> Context }
 
 instance Show HostContext where
@@ -89,7 +94,27 @@ anyContext = Context "any"
 hostContext :: HostContext
 hostContext = HostContext Context
 
-type PrivData = String
+-- | Contains the actual private data.
+--
+-- Note that this may contain exta newlines at the end, or they may have
+-- been stripped off, depending on how the user entered the privdata,
+-- and which version of propellor stored it. Use the accessor functions
+-- below to avoid newline problems.
+newtype PrivData = PrivData String
+
+-- | When PrivData is the content of a file, this is the lines thereof.
+privDataLines :: PrivData -> [String]
+privDataLines (PrivData s) = lines s
+
+-- | When the PrivData is a single value, like a password, this extracts
+-- it. Note that if multiple lines are present in the PrivData, only
+-- the first is returned; there is never a newline in the String.
+privDataVal :: PrivData -> String
+privDataVal (PrivData s) = fromMaybe "" (headMaybe (lines s))
+
+-- | Use to get ByteString out of PrivData.
+privDataByteString :: PrivData -> L.ByteString
+privDataByteString (PrivData s) = encodeBS s
 
 data SshKeyType = SshRsa | SshDsa | SshEcdsa | SshEd25519
 	deriving (Read, Show, Ord, Eq, Enum, Bounded)

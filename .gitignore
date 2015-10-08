@@ -7,6 +7,10 @@ Setup
 Setup.hi
 Setup.o
 docker
+chroot
 propellor.1
 .cabal-sandbox/
 cabal.sandbox.config
+.lock
+.lastchecked
+.stack-work/*

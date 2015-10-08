@@ -25,14 +25,17 @@ import qualified Propellor.Property.Obnam as Obnam
 import qualified Propellor.Property.Gpg as Gpg
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Journald as Journald
+import qualified Propellor.Property.Chroot as Chroot
+import qualified Propellor.Property.Aiccu as Aiccu
 import qualified Propellor.Property.OS as OS
 import qualified Propellor.Property.HostingProvider.CloudAtCost as CloudAtCost
 import qualified Propellor.Property.HostingProvider.Linode as Linode
 import qualified Propellor.Property.SiteSpecific.GitHome as GitHome
 import qualified Propellor.Property.SiteSpecific.GitAnnexBuilder as GitAnnexBuilder
 import qualified Propellor.Property.SiteSpecific.IABak as IABak
+import qualified Propellor.Property.SiteSpecific.Branchable as Branchable
 import qualified Propellor.Property.SiteSpecific.JoeySites as JoeySites
-
+import Propellor.Property.DiskImage
 
 main :: IO ()           --     _         ______`|                       ,-.__ 
 main = defaultMain hosts --  /   \___-=O`/|O`/__|                      (____.'
@@ -44,9 +47,11 @@ hosts =                --                  (o)  `
 	, gnu
 	, clam
 	, orca
+	, honeybee
 	, kite
 	, elephant
 	, beaver
+	, pell
 	, iabak
 	] ++ monsters
 
@@ -69,19 +74,26 @@ testvm = host "testvm.kitenet.net"
 
 darkstar :: Host
 darkstar = host "darkstar.kitenet.net"
-	& ipv6 "2001:4830:1600:187::2" -- sixxs tunnel
+	& ipv6 "2001:4830:1600:187::2"
+	& Aiccu.hasConfig "T18376" "JHZ2-SIXXS"
 
 	& Apt.buildDep ["git-annex"] `period` Daily
-	& Docker.configured
-	! Docker.docked gitAnnexAndroidDev
 
 	& JoeySites.postfixClientRelay (Context "darkstar.kitenet.net")
 	& JoeySites.dkimMilter
 
+	& imageBuilt "/tmp/img" c MSDOS
+		[ partition EXT2 `mountedAt` "/boot" `setFlag` BootFlag
+		, partition EXT4 `mountedAt` "/" `addFreeSpace` MegaBytes 100
+		-- , swapPartition (MegaBytes 256)
+		] noFinalization -- (grubBooted PC)
+  where
+	c d = Chroot.debootstrapped (System (Debian Unstable) "amd64") mempty d
+		& Apt.installed ["linux-image-amd64"]
+
 gnu :: Host
 gnu = host "gnu.kitenet.net"
 	& Apt.buildDep ["git-annex"] `period` Daily
-	& Docker.configured
 
 	& JoeySites.postfixClientRelay (Context "gnu.kitenet.net")
 	& JoeySites.dkimMilter
@@ -95,18 +107,18 @@ clam = standardSystem "clam.kitenet.net" Unstable "amd64"
 	& Ssh.randomHostKeys
 	& Apt.unattendedUpgrades
 	& Network.ipv6to4
+
 	& Tor.isRelay
 	& Tor.named "kite1"
 	& Tor.bandwidthRate (Tor.PerMonth "400 GB")
 
-	& Docker.configured
-	& Docker.garbageCollected `period` Daily
-	& Docker.docked webserver
+	& Systemd.nspawned webserver
 	& File.dirExists "/var/www/html"
-	& File.notPresent "/var/www/html/index.html"
-	& "/var/www/index.html" `File.hasContent` ["hello, world"]
+	& File.notPresent "/var/www/index.html"
+	& "/var/www/html/index.html" `File.hasContent` ["hello, world"]
 	& alias "helloworld.kitenet.net"
-	& Docker.docked oldusenetShellBox
+	
+	& Systemd.nspawned oldusenetShellBox
 
 	& JoeySites.scrollBox
 	& alias "scroll.joeyh.name"
@@ -127,15 +139,50 @@ orca = standardSystem "orca.kitenet.net" Unstable "amd64"
 
 	& Apt.unattendedUpgrades
 	& Postfix.satellite
+	& Apt.serviceInstalledRunning "ntp"
 	& Systemd.persistentJournal
-	& Docker.configured
-	& Docker.docked (GitAnnexBuilder.standardAutoBuilderContainer dockerImage "amd64" 15 "2h")
-	& Docker.docked (GitAnnexBuilder.standardAutoBuilderContainer dockerImage "i386" 45 "2h")
-	& Docker.docked (GitAnnexBuilder.armelCompanionContainer dockerImage)
-	& Docker.docked (GitAnnexBuilder.armelAutoBuilderContainer dockerImage (Cron.Times "1 3 * * *") "5h")
-	& Docker.docked (GitAnnexBuilder.androidAutoBuilderContainer dockerImage (Cron.Times "1 1 * * *") "3h")
-	& Docker.garbageCollected `period` Daily
-	& Apt.buildDep ["git-annex"] `period` Daily
+
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		(System (Debian Unstable) "amd64") Nothing fifteenpast "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		(System (Debian Unstable) "i386") Nothing fifteenpast "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		(System (Debian (Stable "jessie")) "i386") (Just "ancient") fifteenpast "2h")
+	& Systemd.nspawned (GitAnnexBuilder.androidAutoBuilderContainer
+		(Cron.Times "1 1 * * *") "3h")
+  where
+	fifteenpast = Cron.Times "15 * * * *"
+
+honeybee :: Host
+honeybee = standardSystem "honeybee.kitenet.net" Testing "armhf"
+	[ "Arm git-annex build box." ]
+	
+	-- I have to travel to get console access, so no automatic
+	-- upgrades, and try to be robust.
+	& "/etc/default/rcS" `File.containsLine` "FSCKFIX=yes"
+
+	& Apt.installed ["flash-kernel"]
+	& "/etc/flash-kernel/machine" `File.hasContent` ["Cubietech Cubietruck"]
+	& Apt.installed ["linux-image-armmp"]
+	& Network.dhcp "eth0" `requires` Network.cleanInterfacesFile
+	& Postfix.satellite
+	
+	-- ipv6 used for remote access thru firewalls
+	& Apt.serviceInstalledRunning "aiccu"
+	& ipv6 "2001:4830:1600:187::2"
+
+	-- In case compiler needs more than available ram
+	& Apt.serviceInstalledRunning "swapspace"
+
+	-- No hardware clock.
+	& Apt.serviceInstalledRunning "ntp"
+
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.armAutoBuilder
+			(System (Debian Unstable) "armel") Nothing Cron.Daily "22h")
 
 -- This is not a complete description of kite, since it's a
 -- multiuser system with eg, user passwords that are not deployed
@@ -220,9 +267,6 @@ kite = standardSystemUnhardened "kite.kitenet.net" Testing "amd64"
 		, "zsh"
 		]
 	
-	& Docker.configured
-	& Docker.garbageCollected `period` Daily
-	
 	& alias "nntp.olduse.net"
 	& JoeySites.oldUseNetServer hosts
 	
@@ -279,12 +323,13 @@ elephant = standardSystem "elephant.kitenet.net" Unstable "amd64"
 	& myDnsSecondary
 	
 	& Docker.configured
-	& Docker.docked oldusenetShellBox
 	& Docker.docked openidProvider
 		`requires` Apt.serviceInstalledRunning "ntp"
 	& Docker.docked ancientKitenet
 	& Docker.docked jerryPlay
 	& Docker.garbageCollected `period` (Weekly (Just 1))
+	
+	& Systemd.nspawned oldusenetShellBox
 	
 	& JoeySites.scrollBox
 	& alias "scroll.joeyh.name"
@@ -293,7 +338,7 @@ elephant = standardSystem "elephant.kitenet.net" Unstable "amd64"
 	-- For https port 443, shellinabox with ssh login to
 	-- kitenet.net
 	& alias "shell.kitenet.net"
-	& Docker.docked kiteShellBox
+	& Systemd.nspawned kiteShellBox
 	-- Nothing is using http port 80, so listen on
 	-- that port for ssh, for traveling on bad networks that
 	-- block 22.
@@ -310,6 +355,31 @@ beaver = host "beaver.kitenet.net"
 	& Apt.serviceInstalledRunning "anacron"
 	& Cron.niceJob "system disk backed up" Cron.Weekly (User "root") "/"
 		"rsync -a -x / /home/joey/lib/backup/beaver.kitenet.net/"
+
+-- Branchable is not completely deployed with propellor yet.
+pell :: Host
+pell = host "pell.branchable.com"
+	& alias "branchable.com"
+	& ipv4 "66.228.46.55"
+	& ipv6 "2600:3c03::f03c:91ff:fedf:c0e5"
+	
+	-- All the websites I host at branchable that don't use
+	-- branchable.com dns.
+	& alias "olduse.net"
+	& alias "www.olduse.net"
+	& alias "www.kitenet.net"
+	& alias "joeyh.name"
+	& alias "campaign.joeyh.name"
+	& alias "ikiwiki.info"
+	& alias "git.ikiwiki.info"
+	& alias "l10n.ikiwiki.info"
+	& alias "dist-bugs.kitenet.net"
+	& alias "family.kitenet.net"
+
+	& Apt.installed ["linux-image-amd64"]
+	& Linode.chainPVGrub 5
+	& Apt.unattendedUpgrades
+	& Branchable.server hosts
 
 iabak :: Host
 iabak = host "iabak.archiveteam.org"
@@ -338,28 +408,28 @@ iabak = host "iabak.archiveteam.org"
 	& IABak.gitServer monsters
 	& IABak.registrationServer monsters
 	& IABak.graphiteServer
+	& IABak.publicFace
   where
 	admins = map User ["joey", "db48x"]
 
        --'                        __|II|      ,.
      ----                      __|II|II|__   (  \_,/\
 --'-------'\o/-'-.-'-.-'-.- __|II|II|II|II|___/   __/ -'-.-'-.-'-.-'-.-'-.-'-
--------------------------- |      [Docker]       / --------------------------
+-------------------------- |   [Containers]      / --------------------------
 -------------------------- :                    / ---------------------------
 --------------------------- \____, o          ,' ----------------------------
 ---------------------------- '--,___________,'  -----------------------------
 
 -- Simple web server, publishing the outside host's /var/www
-webserver :: Docker.Container
+webserver :: Systemd.Container
 webserver = standardStableContainer "webserver"
-	& Docker.publish "80:80"
-	& Docker.volume "/var/www:/var/www"
+	& Systemd.bind "/var/www"
 	& Apt.serviceInstalledRunning "apache2"
 
 -- My own openid provider. Uses php, so containerized for security
 -- and administrative sanity.
 openidProvider :: Docker.Container
-openidProvider = standardStableContainer "openid-provider"
+openidProvider = standardStableDockerContainer "openid-provider"
 	& alias "openid.kitenet.net"
 	& Docker.publish "8081:80"
 	& OpenId.providerFor [User "joey", User "liw"]
@@ -367,39 +437,30 @@ openidProvider = standardStableContainer "openid-provider"
 
 -- Exhibit: kite's 90's website.
 ancientKitenet :: Docker.Container
-ancientKitenet = standardStableContainer "ancient-kitenet"
+ancientKitenet = standardStableDockerContainer "ancient-kitenet"
 	& alias "ancient.kitenet.net"
 	& Docker.publish "1994:80"
 	& Apt.serviceInstalledRunning "apache2"
-	& Git.cloned (User "root") "git://kitenet-net.branchable.com/" "/var/www"
+	& Git.cloned (User "root") "git://kitenet-net.branchable.com/" "/var/www/html"
 		(Just "remotes/origin/old-kitenet.net")
 
-oldusenetShellBox :: Docker.Container
+oldusenetShellBox :: Systemd.Container
 oldusenetShellBox = standardStableContainer "oldusenet-shellbox"
 	& alias "shell.olduse.net"
-	& Docker.publish "4200:4200"
 	& JoeySites.oldUseNetShellBox
 
--- for development of git-annex for android, using my git-annex work tree
-gitAnnexAndroidDev :: Docker.Container
-gitAnnexAndroidDev = GitAnnexBuilder.androidContainer dockerImage "android-git-annex" doNothing gitannexdir
-	& Docker.volume ("/home/joey/src/git-annex:" ++ gitannexdir)
-  where
-	gitannexdir = GitAnnexBuilder.homedir </> "git-annex"
-	
 jerryPlay :: Docker.Container
-jerryPlay = standardContainer "jerryplay" Unstable "amd64"
+jerryPlay = standardDockerContainer "jerryplay" Unstable "amd64"
 	& alias "jerryplay.kitenet.net"
 	& Docker.publish "2202:22"
 	& Docker.publish "8001:80"
 	& Apt.installed ["ssh"]
-	& User.hasSomePassword (User "root")
-	& Ssh.permitRootLogin True
-	
-kiteShellBox :: Docker.Container
+	& User.hasPassword (User "root")
+	& Ssh.permitRootLogin (Ssh.RootLogin True)
+
+kiteShellBox :: Systemd.Container
 kiteShellBox = standardStableContainer "kiteshellbox"
 	& JoeySites.kiteShellBox
-	& Docker.publish "443:443"
 
 type Motd = [String]
 
@@ -430,12 +491,25 @@ standardSystemUnhardened hn suite arch motd = host hn
 	& Apt.removed ["exim4", "exim4-daemon-light", "exim4-config", "exim4-base"]
 		`onChange` Apt.autoRemove
 
-standardStableContainer :: Docker.ContainerName -> Docker.Container
-standardStableContainer name = standardContainer name (Stable "wheezy") "amd64"
-
 -- This is my standard container setup, Featuring automatic upgrades.
-standardContainer :: Docker.ContainerName -> DebianSuite -> Architecture -> Docker.Container
-standardContainer name suite arch = Docker.container name (dockerImage system)
+standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Systemd.Container
+standardContainer name suite arch = Systemd.container name chroot
+	& os system
+	& Apt.stdSourcesList `onChange` Apt.upgrade
+	& Apt.unattendedUpgrades
+	& Apt.cacheCleaned
+  where
+	system = System (Debian suite) arch
+	chroot = Chroot.debootstrapped system mempty
+
+standardStableContainer :: Systemd.MachineName -> Systemd.Container
+standardStableContainer name = standardContainer name (Stable "jessie") "amd64"
+
+standardStableDockerContainer :: Docker.ContainerName -> Docker.Container
+standardStableDockerContainer name = standardDockerContainer name (Stable "jessie") "amd64"
+
+standardDockerContainer :: Docker.ContainerName -> DebianSuite -> Architecture -> Docker.Container
+standardDockerContainer name suite arch = Docker.container name (dockerImage system)
 	& os system
 	& Apt.stdSourcesList `onChange` Apt.upgrade
 	& Apt.unattendedUpgrades
@@ -446,10 +520,10 @@ standardContainer name suite arch = Docker.container name (dockerImage system)
 
 -- Docker images I prefer to use.
 dockerImage :: System -> Docker.Image
-dockerImage (System (Debian Unstable) arch) = "joeyh/debian-unstable-" ++ arch
-dockerImage (System (Debian Testing) arch) = "joeyh/debian-unstable-" ++ arch
-dockerImage (System (Debian (Stable _)) arch) = "joeyh/debian-stable-" ++ arch
-dockerImage _ = "debian-stable-official" -- does not currently exist!
+dockerImage (System (Debian Unstable) arch) = Docker.latestImage ("joeyh/debian-unstable-" ++ arch)
+dockerImage (System (Debian Testing) arch) = Docker.latestImage ("joeyh/debian-unstable-" ++ arch)
+dockerImage (System (Debian (Stable _)) arch) = Docker.latestImage ("joeyh/debian-stable-" ++ arch)
+dockerImage _ = Docker.latestImage "debian-stable-official" -- does not currently exist!
 
 myDnsSecondary :: Property HasInfo
 myDnsSecondary = propertyList "dns secondary for all my domains" $ props
@@ -491,19 +565,6 @@ monsters =            -- but do want to track their public keys etc.
 		& ipv6 "2001:4978:f:2d9::2"
 	, host "mouse.kitenet.net"
 		& ipv6 "2001:4830:1600:492::2"
-	, host "branchable.com"
-		& ipv4 "66.228.46.55"
-		& ipv6 "2600:3c03::f03c:91ff:fedf:c0e5"
-		& alias "olduse.net"
-		& alias "www.olduse.net"
-		& alias "www.kitenet.net"
-		& alias "joeyh.name"
-		& alias "campaign.joeyh.name"
-		& alias "ikiwiki.info"
-		& alias "git.ikiwiki.info"
-		& alias "l10n.ikiwiki.info"
-		& alias "dist-bugs.kitenet.net"
-		& alias "family.kitenet.net"
 	, host "animx"
 		& ipv4 "76.7.162.101"
 		& ipv4 "76.7.162.186"

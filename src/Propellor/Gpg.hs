@@ -6,6 +6,7 @@ import System.FilePath
 import System.Directory
 import Data.Maybe
 import Data.List.Utils
+import Control.Monad
 
 import Propellor.PrivData.Paths
 import Propellor.Message
@@ -14,6 +15,7 @@ import Utility.Process
 import Utility.Monad
 import Utility.Misc
 import Utility.Tmp
+import Utility.FileSystemEncoding
 
 type KeyId = String
 
@@ -40,10 +42,10 @@ useKeyringOpts =
 addKey :: KeyId -> IO ()
 addKey keyid = exitBool =<< allM (uncurry actionMessage)
 	[ ("adding key to propellor's keyring", addkeyring)
-	, ("staging propellor's keyring", gitadd keyring)
-	, ("updating encryption of any privdata", reencryptprivdata)
-	, ("configuring git signing to use key", gitconfig)
-	, ("committing changes", gitcommit)
+	, ("staging propellor's keyring", gitAdd keyring)
+	, ("updating encryption of any privdata", reencryptPrivData)
+	, ("configuring git commit signing to use key", gitconfig)
+	, ("committing changes", gitCommitKeyRing "add-key")
 	]
   where
 	addkeyring = do
@@ -53,18 +55,6 @@ addKey keyid = exitBool =<< allM (uncurry actionMessage)
 			, Param $ "gpg --export " ++ keyid ++ " | gpg " ++
 				unwords (useKeyringOpts ++ ["--import"])
 			]
-
-	reencryptprivdata = ifM (doesFileExist privDataFile)
-		( do
-			gpgEncrypt privDataFile =<< gpgDecrypt privDataFile
-			gitadd privDataFile
-		, return True
-		)
-
-	gitadd f = boolSystem "git"
-		[ Param "add"
-		, File f
-		]
 
 	gitconfig = ifM (snd <$> processTranscript "gpg" ["--list-secret-keys", keyid] Nothing)
 		( boolSystem "git"
@@ -77,10 +67,53 @@ addKey keyid = exitBool =<< allM (uncurry actionMessage)
 			return True
 		)
 
-	gitcommit = gitCommit
-		[ File keyring
-		, Param "-m"
-		, Param "propellor addkey"
+rmKey :: KeyId -> IO ()
+rmKey keyid = exitBool =<< allM (uncurry actionMessage)
+	[ ("removing key from propellor's keyring", rmkeyring)
+	, ("staging propellor's keyring", gitAdd keyring)
+	, ("updating encryption of any privdata", reencryptPrivData)
+	, ("configuring git commit signing to not use key", gitconfig)
+	, ("committing changes", gitCommitKeyRing "rm-key")
+	]
+  where
+	rmkeyring = boolSystem "gpg" $
+		(map Param useKeyringOpts) ++ 
+		[ Param "--batch"
+		, Param "--yes"
+		, Param "--delete-key", Param keyid
+		]
+	
+	gitconfig = ifM ((==) (keyid++"\n", True) <$> processTranscript "git" ["config", "user.signingkey"] Nothing)
+		( boolSystem "git"
+			[ Param "config"
+			, Param "--unset"
+			, Param "user.signingkey"
+			]
+		, return True
+		)	
+
+reencryptPrivData :: IO Bool
+reencryptPrivData = ifM (doesFileExist privDataFile)
+	( do
+		gpgEncrypt privDataFile =<< gpgDecrypt privDataFile
+		gitAdd privDataFile
+	, return True
+	)
+	
+gitAdd :: FilePath -> IO Bool
+gitAdd f = boolSystem "git"
+	[ Param "add"
+	, File f
+	]
+
+gitCommitKeyRing :: String -> IO Bool
+gitCommitKeyRing action = do
+	-- Commit explicitly the keyring and privdata files, as other
+	-- changes may be staged by the user and shouldn't be committed.
+	tocommit <- filterM doesFileExist [ privDataFile, keyring]
+	gitCommit $ (map File tocommit) ++ 
+		[ Param "-m"
+		, Param ("propellor " ++ action)
 		]
 
 -- Adds --gpg-sign if there's a keyring.
@@ -98,7 +131,7 @@ gitCommit ps = do
 
 gpgDecrypt :: FilePath -> IO String
 gpgDecrypt f = ifM (doesFileExist f)
-	( readProcess "gpg" ["--decrypt", f]
+	( writeReadProcessEnv "gpg" ["--decrypt", f] Nothing Nothing (Just fileEncoding)
 	, return ""
 	)
 
@@ -112,8 +145,9 @@ gpgEncrypt f s = do
 		, "--encrypt"
 		, "--trust-model", "always"
 		] ++ concatMap (\k -> ["--recipient", k]) keyids
-	encrypted <- writeReadProcessEnv "gpg" opts
-		Nothing
-		(Just $ flip hPutStr s)
-		Nothing
+	encrypted <- writeReadProcessEnv "gpg" opts Nothing (Just writer) Nothing
 	viaTmp writeFile f encrypted
+  where
+	writer h = do
+		fileEncoding h
+		hPutStr h s

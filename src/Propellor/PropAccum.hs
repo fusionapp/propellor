@@ -13,6 +13,8 @@ import Data.Monoid
 
 import Propellor.Types
 import Propellor.Property
+import Propellor.Types.Info
+import Propellor.PrivData
 
 -- | Starts accumulating the properties of a Host.
 --
@@ -47,7 +49,7 @@ class PropAccum h where
 instance PropAccum Host where
 	(Host hn ps is) &  p = Host hn (ps ++ [toProp p])
 		(is <> getInfoRecursive p)
-	(Host hn ps is) &^ p = Host hn ([toProp p] ++ ps)
+	(Host hn ps is) &^ p = Host hn (toProp p : ps)
 		(getInfoRecursive p <> is)
 	getProperties = hostProperties
 
@@ -72,17 +74,15 @@ infixl 1 !
 -- The Info of the propertyChildren is adjusted to only include 
 -- info that should be propigated out to the Property.
 --
--- DNS Info is propigated, so that eg, aliases of a PropAccum
--- are reflected in the dns for the host where it runs.
---
--- PrivData Info is propigated, so that properties used inside a
--- PropAccum will have the necessary PrivData available.
+-- Any PrivInfo that uses HostContext is adjusted to use the name
+-- of the container as its context.
 propigateContainer
 	:: (PropAccum container)
-	=> container
+	=> String
+	-> container
 	-> Property HasInfo
 	-> Property HasInfo
-propigateContainer c prop = infoProperty
+propigateContainer containername c prop = infoProperty
 	(propertyDesc prop)
 	(propertySatisfy prop)
 	(propertyInfo prop)
@@ -90,10 +90,7 @@ propigateContainer c prop = infoProperty
   where
 	hostprops = map go $ getProperties c
 	go p = 
-		let i = propertyInfo p
-		    i' = mempty
-			{ _dns = _dns i
-			, _privData = _privData i
-			}
+		let i = mapInfo (forceHostContext containername)
+			(propigatableInfo (propertyInfo p))
 		    cs = map go (propertyChildren p)
-		in infoProperty (propertyDesc p) (propertySatisfy p) i' cs
+		in infoProperty (propertyDesc p) (propertySatisfy p) i cs

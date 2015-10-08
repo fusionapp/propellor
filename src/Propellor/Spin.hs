@@ -14,8 +14,7 @@ import System.Posix.Directory
 import Control.Concurrent.Async
 import qualified Data.ByteString as B
 import qualified Data.Set as S
-import qualified Network.BSD as BSD
-import Network.Socket (inet_ntoa)
+import Network.Socket (getAddrInfo, defaultHints, AddrInfo(..), AddrInfoFlag(..), SockAddr)
 
 import Propellor
 import Propellor.Protocol
@@ -25,6 +24,7 @@ import Propellor.Ssh
 import Propellor.Gpg
 import Propellor.Bootstrap
 import Propellor.Types.CmdLine
+import Propellor.Types.Info
 import qualified Propellor.Shim as Shim
 import Utility.FileMode
 import Utility.SafeCommand
@@ -59,7 +59,7 @@ spin target relay hst = do
 
 	-- And now we can run it.
 	unlessM (boolSystem "ssh" (map Param $ cacheparams ++ ["-t", sshtarget, shellWrap runcmd])) $
-		error $ "remote propellor failed"
+		error "remote propellor failed"
   where
 	hn = fromMaybe target relay
 
@@ -98,17 +98,21 @@ spin target relay hst = do
 getSshTarget :: HostName -> Host -> IO String
 getSshTarget target hst
 	| null configips = return target
-	| otherwise = go =<< tryIO (BSD.getHostByName target)
+	| otherwise = go =<< tryIO (dnslookup target)
   where
 	go (Left e) = useip (show e)
-	go (Right hostentry) = ifM (anyM matchingconfig (BSD.hostAddresses hostentry))
-		( return target
-		, do
-			ips <- mapM inet_ntoa (BSD.hostAddresses hostentry)
-			useip ("DNS " ++ show ips ++ " vs configured " ++ show configips)
-		)
+	go (Right addrinfos) = do
+		configaddrinfos <- catMaybes <$> mapM iptoaddr configips
+		if any (`elem` configaddrinfos) (map addrAddress addrinfos)
+			then return target
+			else useip ("DNS lookup did not return any of the expected addresses " ++ show configips)
 
-	matchingconfig a = flip elem configips <$> inet_ntoa a
+	dnslookup h = getAddrInfo (Just $ defaultHints { addrFlags = [AI_CANONNAME] }) (Just h) Nothing
+
+	-- Convert a string containing an IP address into a SockAddr.
+	iptoaddr :: String -> IO (Maybe SockAddr)
+	iptoaddr ip = catchDefaultIO Nothing $ headMaybe . map addrAddress
+		<$> getAddrInfo (Just $ defaultHints { addrFlags = [AI_NUMERICHOST] })  (Just ip) Nothing
 
 	useip why = case headMaybe configips of
 		Nothing -> return target
@@ -123,7 +127,7 @@ getSshTarget target hst
 					return ip
 
 	configips = map fromIPAddr $ mapMaybe getIPAddr $
-		S.toList $ _dns $ hostInfo hst
+		S.toList $ fromDnsInfo $ getInfo $ hostInfo hst
 
 -- Update the privdata, repo url, and git repo over the ssh
 -- connection, talking to the user's local propellor instance which is
@@ -144,11 +148,15 @@ update forhost = do
 			hout <- dup stdOutput
 			hClose stdin
 			hClose stdout
+			-- Not using git pull because git 2.5.0 badly
+			-- broke its option parser.
 			unlessM (boolSystem "git" (pullparams hin hout)) $
-				errorMessage "git pull from client failed"
+				errorMessage "git fetch from client failed"
+			unlessM (boolSystem "git" [Param "merge", Param "FETCH_HEAD"]) $
+				errorMessage "git merge from client failed"
   where
 	pullparams hin hout =
-		[ Param "pull"
+		[ Param "fetch"
 		, Param "--progress"
 		, Param "--upload-pack"
 		, Param $ "./propellor --gitpush " ++ show hin ++ " " ++ show hout
@@ -176,7 +184,7 @@ updateServer target relay hst connect haveprecompiled =
 		let loop = go (toh, fromh)
 		let restart = updateServer hn relay hst connect haveprecompiled
 		let done = return ()
-		v <- (maybe Nothing readish <$> getMarked fromh statusMarker)
+		v <- maybe Nothing readish <$> getMarked fromh statusMarker
 		case v of
 			(Just NeedRepoUrl) -> do
 				sendRepoUrl toh
@@ -255,7 +263,7 @@ sendGitClone hn = void $ actionMessage ("Clone git repository to " ++ hn) $ do
 -- This should be reasonably portable, as long as the remote host has the
 -- same architecture as the build host.
 sendPrecompiled :: HostName -> IO ()
-sendPrecompiled hn = void $ actionMessage ("Uploading locally compiled propellor as a last resort") $ do
+sendPrecompiled hn = void $ actionMessage "Uploading locally compiled propellor as a last resort" $
 	bracket getWorkingDirectory changeWorkingDirectory $ \_ ->
 		withTmpDir "propellor" go
   where

@@ -1,7 +1,7 @@
--- |Properties for configuring firewall (iptables) rules
---
--- Copyright 2014 Arnaud Bailly <arnaud.oqube@gmail.com>
--- License: BSD-2-Clause
+-- | Maintainer: Arnaud Bailly <arnaud.oqube@gmail.com>
+-- 
+-- Properties for configuring firewall (iptables) rules
+
 module Propellor.Property.Firewall (
 	rule,
 	installed,
@@ -9,7 +9,6 @@ module Propellor.Property.Firewall (
 	Target(..),
 	Proto(..),
 	Rules(..),
-	Port,
 	ConnectionState(..)
 ) where
 
@@ -18,7 +17,6 @@ import Data.Char
 import Data.List
 
 import Propellor
-import Utility.SafeCommand
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Network as Network
 
@@ -44,45 +42,48 @@ toIpTable r =  map Param $
 	(toIpTableArg (ruleRules r)) ++ [ "-j" , show $ ruleTarget r ]
 
 toIpTableArg :: Rules -> [String]
-toIpTableArg Everything        = []
-toIpTableArg (Proto proto)     = ["-p", map toLower $ show proto]
-toIpTableArg (Port port)       = ["--dport", show port]
-toIpTableArg (PortRange (f,t)) = ["--dport", show f ++ ":" ++ show t]
-toIpTableArg (IFace iface)     = ["-i", iface]
-toIpTableArg (Ctstate states)  = ["-m", "conntrack","--ctstate", concat $ intersperse "," (map show states)]
-toIpTableArg (r :- r')         = toIpTableArg r <> toIpTableArg r'
+toIpTableArg Everything = []
+toIpTableArg (Proto proto) = ["-p", map toLower $ show proto]
+toIpTableArg (DPort (Port port)) = ["--dport", show port]
+toIpTableArg (DPortRange (Port f, Port t)) =
+	["--dport", show f ++ ":" ++ show t]
+toIpTableArg (IFace iface) = ["-i", iface]
+toIpTableArg (Ctstate states) =
+	[ "-m"
+	, "conntrack"
+	, "--ctstate", concat $ intersperse "," (map show states)
+	]
+toIpTableArg (r :- r') = toIpTableArg r <> toIpTableArg r'
 
 data Rule = Rule
 	{ ruleChain :: Chain
 	, ruleTarget :: Target
 	, ruleRules :: Rules
-	} deriving (Eq, Show, Read)
+	} deriving (Eq, Show)
 
 data Chain = INPUT | OUTPUT | FORWARD
-	deriving (Eq,Show,Read)
+	deriving (Eq, Show)
 
 data Target = ACCEPT | REJECT | DROP | LOG
-	deriving (Eq,Show,Read)
+	deriving (Eq, Show)
 
 data Proto = TCP | UDP | ICMP
-	deriving (Eq,Show,Read)
-
-type Port = Int
+	deriving (Eq, Show)
 
 data ConnectionState = ESTABLISHED | RELATED | NEW | INVALID
-	deriving (Eq,Show,Read)
+	deriving (Eq, Show)
 
 data Rules
 	= Everything
 	| Proto Proto
 	-- ^There is actually some order dependency between proto and port so this should be a specific
 	-- data type with proto + ports
-	| Port Port
-	| PortRange (Port,Port)
+	| DPort Port
+	| DPortRange (Port,Port)
 	| IFace Network.Interface
 	| Ctstate [ ConnectionState ]
 	| Rules :- Rules   -- ^Combine two rules
-	deriving (Eq,Show,Read)
+	deriving (Eq, Show)
 
 infixl 0 :-
 

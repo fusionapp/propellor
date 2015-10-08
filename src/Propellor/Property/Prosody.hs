@@ -1,3 +1,5 @@
+-- | Maintainer: Félix Sipma <felix+propellor@gueux.org>
+
 module Propellor.Property.Prosody where
 
 import Propellor

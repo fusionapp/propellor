@@ -1,11 +1,17 @@
+{-# LANGUAGE DeriveDataTypeable, GeneralizedNewtypeDeriving #-}
+
 module Propellor.Types.Dns where
 
 import Propellor.Types.OS (HostName)
 import Propellor.Types.Empty
+import Propellor.Types.Info
 
 import Data.Word
 import Data.Monoid
 import qualified Data.Map as M
+import qualified Data.Set as S
+import Data.List
+import Data.String.Utils (split, replace)
 
 type Domain = String
 
@@ -15,6 +21,29 @@ data IPAddr = IPv4 String | IPv6 String
 fromIPAddr :: IPAddr -> String
 fromIPAddr (IPv4 addr) = addr
 fromIPAddr (IPv6 addr) = addr
+
+newtype AliasesInfo = AliasesInfo (S.Set HostName)
+	deriving (Show, Eq, Ord, Monoid, Typeable)
+
+instance IsInfo AliasesInfo where
+	propigateInfo _ = False
+
+toAliasesInfo :: [HostName] -> AliasesInfo
+toAliasesInfo l = AliasesInfo (S.fromList l)
+
+fromAliasesInfo :: AliasesInfo -> [HostName]
+fromAliasesInfo (AliasesInfo s) = S.toList s
+
+newtype DnsInfo = DnsInfo { fromDnsInfo :: S.Set Record }
+	deriving (Show, Eq, Ord, Monoid, Typeable)
+
+toDnsInfo :: S.Set Record -> DnsInfo
+toDnsInfo = DnsInfo
+
+-- | DNS Info is propigated, so that eg, aliases of a container
+-- are reflected in the dns for the host where it runs.
+instance IsInfo DnsInfo where
+	propigateInfo _ = True
 
 -- | Represents a bind 9 named.conf file.
 data NamedConf = NamedConf
@@ -64,7 +93,33 @@ data Record
 	| SRV Word16 Word16 Word16 BindDomain
 	| SSHFP Int Int String
 	| INCLUDE FilePath
-	deriving (Read, Show, Eq, Ord)
+	| PTR ReverseIP
+	deriving (Read, Show, Eq, Ord, Typeable)
+
+-- | An in-addr.arpa record corresponding to an IPAddr.
+type ReverseIP = String
+
+reverseIP :: IPAddr -> ReverseIP
+reverseIP (IPv4 addr) = intercalate "." (reverse $ split "." addr) ++ ".in-addr.arpa"
+reverseIP addr@(IPv6 _) = reverse (intersperse '.' $ replace ":" "" $ fromIPAddr $ canonicalIP addr) ++ ".ip6.arpa"
+
+-- | Converts an IP address (particularly IPv6) to canonical, fully
+-- expanded form.
+canonicalIP :: IPAddr -> IPAddr
+canonicalIP (IPv4 addr) = IPv4 addr
+canonicalIP (IPv6 addr) = IPv6 $ intercalate ":" $ map canonicalGroup $ split ":" $ replaceImplicitGroups addr
+  where
+	canonicalGroup g
+		| l <= 4    = replicate (4 - l) '0' ++ g
+		| otherwise = error $ "IPv6 group " ++ g ++ "as more than 4 hex digits"
+	  where
+		l = length g
+	emptyGroups n = iterate (++ ":") "" !! n
+	numberOfImplicitGroups a = 8 - length (split ":" $ replace "::" "" a)
+	replaceImplicitGroups a = concat $ aux $ split "::" a
+	  where
+		aux [] = []
+		aux (x : xs) = x : emptyGroups (numberOfImplicitGroups a) : xs
 
 getIPAddr :: Record -> Maybe IPAddr
 getIPAddr (Address addr) = Just addr
@@ -97,7 +152,10 @@ domainHostName (AbsDomain d) = Just d
 domainHostName RootDomain = Nothing
 
 newtype NamedConfMap = NamedConfMap (M.Map Domain NamedConf)
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Typeable)
+
+instance IsInfo NamedConfMap where
+	propigateInfo _ = False
 
 -- | Adding a Master NamedConf stanza for a particulr domain always
 -- overrides an existing Secondary stanza for that domain, while a

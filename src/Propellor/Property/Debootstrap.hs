@@ -13,9 +13,7 @@ module Propellor.Property.Debootstrap (
 import Propellor
 import qualified Propellor.Property.Apt as Apt
 import Propellor.Property.Chroot.Util
-import Propellor.Property.Mount
 import Utility.Path
-import Utility.SafeCommand
 import Utility.FileMode
 
 import Data.List
@@ -62,7 +60,7 @@ built target system config = built' (toProp installed) target system config <!> 
 	teardown = check (not <$> unpopulated target) teardownprop
 	
 	teardownprop = property ("removed debootstrapped " ++ target) $
-		makeChange (removetarget target)
+		makeChange (removeChroot target)
 
 built' :: (Combines (Property NoInfo) (Property i)) => Property i -> FilePath -> System -> DebootstrapConfig -> Property (CInfo NoInfo i)
 built' installprop target system@(System _ arch) config = 
@@ -97,21 +95,13 @@ built' installprop target system@(System _ arch) config =
 	-- recover by deleting it and trying again.
 	ispartial = ifM (doesDirectoryExist (target </> "debootstrap"))
 		( do
-			removetarget target
+			removeChroot target
 			return True
 		, return False
 		)
 	
 unpopulated :: FilePath -> IO Bool
 unpopulated d = null <$> catchDefaultIO [] (dirContents d)	
-
-removetarget :: FilePath -> IO ()
-removetarget target = do
-	submnts <- filter (\p -> simplifyPath p /= simplifyPath target)
-		. filter (dirContains target)
-		<$> mountPoints
-	forM_ submnts umountLazy
-	removeDirectoryRecursive target
 
 extractSuite :: System -> Maybe String
 extractSuite (System (Debian s) _) = Just $ Apt.showSuite s
@@ -168,7 +158,7 @@ sourceInstall' = withTmpDir "debootstrap" $ \tmpd -> do
 	let indexfile = tmpd </> "index.html"
 	unlessM (download baseurl indexfile) $
 		errorMessage $ "Failed to download " ++ baseurl
-	urls <- reverse . sort -- highest version first
+	urls <- sortBy (flip compare) -- highest version first
 		. filter ("debootstrap_" `isInfixOf`)
 		. filter (".tar." `isInfixOf`)
 		. extractUrls baseurl <$>

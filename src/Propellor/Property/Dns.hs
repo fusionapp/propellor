@@ -15,6 +15,7 @@ module Propellor.Property.Dns (
 
 import Propellor
 import Propellor.Types.Dns
+import Propellor.Types.Info
 import Propellor.Property.File
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Ssh as Ssh
@@ -27,7 +28,9 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.List
 
--- | Primary dns server for a domain.
+-- | Primary dns server for a domain, using bind.
+--
+-- Currently, this only configures bind to serve forward DNS, not reverse DNS.
 --
 -- Most of the content of the zone file is configured by setting properties
 -- of hosts. For example,
@@ -68,17 +71,17 @@ primary hosts domain soa rs = setup <!> cleanup
 	zonefile = "/etc/bind/propellor/db." ++ domain
 
 setupPrimary :: FilePath -> (FilePath -> FilePath) -> [Host] -> Domain -> SOA -> [(BindDomain, Record)] -> Property HasInfo
-setupPrimary zonefile mknamedconffile hosts domain soa rs = 
+setupPrimary zonefile mknamedconffile hosts domain soa rs =
 	withwarnings baseprop
 		`requires` servingZones
   where
 	hostmap = hostMap hosts
 	-- Known hosts with hostname located in the domain.
 	indomain = M.elems $ M.filterWithKey (\hn _ -> inDomain domain $ AbsDomain $ hn) hostmap
-	
+
 	(partialzone, zonewarnings) = genZone indomain hostmap domain soa
 	baseprop = infoProperty ("dns primary for " ++ domain) satisfy
-		(addNamedConf conf) []
+		(mempty `addInfo` addNamedConf conf) []
 	satisfy = do
 		sshfps <- concat <$> mapM (genSSHFP domain) (M.elems hostmap)
 		let zone = partialzone
@@ -96,7 +99,7 @@ setupPrimary zonefile mknamedconffile hosts domain soa rs =
 		, confFile = mknamedconffile zonefile
 		, confMasters = []
 		, confAllowTransfer = nub $
-			concatMap (\h -> hostAddresses h hosts) $
+			concatMap (`hostAddresses` hosts) $
 				secondaries ++ nssecondaries
 		, confLines = []
 		}
@@ -152,18 +155,18 @@ cleanupPrimary zonefile domain = check (doesFileExist zonefile) $
 signedPrimary :: Recurrance -> [Host] -> Domain -> SOA -> [(BindDomain, Record)] -> RevertableProperty
 signedPrimary recurrance hosts domain soa rs = setup <!> cleanup
   where
-	setup = combineProperties ("dns primary for " ++ domain ++ " (signed)") 
+	setup = combineProperties ("dns primary for " ++ domain ++ " (signed)")
 		(props
 			& setupPrimary zonefile signedZoneFile hosts domain soa rs'
 			& zoneSigned domain zonefile
 			& forceZoneSigned domain zonefile `period` recurrance
 		)
 		`onChange` Service.reloaded "bind9"
-	
+
 	cleanup = cleanupPrimary zonefile domain
 		`onChange` toProp (revert (zoneSigned domain zonefile))
 		`onChange` Service.reloaded "bind9"
-	
+
 	-- Include the public keys into the zone file.
 	rs' = include PubKSK : include PubZSK : rs
 	include k = (RootDomain, INCLUDE (keyFn domain k))
@@ -198,7 +201,7 @@ secondaryFor masters hosts domain = setup <!> cleanup
 		{ confDomain = domain
 		, confDnsServerType = Secondary
 		, confFile = "db." ++ domain
-		, confMasters = concatMap (\m -> hostAddresses m hosts) masters
+		, confMasters = concatMap (`hostAddresses` hosts) masters
 		, confAllowTransfer = []
 		, confLines = []
 		}
@@ -207,7 +210,7 @@ otherServers :: DnsServerType -> [Host] -> Domain -> [HostName]
 otherServers wantedtype hosts domain =
 	M.keys $ M.filter wanted $ hostMap hosts
   where
-	wanted h = case M.lookup domain (fromNamedConfMap $ _namedconf $ hostInfo h) of
+	wanted h = case M.lookup domain (fromNamedConfMap $ getInfo $ hostInfo h) of
 		Nothing -> False
 		Just conf -> confDnsServerType conf == wantedtype
 			&& confDomain conf == domain
@@ -242,7 +245,7 @@ confStanza c =
 	]
   where
 	cfgline f v = "\t" ++ f ++ " " ++ v ++ ";"
-	ipblock name l = 
+	ipblock name l =
 		[ "\t" ++ name ++ " {" ] ++
 		(map (\ip -> "\t\t" ++ fromIPAddr ip ++ ";") l) ++
 		[ "\t};" ]
@@ -285,38 +288,40 @@ dValue (RelDomain d) = d
 dValue (AbsDomain d) = d ++ "."
 dValue (RootDomain) = "@"
 
-rField :: Record -> String
-rField (Address (IPv4 _)) = "A"
-rField (Address (IPv6 _)) = "AAAA"
-rField (CNAME _) = "CNAME"
-rField (MX _ _) = "MX"
-rField (NS _) = "NS"
-rField (TXT _) = "TXT"
-rField (SRV _ _ _ _) = "SRV"
-rField (SSHFP _ _ _) = "SSHFP"
-rField (INCLUDE _) = "$INCLUDE"
+rField :: Record -> Maybe String
+rField (Address (IPv4 _)) = Just "A"
+rField (Address (IPv6 _)) = Just "AAAA"
+rField (CNAME _) = Just "CNAME"
+rField (MX _ _) = Just "MX"
+rField (NS _) = Just "NS"
+rField (TXT _) = Just "TXT"
+rField (SRV _ _ _ _) = Just "SRV"
+rField (SSHFP _ _ _) = Just "SSHFP"
+rField (INCLUDE _) = Just "$INCLUDE"
+rField (PTR _) = Nothing
 
-rValue :: Record -> String
-rValue (Address (IPv4 addr)) = addr
-rValue (Address (IPv6 addr)) = addr
-rValue (CNAME d) = dValue d
-rValue (MX pri d) = show pri ++ " " ++ dValue d
-rValue (NS d) = dValue d
-rValue (SRV priority weight port target) = unwords
+rValue :: Record -> Maybe String
+rValue (Address (IPv4 addr)) = Just addr
+rValue (Address (IPv6 addr)) = Just addr
+rValue (CNAME d) = Just $ dValue d
+rValue (MX pri d) = Just $ show pri ++ " " ++ dValue d
+rValue (NS d) = Just $ dValue d
+rValue (SRV priority weight port target) = Just $ unwords
 	[ show priority
 	, show weight
 	, show port
 	, dValue target
 	]
-rValue (SSHFP x y s) = unwords
+rValue (SSHFP x y s) = Just $ unwords
 	[ show x
 	, show y
 	, s
 	]
-rValue (INCLUDE f) = f
-rValue (TXT s) = [q] ++ filter (/= q) s ++ [q]
+rValue (INCLUDE f) = Just f
+rValue (TXT s) = Just $ [q] ++ filter (/= q) s ++ [q]
   where
 	q = '"'
+rValue (PTR _) = Nothing
 
 -- | Adjusts the serial number of the zone to always be larger
 -- than the serial number in the Zone record,
@@ -374,27 +379,28 @@ readZonePropellorFile f = catchDefaultIO Nothing $
 -- | Generating a zone file.
 genZoneFile :: Zone -> String
 genZoneFile (Zone zdomain soa rs) = unlines $
-	header : genSOA soa ++ map (genRecord zdomain) rs
+	header : genSOA soa ++ mapMaybe (genRecord zdomain) rs
   where
 	header = com $ "BIND zone file for " ++ zdomain ++ ". Generated by propellor, do not edit."
 
-genRecord :: Domain -> (BindDomain, Record) -> String
-genRecord _ (_, record@(INCLUDE _)) = intercalate "\t"
-		[ rField record
-		, rValue record
-		]
-genRecord zdomain (domain, record) = intercalate "\t"
-		[ domainHost zdomain domain
-		, "IN"
-		, rField record
-		, rValue record
-		]
+genRecord :: Domain -> (BindDomain, Record) -> Maybe String
+genRecord zdomain (domain, record) = case (rField record, rValue record) of
+	(Nothing, _) -> Nothing
+	(_, Nothing) -> Nothing
+	(Just rfield, Just rvalue) -> Just $ intercalate "\t" $ case record of
+		INCLUDE _ -> [ rfield, rvalue ]
+		_ ->
+			[ domainHost zdomain domain
+			, "IN"
+			, rfield
+			, rvalue
+			]
 
 genSOA :: SOA -> [String]
-genSOA soa = 
+genSOA soa =
 	-- "@ IN SOA ns1.example.com. root ("
 	[ intercalate "\t"
-		[ dValue RootDomain 
+		[ dValue RootDomain
 		, "IN"
 		, "SOA"
 		, dValue (sDomain soa)
@@ -424,7 +430,7 @@ type WarningMessage = String
 -- Does not include SSHFP records.
 genZone :: [Host] -> M.Map HostName Host -> Domain -> SOA -> (Zone, [WarningMessage])
 genZone inzdomain hostmap zdomain soa =
-	let (warnings, zhosts) = partitionEithers $ concat $ map concat
+	let (warnings, zhosts) = partitionEithers $ concatMap concat
 		[ map hostips inzdomain
 		, map hostrecords inzdomain
 		, map addcnames (M.elems hostmap)
@@ -459,7 +465,7 @@ genZone inzdomain hostmap zdomain soa =
 	-- So we can just use the IPAddrs.
 	addcnames :: Host -> [Either WarningMessage (BindDomain, Record)]
 	addcnames h = concatMap gen $ filter (inDomain zdomain) $
-		mapMaybe getCNAME $ S.toList (_dns info)
+		mapMaybe getCNAME $ S.toList $ fromDnsInfo $ getInfo info
 	  where
 		info = hostInfo h
 		gen c = case getAddresses info of
@@ -467,14 +473,14 @@ genZone inzdomain hostmap zdomain soa =
 			l -> map (ret . Address) l
 		  where
 			ret record = Right (c, record)
-	
+
 	-- Adds any other DNS records for a host located in the zdomain.
 	hostrecords :: Host -> [Either WarningMessage (BindDomain, Record)]
 	hostrecords h = map Right l
 	  where
 		info = hostInfo h
 		l = zip (repeat $ AbsDomain $ hostName h)
-			(S.toList $ S.filter (\r -> isNothing (getIPAddr r) && isNothing (getCNAME r)) (_dns info))
+			(S.toList $ S.filter (\r -> isNothing (getIPAddr r) && isNothing (getCNAME r)) (fromDnsInfo $ getInfo info))
 
 	-- Simplifies the list of hosts. Remove duplicate entries.
 	-- Also, filter out any CHAMES where the same domain has an
@@ -503,13 +509,13 @@ domainHost base (AbsDomain d)
   where
 	dotbase = '.':base
 
-addNamedConf :: NamedConf -> Info
-addNamedConf conf = mempty { _namedconf = NamedConfMap (M.singleton domain conf) }
+addNamedConf :: NamedConf -> NamedConfMap
+addNamedConf conf = NamedConfMap (M.singleton domain conf)
   where
 	domain = confDomain conf
 
 getNamedConf :: Propellor (M.Map Domain NamedConf)
-getNamedConf = asks $ fromNamedConfMap . _namedconf . hostInfo
+getNamedConf = asks $ fromNamedConfMap . getInfo . hostInfo
 
 -- | Generates SSHFP records for hosts in the domain (or with CNAMES
 -- in the domain) that have configured ssh public keys.
@@ -522,7 +528,7 @@ genSSHFP domain h = concatMap mk . concat <$> (gen =<< get)
 	gen = liftIO . mapM genSSHFP' . M.elems . fromMaybe M.empty
 	mk r = mapMaybe (\d -> if inDomain domain d then Just (d, r) else Nothing)
 		(AbsDomain hostname : cnames)
-	cnames = mapMaybe getCNAME $ S.toList $ _dns info
+	cnames = mapMaybe getCNAME $ S.toList $ fromDnsInfo $ getInfo info
 	hostname = hostName h
 	info = hostInfo h
 

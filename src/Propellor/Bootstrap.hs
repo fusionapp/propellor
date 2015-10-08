@@ -6,7 +6,6 @@ module Propellor.Bootstrap (
 ) where
 
 import Propellor
-import Utility.SafeCommand
 
 import System.Posix.Files
 import Data.List
@@ -82,6 +81,7 @@ depsCommand = "( " ++ intercalate " ; " (concat [osinstall, cabalinstall]) ++ " 
 		, "libghc-mtl-dev"
 		, "libghc-transformers-dev"
 		, "libghc-exceptions-dev"
+		, "make"
 		]
 
 installGitCommand :: ShellCommand
@@ -104,9 +104,24 @@ build = catchBoolIO $ do
 		void $ cabal ["configure"]
 		unlessM (cabal ["build"]) $
 			error "cabal build failed"
-	nukeFile "propellor"
-	createSymbolicLink "dist/build/propellor-config/propellor-config" "propellor"
+	-- For safety against eg power loss in the middle of the build,
+	-- make a copy of the binary, and move it into place atomically.
+	-- This ensures that the propellor symlink only ever points at
+	-- a binary that is fully built. Also, avoid ever removing
+	-- or breaking the symlink.
+	--
+	-- Need cp -a to make build timestamp checking work.
+	unlessM (boolSystem "cp" [Param "-af", Param cabalbuiltbin, Param (tmpfor safetycopy)]) $
+		error "cp of binary failed"
+	rename (tmpfor safetycopy) safetycopy
+	createSymbolicLink safetycopy (tmpfor dest)
+	rename (tmpfor dest) dest
 	return True
+  where
+	dest = "propellor"
+	cabalbuiltbin = "dist/build/propellor-config/propellor-config"
+	safetycopy = cabalbuiltbin ++ ".built"
+	tmpfor f = f ++ ".propellortmp"
 
 make :: FilePath -> [FilePath] -> IO Bool -> IO ()
 make dest srcs builder = do

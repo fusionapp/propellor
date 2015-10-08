@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Propellor.Types.OS (
 	System(..),
 	Distribution(..),
@@ -10,13 +12,15 @@ module Propellor.Types.OS (
 	User(..),
 	Group(..),
 	userGroup,
+	Port(..),
 ) where
 
 import Network.BSD (HostName)
+import Data.Typeable
 
 -- | High level description of a operating system.
 data System = System Distribution Architecture
-	deriving (Show, Eq)
+	deriving (Show, Eq, Typeable)
 
 data Distribution
 	= Debian DebianSuite
@@ -42,3 +46,6 @@ newtype Group = Group String
 -- | Makes a Group with the same name as the User.
 userGroup :: User -> Group
 userGroup (User u) = Group u
+
+newtype Port = Port Int
+	deriving (Eq, Show)

@@ -8,7 +8,6 @@ module Propellor.Shim (setup, cleanEnv, file) where
 
 import Propellor
 import Utility.LinuxMkLibs
-import Utility.SafeCommand
 import Utility.FileMode
 import Utility.FileSystemEncoding
 
@@ -21,7 +20,7 @@ import System.Posix.Files
 -- Propellor may be running from an existing shim, in which case it's
 -- simply reused.
 setup :: FilePath -> Maybe FilePath -> FilePath -> IO FilePath
-setup propellorbin propellorbinpath dest = checkAlreadyShimmed propellorbin $ do
+setup propellorbin propellorbinpath dest = checkAlreadyShimmed shim $ do
 	createDirectoryIfMissing True dest
 
 	libs <- parseLdd <$> readProcess "ldd" [propellorbin]
@@ -40,7 +39,6 @@ setup propellorbin propellorbinpath dest = checkAlreadyShimmed propellorbin $ do
 		fromMaybe (error "cannot find gconv directory") $
 			headMaybe $ filter ("/gconv/" `isInfixOf`) glibclibs
 	let linkerparams = ["--library-path", intercalate ":" libdirs ]
-	let shim = file propellorbin dest
 	writeFile shim $ unlines
 		[ shebang
 		, "GCONV_PATH=" ++ shellEscape gconvdir
@@ -50,17 +48,22 @@ setup propellorbin propellorbinpath dest = checkAlreadyShimmed propellorbin $ do
 		]
 	modifyFileMode shim (addModes executeModes)
 	return shim
+  where
+	shim = file propellorbin dest
 
 shebang :: String
 shebang = "#!/bin/sh"
 
 checkAlreadyShimmed :: FilePath -> IO FilePath -> IO FilePath
-checkAlreadyShimmed f nope = withFile f ReadMode $ \h -> do
-	fileEncoding h
-	s <- hGetLine h
-	if s == shebang
-		then return f
-		else nope
+checkAlreadyShimmed f nope = ifM (doesFileExist f)
+	( withFile f ReadMode $ \h -> do
+		fileEncoding h
+		s <- hGetLine h
+		if s == shebang
+			then return f
+			else nope
+	, nope
+	)
 
 -- Called when the shimmed propellor is running, so that commands it runs
 -- don't see it.
@@ -74,7 +77,7 @@ installFile :: FilePath -> FilePath -> IO ()
 installFile top f = do
 	createDirectoryIfMissing True destdir
 	nukeFile dest
-	createLink f dest `catchIO` (const copy)
+	createLink f dest `catchIO` const copy
   where
 	copy = void $ boolSystem "cp" [Param "-a", Param f, Param dest]
 	destdir = inTop top $ takeDirectory f

@@ -4,6 +4,7 @@ import Propellor
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Service as Service
+import qualified Propellor.Property.ConfFile as ConfFile
 import Utility.FileMode
 import Utility.DataUnits
 
@@ -103,13 +104,8 @@ bandwidthRate' s divby = case readSize dataUnits s of
 	Nothing -> property ("unable to parse " ++ s) noChange
 
 hiddenServiceAvailable :: HiddenServiceName -> Int -> Property NoInfo
-hiddenServiceAvailable hn port = hiddenServiceHostName prop
+hiddenServiceAvailable hn port = hiddenServiceHostName $ hiddenService hn port
   where
-	prop = configured
-		[ ("HiddenServiceDir", varLib </> hn)
-		, ("HiddenServicePort", unwords [show port, "127.0.0.1:" ++ show port])
-		]
-		`describe` "hidden service available"
 	hiddenServiceHostName p =  adjustPropertySatisfy p $ \satisfy -> do
 		r <- satisfy
 		h <- liftIO $ readFile (varLib </> hn </> "hostname")
@@ -117,11 +113,17 @@ hiddenServiceAvailable hn port = hiddenServiceHostName prop
 		return r
 
 hiddenService :: HiddenServiceName -> Int -> Property NoInfo
-hiddenService hn port = configured
-	[ ("HiddenServiceDir", varLib </> hn)
-	, ("HiddenServicePort", unwords [show port, "127.0.0.1:" ++ show port])
-	]
-	`describe` unwords ["hidden service available:", hn, show port]
+hiddenService hn port = ConfFile.adjustSection
+	(unwords ["hidden service", hn, "available on port", show port])
+	(== oniondir)
+	(not . isPrefixOf "HiddenServicePort")
+	(const [oniondir, onionport])
+	(++ [oniondir, onionport])
+	mainConfig
+	`onChange` restarted
+  where
+	oniondir = unwords ["HiddenServiceDir", varLib </> hn]
+	onionport = unwords ["HiddenServicePort", show port, "127.0.0.1:" ++ show port]
 
 hiddenServiceData :: IsContext c => HiddenServiceName -> c -> Property HasInfo
 hiddenServiceData hn context = combineProperties desc
@@ -132,12 +134,12 @@ hiddenServiceData hn context = combineProperties desc
 	desc = unwords ["hidden service data available in", varLib </> hn]
 	installonion f = withPrivData (PrivFile $ varLib </> hn </> f) context $ \getcontent ->
 		property desc $ getcontent $ install $ varLib </> hn </> f
-	install f content = ifM (liftIO $ doesFileExist f)
+	install f privcontent = ifM (liftIO $ doesFileExist f)
 		( noChange
 		, ensureProperties
 			[ property desc $ makeChange $ do
 				createDirectoryIfMissing True (takeDirectory f)
-				writeFileProtected f content
+				writeFileProtected f (unlines (privDataLines privcontent))
 			, File.mode (takeDirectory f) $ combineModes
 				[ownerReadMode, ownerWriteMode, ownerExecuteMode]
 			, File.ownerGroup (takeDirectory f) user (userGroup user)
@@ -164,7 +166,7 @@ type NickName = String
 
 -- | Convert String to a valid tor NickName.
 saneNickname :: String -> NickName
-saneNickname s 
+saneNickname s
 	| null n = "unnamed"
 	| otherwise = n
   where
