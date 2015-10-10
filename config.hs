@@ -39,6 +39,7 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           -- Local private certificates
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
+          & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
 
 
 fusionCa :: [String]
