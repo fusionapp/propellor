@@ -50,9 +50,9 @@ fusionHost :: Property HasInfo
 fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
              & Apt.installed ["mercurial", "git"]
+             & Docker.installed
              & propertyList "admin docker access"
              (flip User.hasGroup (Group "docker") <$> admins)
-             & Docker.installed
 
 
 fusionCa :: [String]
