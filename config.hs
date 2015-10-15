@@ -24,22 +24,35 @@ main = defaultMain hosts
 -- Edit this to configure propellor!
 hosts :: [Host]
 hosts = [ scarlet
+        , onyx
         ]
 
 
 scarlet :: Host
 scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
-          & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
+          & fusionHost
           & Ssh.keyImported SshRsa (User "root") hostContext
-          & Apt.installed ["mercurial"]
-          & propertyList "admin docker access"
-          (flip User.hasGroup (Group "docker") <$> admins)
-          & Docker.installed
           -- Local private certificates
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
+
+
+onyx :: Host
+onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
+       & ipv4 "41.72.130.249"
+       & fusionHost
+       -- & Ssh.keyImported SshRsa (User "root") hostContext
+
+
+fusionHost :: Property HasInfo
+fusionHost = propertyList "Platform dependencies for Fusion services" $ props
+             & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
+             & Apt.installed ["mercurial", "git"]
+             & propertyList "admin docker access"
+             (flip User.hasGroup (Group "docker") <$> admins)
+             & Docker.installed
 
 
 fusionCa :: [String]
