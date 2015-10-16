@@ -12,6 +12,7 @@ import qualified Propellor.Property.Debootstrap as Debootstrap
 import qualified Propellor.Property.Docker as Docker
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Hostname as Hostname
+import qualified Propellor.Property.Nginx as Nginx
 import qualified Propellor.Property.Ssh as Ssh
 import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.Systemd as Systemd
@@ -47,6 +48,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        -- & Ssh.keyImported SshRsa (User "root") hostContext
        & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
+       & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
 
 
@@ -217,9 +219,8 @@ apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             & Systemd.bind "/srv/svn"
             & Systemd.containerCfg "network-veth"
             & Systemd.running Systemd.networkd
-            & Apt.installed ["apache2", "libapache2-svn"]
-            & Systemd.running "apache2"
-            & Apache.modEnabled "dav_svn"
+            & Systemd.running "apache2" `requires` Apt.installed ["apache2"]
+            & Apache.modEnabled "dav_svn" `requires` Apt.installed ["libapache2-svn"]
             & Apache.siteDisabled "000-default"
             & Apache.listenPorts [Port 8100]
             & Apache.siteEnabled "svn.quotemaster.co.za"
@@ -238,3 +239,48 @@ apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             , "  </Location>"
             , "</VirtualHost>"
             ]
+
+
+nginxPrimary :: Systemd.Container
+nginxPrimary = standardContainer "nginx-primary" (Stable "jessie") "amd64"
+               & Systemd.running Systemd.networkd
+               & Systemd.running "nginx" `requires` Nginx.installed
+               & Nginx.siteEnabled "svn.quotemaster.co.za"
+               [ " server {"
+               , "    listen              41.72.130.249:80;"
+               , "    server_name         svn.quotemaster.co.za;"
+               , "    access_log          /var/log/nginx/svn.quotemaster.co.za_access.log;"
+               , "    client_max_body_size 200m;"
+               , ""
+               , "    location / {"
+               , "        proxy_set_header Host $host;"
+               , "        proxy_set_header X-Real-IP $remote_addr;"
+               , "        proxy_set_header X-Forwarded-Proto http;"
+               , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+               , "        proxy_pass       http://localhost:8100;"
+               , "    }"
+               , "}"
+               , ""
+               , "server {"
+               , "    listen              41.72.130.249:443;"
+               , "    server_name         svn.fusionapp.com;"
+               , "    ssl_certificate     /srv/certs/private/star.fusionapp.com.pem;"
+               , "    ssl_certificate_key /srv/certs/private/star.fusionapp.com.pem;"
+               , "    ssl_ciphers         ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AES:RSA+3DES:!ADH:!AECDH:!MD5;"
+               , "    ssl_prefer_server_ciphers on;"
+               , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
+               , "    ssl_session_cache   shared:SSL:50m;"
+               , "    ssl_session_timeout 5m;"
+               , "    access_log          /var/log/nginx/svn.quotemaster.co.za_tls_access.log;"
+               , "    client_max_body_size 200m;"
+               , ""
+               , "    location / {"
+               , "        proxy_set_header Host $host;"
+               , "        proxy_set_header X-Real-IP $remote_addr;"
+               , "        proxy_set_header X-Forwarded-Proto http;"
+               , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+               , "        proxy_pass       http://localhost:8100;"
+               , "    }"
+               , "}"
+               ]
+
