@@ -47,7 +47,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        -- & Ssh.keyImported SshRsa (User "root") hostContext
        & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
-       & Systemd.nspawned apacheSvn
+       & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
 
 
 fusionHost :: Property HasInfo
@@ -184,7 +184,6 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
 standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Systemd.Container
 standardContainer name suite arch =
   Systemd.container name chroot
-  & os system
   & Apt.stdSourcesList `onChange` Apt.upgrade
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
@@ -196,6 +195,7 @@ apacheSvn :: Systemd.Container
 apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             & Systemd.bind "/srv/svn"
             & Systemd.containerCfg "network-veth"
+            & Systemd.running Systemd.networkd
             & Apt.serviceInstalledRunning "apache2"
             & Apt.installed ["libapache2-svn"]
             & Apache.modEnabled "dav_svn"
@@ -217,5 +217,3 @@ apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             , "  </Location>"
             , "</VirtualHost>"
             ]
-  where chroot = Chroot.debootstrapped system Debootstrap.MinBase
-        system = System (Debian (Stable "jessie")) "amd64"
