@@ -101,6 +101,7 @@ standardSystem hn suite arch =
   & os (System (Debian suite) arch)
   & Hostname.sane
   & Hostname.searchDomain
+  & standardNsSwitch
   & Apt.stdSourcesList
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
@@ -145,6 +146,25 @@ standardSystem hn suite arch =
                   , "fish"
                   , "rsync"
                   ]
+
+
+standardNsSwitch :: Property NoInfo
+standardNsSwitch =
+  File.hasContent "/etc/nsswitch.conf"
+  [ "passwd:         compat mymachines"
+  , "group:          compat mymachines"
+  , "shadow:         compat"
+  , ""
+  , "hosts:          files resolve mymachines myhostname"
+  , "networks:       files"
+  , ""
+  , "protocols:      db files"
+  , "services:       db files"
+  , "ethers:         db files"
+  , "rpc:            db files"
+  , ""
+  , "netgroup:       nis"
+  ]
 
 
 admins :: [User]
@@ -200,9 +220,9 @@ apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             & Apt.installed ["libapache2-svn"]
             & Apache.modEnabled "dav_svn"
             & Apache.siteDisabled "000-default"
+            & Apache.listenPorts [Port 8100]
             & Apache.siteEnabled "svn.quotemaster.co.za"
-            [ "Listen 127.0.0.1:8100"
-            , "<VirtualHost *:8100>"
+            [ "<VirtualHost *:8100>"
             , "  ServerName svn.quotemaster.co.za;"
             , "  <Location /svn>"
             , "      DAV             svn"
