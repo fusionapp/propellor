@@ -101,6 +101,7 @@ standardSystem hn suite arch =
   & os (System (Debian suite) arch)
   & Hostname.sane
   & Hostname.searchDomain
+  & Apt.installed ["libnss-myhostname"]
   & standardNsSwitch
   & Apt.stdSourcesList
   & Apt.unattendedUpgrades
@@ -155,7 +156,7 @@ standardNsSwitch =
   , "group:          compat mymachines"
   , "shadow:         compat"
   , ""
-  , "hosts:          files resolve mymachines myhostname"
+  , "hosts:          files dns mymachines myhostname"
   , "networks:       files"
   , ""
   , "protocols:      db files"
