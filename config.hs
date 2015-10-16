@@ -102,6 +102,7 @@ standardSystem hn suite arch =
   & Hostname.searchDomain
   & Apt.stdSourcesList
   & Apt.unattendedUpgrades
+  & Apt.cacheCleaned
   & Apt.installed [ "openssh-server"
                   , "openssh-client"
                   , "git"
@@ -181,6 +182,10 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
 
 apacheSvn :: Systemd.Container
 apacheSvn = Systemd.container "apache-svn" chroot
+            & os system
+            & Apt.stdSourcesList
+            & Apt.unattendedUpgrades
+            & Apt.cacheCleaned
             & Apt.serviceInstalledRunning "apache2"
             & Apt.installed ["libapache2-svn"]
             & Apache.modEnabled "dav_svn"
@@ -202,4 +207,5 @@ apacheSvn = Systemd.container "apache-svn" chroot
             , "  </Location>"
             , "</VirtualHost>"
             ]
-  where chroot = Chroot.debootstrapped (System (Debian (Stable "jessie")) "amd64") Debootstrap.MinBase
+  where chroot = Chroot.debootstrapped system Debootstrap.MinBase
+        system = System (Debian (Stable "jessie")) "amd64"
