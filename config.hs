@@ -1,20 +1,21 @@
 -- This is the main configuration file for Propellor, and is used to build
 -- the propellor program.
 
+import           Control.Applicative ((<$>), (<*>))
 import           Propellor
 import           Propellor.CmdLine
---import           System.Posix.Files
-import qualified Propellor.Property.File as File
+import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Apt as Apt
---import qualified Propellor.Property.Network as Network
-import qualified Propellor.Property.Ssh as Ssh
+import qualified Propellor.Property.Chroot as Chroot
 import qualified Propellor.Property.Cron as Cron
-import qualified Propellor.Property.Systemd as Systemd
-import qualified Propellor.Property.Sudo as Sudo
-import qualified Propellor.Property.User as User
-import qualified Propellor.Property.Hostname as Hostname
---import qualified Propellor.Property.Tor as Tor
+import qualified Propellor.Property.Debootstrap as Debootstrap
 import qualified Propellor.Property.Docker as Docker
+import qualified Propellor.Property.File as File
+import qualified Propellor.Property.Hostname as Hostname
+import qualified Propellor.Property.Ssh as Ssh
+import qualified Propellor.Property.Sudo as Sudo
+import qualified Propellor.Property.Systemd as Systemd
+import qualified Propellor.Property.User as User
 
 main :: IO ()
 main = defaultMain hosts
@@ -44,6 +45,8 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
        & fusionHost
        -- & Ssh.keyImported SshRsa (User "root") hostContext
+       & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
+       & Systemd.nspawned apacheSvn
 
 
 fusionHost :: Property HasInfo
@@ -138,6 +141,7 @@ standardSystem hn suite arch =
                   , "atool"
                   , "sqlite3"
                   , "fish"
+                  , "rsync"
                   ]
 
 
@@ -173,3 +177,29 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
                  , jjKeys
                  , darrenKeys
                  ]
+
+
+apacheSvn :: Systemd.Container
+apacheSvn = Systemd.container "apache-svn" chroot
+            & Apt.serviceInstalledRunning "apache2"
+            & Apt.installed ["libapache2-svn"]
+            & Apache.modEnabled "dav_svn"
+            & Apache.siteDisabled "000-default"
+            & Apache.siteEnabled
+            [ "Listen 127.0.0.1:8100"
+            , "<VirtualHost *:8100>"
+            , "  ServerName svn.quotemaster.co.za;"
+            , "  <Location /svn>"
+            , "      DAV             svn"
+            , "      SVNParentPath   /srv/svn"
+            , "      AuthName        Subversion"
+            , "      AuthType        Basic"
+            , "      AuthUserFile    /srv/svn/dav_svn.passwd"
+            , "      <LimitExcept GET PROPFIND OPTIONS REPORT>"
+            , "          Require valid-user"
+            , "      </LimitExcept>"
+            , Apache.allowAll
+            , "  </Location>"
+            , "</VirtualHost>"
+            ]
+  where chroot = Chroot.debootstrapped (System (Debian (Stable "jessie")) "amd64") Debootstrap.MinBase
