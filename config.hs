@@ -185,7 +185,7 @@ apacheSvn = Systemd.container "apache-svn" chroot
             & Apt.installed ["libapache2-svn"]
             & Apache.modEnabled "dav_svn"
             & Apache.siteDisabled "000-default"
-            & Apache.siteEnabled
+            & Apache.siteEnabled "svn.quotemaster.co.za"
             [ "Listen 127.0.0.1:8100"
             , "<VirtualHost *:8100>"
             , "  ServerName svn.quotemaster.co.za;"
