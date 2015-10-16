@@ -181,12 +181,21 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
                  ]
 
 
+standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Systemd.Container
+standardContainer name suite arch =
+  Systemd.container name chroot
+  & os system
+  & Apt.stdSourcesList `onChange` Apt.upgrade
+  & Apt.unattendedUpgrades
+  & Apt.cacheCleaned
+  where chroot = Chroot.debootstrapped system Debootstrap.MinBase
+        system = System (Debian suite) arch
+
+
 apacheSvn :: Systemd.Container
-apacheSvn = Systemd.container "apache-svn" chroot
-            & os system
-            & Apt.stdSourcesList
-            & Apt.unattendedUpgrades
-            & Apt.cacheCleaned
+apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
+            & Systemd.bind "/srv/svn"
+            & Systemd.containerCfg "network-veth"
             & Apt.serviceInstalledRunning "apache2"
             & Apt.installed ["libapache2-svn"]
             & Apache.modEnabled "dav_svn"
