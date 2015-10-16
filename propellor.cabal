@@ -1,5 +1,5 @@
 Name: propellor
-Version: 2.8.1
+Version: 2.9.0
 Cabal-Version: >= 1.8
 License: BSD3
 Maintainer: Joey Hess <id@joeyh.name>
@@ -69,6 +69,8 @@ Library
 
   Exposed-Modules:
     Propellor
+    Propellor.Base
+    Propellor.Location
     Propellor.Property
     Propellor.Property.Aiccu
     Propellor.Property.Apache
@@ -92,6 +94,9 @@ Library
     Propellor.Property.Grub
     Propellor.Property.Journald
     Propellor.Property.Kerberos
+    Propellor.Property.List
+    Propellor.Property.LightDM
+    Propellor.Property.Logcheck
     Propellor.Property.Mount
     Propellor.Property.Network
     Propellor.Property.Nginx
@@ -104,9 +109,7 @@ Library
     Propellor.Property.Prosody
     Propellor.Property.Reboot
     Propellor.Property.Rsync
-    Propellor.Property.List
-    Propellor.Property.LightDM
-    Propellor.Property.Logcheck
+    Propellor.Property.Spin
     Propellor.Property.Scheduled
     Propellor.Property.Service
     Propellor.Property.Ssh
@@ -116,6 +119,7 @@ Library
     Propellor.Property.Tor
     Propellor.Property.Unbound
     Propellor.Property.User
+    Propellor.Property.Uwsgi
     Propellor.Property.HostingProvider.CloudAtCost
     Propellor.Property.HostingProvider.DigitalOcean
     Propellor.Property.HostingProvider.Linode
@@ -125,6 +129,7 @@ Library
     Propellor.Property.SiteSpecific.Branchable
     Propellor.Property.SiteSpecific.IABak
     Propellor.PropAccum
+    Propellor.Utilities
     Propellor.CmdLine
     Propellor.Info
     Propellor.Message

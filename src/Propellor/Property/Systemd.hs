@@ -40,7 +40,7 @@ module Propellor.Property.Systemd (
 	bindRo,
 ) where
 
-import Propellor
+import Propellor.Base
 import Propellor.Types.Chroot
 import Propellor.Types.Container
 import Propellor.Types.Info
@@ -62,8 +62,8 @@ data Container = Container MachineName Chroot.Chroot Host
 	deriving (Show)
 
 instance PropAccum Container where
-	(Container n c h) & p = Container n c (h & p)
-	(Container n c h) &^ p = Container n c (h &^ p)
+	(Container n c h) `addProp` p = Container n c (h `addProp` p)
+	(Container n c h) `addPropFront` p = Container n c (h `addPropFront` p)
 	getProperties (Container _ _ h) = hostProperties h
 
 -- | Starts a systemd service.
@@ -254,8 +254,9 @@ nspawnService (Container name _ _) cfg = setup <!> teardown
 		<$> servicefilecontent
 		<*> catchDefaultIO "" (readFile servicefile)
 
-	writeservicefile = property servicefile $ makeChange $
-		viaTmp writeFile servicefile =<< servicefilecontent
+	writeservicefile = property servicefile $ makeChange $ do
+		c <- servicefilecontent
+		File.viaStableTmp (\t -> writeFile t c) servicefile
 
 	setupservicefile = check (not <$> goodservicefile) $
 		-- if it's running, it has the wrong configuration,
@@ -376,8 +377,8 @@ instance Publishable (Proto, Bound Port) where
 --
 -- > foo :: Host
 -- > foo = host "foo.example.com"
--- >	& Systemd.running Systemd.networkd
 -- >	& Systemd.nspawned webserver
+-- > 		`requires` Systemd.running Systemd.networkd
 -- >
 -- > webserver :: Systemd.container
 -- > webserver = Systemd.container "webserver" (Chroot.debootstrapped (System (Debian Testing) "amd64") mempty)
