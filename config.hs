@@ -45,6 +45,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
        & fusionHost
        -- & Ssh.keyImported SshRsa (User "root") hostContext
+       & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
        & Systemd.nspawned apacheSvn
 
