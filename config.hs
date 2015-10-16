@@ -245,6 +245,7 @@ nginxPrimary :: Systemd.Container
 nginxPrimary = standardContainer "nginx-primary" (Stable "jessie") "amd64"
                & Systemd.running Systemd.networkd
                & Systemd.running "nginx" `requires` Nginx.installed
+               & Systemd.bind "/srv/certs"
                & Nginx.siteEnabled "svn.quotemaster.co.za"
                [ " server {"
                , "    listen              41.72.130.249:80;"
