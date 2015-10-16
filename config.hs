@@ -217,8 +217,8 @@ apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             & Systemd.bind "/srv/svn"
             & Systemd.containerCfg "network-veth"
             & Systemd.running Systemd.networkd
-            & Apt.serviceInstalledRunning "apache2"
-            & Apt.installed ["libapache2-svn"]
+            & Apt.installed ["apache2", "libapache2-svn"]
+            & Systemd.running "apache2"
             & Apache.modEnabled "dav_svn"
             & Apache.siteDisabled "000-default"
             & Apache.listenPorts [Port 8100]
