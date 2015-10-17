@@ -288,6 +288,7 @@ nginxPrimary = standardContainer "nginx-primary" (Stable "jessie") "amd64"
                ]
 
 
+dhparam2048 :: [String]
 dhparam2048 =
   [ "-----BEGIN DH PARAMETERS-----"
   , "MIIBCAKCAQEAxDV+dxRNpt4NL5EfIq9XpCd25rABEgjgA1oRdAs5CXl9Kd+DADmR"
