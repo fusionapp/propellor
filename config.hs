@@ -132,6 +132,7 @@ standardSystem hn suite arch =
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
   & darrenKeys (User "darren")
+  & williamKeys (User "william")
   & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
@@ -172,7 +173,7 @@ standardNsSwitch =
 
 
 admins :: [User]
-admins = map User ["tristan", "jj", "darren"]
+admins = map User ["tristan", "jj", "darren", "william"]
 
 
 tristanKeys :: User -> Property NoInfo
@@ -197,11 +198,19 @@ darrenKeys user = propertyList "keys for darren" $ map (Ssh.authorizedKey user)
                   , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCoiVJFBthrh+YDlE7U5FNopTzDwQwtCLdASt3ex+UdVPzkLxiHtDaqQYwkGquTk8w6nKbIhTc9cuSe065EqPvpZznOFks07dW5vHUn+C+soZ18VXt7WOX8c8TlGVCMHQ00VFxAqyAltleWYTfpUUGHMcTijN1s/8CgF/p6VlLDzzM704cg4iI0xzN+x9JtKWs6i042RlevO8UA0t2oSYKM08IcKiC/Hi1yjRYFC6yB2lh3c/4BD7V+j4stLvmgk1aBYQHn+2O7VEhwKAgGG5pJUKU373GWDFBDB3ox+ACIgjWLEFMoJCsLlxObiiBMCj88BmVu7aAViqCdl//KHZ3N cardno:000603011904"
                   ]
 
+
+williamKeys :: User -> Property NoInfo
+williamKeys user = propertyList "keys for william" $ map (Ssh.authorizedKey user)
+                   [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCiy5Sx5pADzWP9Aq+ecagisuc2jZJaR/DV4PoVWxNAH4HngybzBBUtTL/9BsLcTn5OKNGqc1Kk916PENBPN3sqNQJj1u+OUyibAT8Em/sEfaDZ5ykh++E0/ycKYFs2chXR7fPhe+68hLAMNS3GlKvf5ErmScz3oyDEwR73b00LfABz3rpy7YuxoNiA/PgPv4+5oaULUxo0ysGx+mcoAvrXwQ5u3KHPOKNNzN9E3gF5AhML+qGF5i7T3dYcZ0OsqkEJ4gSRG8PPVmX2rKMI+Ldvh0LI0Xa9fgaEgtC5X38u+0WalEE5EhBv5LUZKRu+9bzkR71jl9kbI86ld/QLYf9Z js@mvp.gg"
+                   ]
+
+
 adminKeys :: User -> Property NoInfo
 adminKeys user = propertyList "admin keys" . map ($ user) $
                  [ tristanKeys
                  , jjKeys
                  , darrenKeys
+                 , williamKeys
                  ]
 
 
