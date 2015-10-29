@@ -39,15 +39,23 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
+          & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
+          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
+          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/scarlet.fusionapp.com.pem"
+          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` "/srv/certs/private/scarlet.fusionapp.com.pem"
 
 
 onyx :: Host
 onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
        & fusionHost
-       -- & Ssh.keyImported SshRsa (User "root") hostContext
+       -- Local private certificates
        & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
+       & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" hostContext
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
 
