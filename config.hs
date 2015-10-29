@@ -111,7 +111,8 @@ standardSystem :: HostName -> DebianSuite -> Architecture -> Host
 standardSystem hn suite arch =
   host hn
   & os (System (Debian suite) arch)
-  & Hostname.sane
+  -- Can't turn this on because 127.0.1.1 in /etc/hosts is a problem
+  -- & Hostname.sane
   & Hostname.searchDomain
   & Apt.installed ["libnss-myhostname"]
   & standardNsSwitch
