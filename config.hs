@@ -232,7 +232,7 @@ standardContainer name suite arch =
   & Apt.stdSourcesList `onChange` Apt.upgrade
   -- Need cron installed for unattended-upgrades to work
   & Apt.installed ["cron"]
-  & Apt.removed ["exim4"]
+  & Apt.removed ["exim4", "exim4-base", "exim4-config", "exim4-daemon-light"]
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
   where chroot = Chroot.debootstrapped system Debootstrap.MinBase
