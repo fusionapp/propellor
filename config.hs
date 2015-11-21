@@ -334,6 +334,12 @@ mailRelay =
   `onChange` Postfix.dedupMainCf
   `onChange` Postfix.reloaded
   `describe` "postfix configured"
+  & Postfix.mappedFile "/etc/postfix/master.cf"
+  (flip File.containsLines
+   [ "submission inet n - - - - smtpd"
+   ])
+  `describe` "postfix master.cf configured"
+  `onChange` Postfix.reloaded
 
 
 dhparam2048 :: [String]
