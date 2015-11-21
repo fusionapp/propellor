@@ -60,6 +60,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
+       & Systemd.nspawned mailRelayContainer
 
 
 fusionHost :: Property HasInfo
