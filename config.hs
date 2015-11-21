@@ -13,6 +13,7 @@ import qualified Propellor.Property.Docker as Docker
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Hostname as Hostname
 import qualified Propellor.Property.Nginx as Nginx
+import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Ssh as Ssh
 import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.Systemd as Systemd
@@ -309,6 +310,29 @@ nginxPrimary = standardContainer "nginx-primary" (Stable "jessie") "amd64"
                , "    }"
                , "}"
                ]
+
+
+mailRelayContainer :: Systemd.Container
+mailRelayContainer = standardContainer "mail-relay" (Stable "jessie") "amd64"
+                     & Systemd.running Systemd.networkd
+                     & mailRelay
+
+
+mailRelay :: Property HasInfo
+mailRelay =
+  propertyList "fusionapp.com mail relay" $ props
+  & Systemd.running Systemd.networkd
+  & Systemd.running "postfix" `requires` Postfix.installed
+  & "/etc/aliases" `File.hasContent`
+  [ "postmaster: root"
+  , "root: dev@fusionapp.com"
+  ] `onChange` Postfix.newaliases
+  & Postfix.mainCfFile `File.containsLines`
+  [ "mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 41.72.130.248/29 41.72.129.157/32 129.232.129.136/29 197.189.229.120/29 41.72.135.80/29"
+  ]
+  `onChange` Postfix.dedupMainCf
+  `onChange` Postfix.reloaded
+  `describe` "postfix configured"
 
 
 dhparam2048 :: [String]
