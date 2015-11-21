@@ -228,6 +228,8 @@ standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Syste
 standardContainer name suite arch =
   Systemd.container name chroot
   & Apt.stdSourcesList `onChange` Apt.upgrade
+  -- Need cron installed for unattended-upgrades to work
+  & Apt.installed ["cron"]
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
   where chroot = Chroot.debootstrapped system Debootstrap.MinBase
