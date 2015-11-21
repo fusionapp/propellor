@@ -237,7 +237,7 @@ standardContainer name suite arch =
 
 
 apacheSvn :: Systemd.Container
-apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
+apacheSvn = Systemd.container "apache-svn" chroot
             & Systemd.bind "/srv/svn"
             & Systemd.containerCfg "network-veth"
             & Systemd.running Systemd.networkd
@@ -261,6 +261,8 @@ apacheSvn = standardContainer "apache-svn" (Stable "jessie") "amd64"
             , "  </Location>"
             , "</VirtualHost>"
             ]
+  where chroot = Chroot.debootstrapped system Debootstrap.MinBase
+        system = System (Debian (Stable "jessie")) "amd64"
 
 
 nginxPrimary :: Systemd.Container
