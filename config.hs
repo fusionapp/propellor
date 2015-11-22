@@ -73,6 +73,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & File.dirExists "/srv/duplicity"
              & File.hasPrivContent "/srv/duplicity/credentials.sh" hostContext
              & File.dirExists "/srv/locks"
+             & backupScript
 
 
 fusionCa :: [String]
@@ -101,6 +102,26 @@ fusionCa =
   , "WHmEGoWHAIQdlp+S8go8qK1sgoS0TBgaWLpDAhIdmL9DNHKNoD9x90K/VImO+Tfj"
   , "bX9SQTuI1LzqcpnxxAscO/QOjgH4VsAbYDvJUEIiSNJVTAvM7sPVurnlVg=="
   , "-----END CERTIFICATE-----"
+  ]
+
+
+backupScript :: Property NoInfo
+backupScript =
+  File.hasContent "/usr/local/bin/fusion-backup"
+  [ "#!/bin/bash"
+  , "set -o errexit -o nounset -o xtrace"
+  , "name = ${1?\"Usage: $0 <name> <path> <S3 bucket>\"}"
+  , "path = ${2?\"Usage: $0 <name> <path> <S3 bucket>\"}"
+  , "bucket = ${3?\"Usage: $0 <name> <path> <S3 bucket>\"}"
+  , "snapshot = \"${name}.$(date +%s%N)\""
+  , "docker pull fusionapp/backup"
+  , "btrfs subvolume snapshot -r ${path} /srv/duplicity/${snapshot}"
+  , "chpst -L /srv/locks/${name}-maintenance.lock \\"
+  , "  docker run --rm --tty --interactive --volume=/srv/duplicity:/duplicity fusionapp/backup \\"
+  , "  --no-encryption --allow-source-mismatch --no-print-statistics --verbosity error \\"
+  , "  --name ${name} --full-if-older-than 2W --exclude /duplicity/${snapshot}/dumps --exclude /duplicity/${snapshot}/\\*.axiom/run/logs \\"
+  , "  /duplicity/${name} ${bucket}"
+  , "btrfs subvolume delete /srv/duplicity/${snapshot}"
   ]
 
 
@@ -166,6 +187,8 @@ standardSystem hn suite arch =
                   , "sqlite3"
                   , "fish"
                   , "rsync"
+                  , "ncdu"
+                  , "iftop"
                   ]
 
 
