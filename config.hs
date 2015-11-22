@@ -166,7 +166,10 @@ standardSystem hn suite arch =
                   , "needrestart"
                   , "runit"
                   ]
-  & "/etc/needrestart/conf.d/10-local-docker.conf" `File.hasContents` ["$nrconf{override_rc}{q(^docker)} = 0;"]
+  & "/etc/needrestart/conf.d/10-local-disabled.conf" `File.hasContents`
+  [ "$nrconf{override_rc}{q(^docker)} = 0;"
+  , "$nrconf{override_rc}{q(^systemd-nspawn)} = 0;"
+  ]
   & Apt.serviceInstalledRunning "ntp"
   & simpleRelay
   & Systemd.installed
