@@ -70,6 +70,9 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & Docker.installed
              & propertyList "admin docker access"
              (flip User.hasGroup (Group "docker") <$> admins)
+             & File.dirExists "/srv/duplicity"
+             & File.hasPrivContent "/srv/duplicity/credentials.sh" hostContext
+             & File.dirExists "/srv/locks"
 
 
 fusionCa :: [String]
