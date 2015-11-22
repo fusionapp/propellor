@@ -120,7 +120,7 @@ backupScript =
   , "docker pull fusionapp/backup"
   , "btrfs subvolume snapshot -r ${path} /srv/duplicity/${snapshot}"
   , "chpst -L /srv/locks/${name}-maintenance.lock \\"
-  , "  docker run --rm --tty --interactive --volume=/srv/duplicity:/duplicity fusionapp/backup \\"
+  , "  docker run --rm --volume=/srv/duplicity:/duplicity fusionapp/backup \\"
   , "  --no-encryption --allow-source-mismatch --no-print-statistics --verbosity error \\"
   , "  --name ${name} --full-if-older-than 2W --exclude /duplicity/${snapshot}/dumps --exclude /duplicity/${snapshot}/\\*.axiom/run/logs \\"
   , "  /duplicity/${snapshot} ${bucket}"
