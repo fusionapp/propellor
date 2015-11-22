@@ -46,7 +46,7 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/scarlet.fusionapp.com.pem"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` "/srv/certs/private/scarlet.fusionapp.com.pem"
-          & Cron.niceJob "fusion-backup" (Cron.Times "0 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
+          & Cron.niceJob "fusion-backup" (Cron.Times "23 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
 
 
 onyx :: Host
@@ -137,6 +137,16 @@ globalCerts = propertyList "Certificates installed globally" $ props
               & File.hasContent "/srv/certs/public/fusion-ca.crt.pem" fusionCa
 
 
+simpleRelay :: Property NoInfo
+simpleRelay =
+  "/etc/ssmtp/ssmtp.conf" `File.hasContent`
+  [ "Root=dev@fusionapp.com"
+  , "Mailhub=smtp.fusionapp.com:587"
+  , "RewriteDomain=fusionapp.com"
+  , "FromLineOverride=yes"
+  ] `requires` Apt.installed ["ssmtp"]
+
+
 standardSystem :: HostName -> DebianSuite -> Architecture -> Host
 standardSystem hn suite arch =
   host hn
@@ -157,6 +167,7 @@ standardSystem hn suite arch =
                   , "runit"
                   ]
   & Apt.serviceInstalledRunning "ntp"
+  & simpleRelay
   & Systemd.installed
   & Systemd.persistentJournal
   & Cron.runPropellor (Cron.Times "30 * * * *")
@@ -264,6 +275,7 @@ standardContainer name suite arch =
   -- Need cron installed for unattended-upgrades to work
   & Apt.installed ["cron"]
   & Apt.removed ["exim4", "exim4-base", "exim4-config", "exim4-daemon-light"]
+  `onChange` Apt.autoRemove
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
   where chroot = Chroot.debootstrapped system Debootstrap.MinBase
