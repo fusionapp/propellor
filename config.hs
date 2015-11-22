@@ -126,6 +126,7 @@ standardSystem hn suite arch =
                   , "git"
                   , "kexec-tools"
                   , "needrestart"
+                  , "runit"
                   ]
   & Apt.serviceInstalledRunning "ntp"
   & Systemd.installed
