@@ -122,7 +122,7 @@ backupScript =
   , "  docker run --rm --tty --interactive --volume=/srv/duplicity:/duplicity fusionapp/backup \\"
   , "  --no-encryption --allow-source-mismatch --no-print-statistics --verbosity error \\"
   , "  --name ${name} --full-if-older-than 2W --exclude /duplicity/${snapshot}/dumps --exclude /duplicity/${snapshot}/\\*.axiom/run/logs \\"
-  , "  /duplicity/${name} ${bucket}"
+  , "  /duplicity/${snapshot} ${bucket}"
   , "btrfs subvolume delete /srv/duplicity/${snapshot}"
   ] `onChange` (File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes)))
   where p = "/usr/local/bin/fusion-backup"
