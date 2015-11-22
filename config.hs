@@ -18,6 +18,8 @@ import qualified Propellor.Property.Ssh as Ssh
 import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.User as User
+import           System.Posix.Files
+import           Utility.FileMode
 
 main :: IO ()
 main = defaultMain hosts
@@ -107,7 +109,7 @@ fusionCa =
 
 backupScript :: Property NoInfo
 backupScript =
-  File.hasContent "/usr/local/bin/fusion-backup"
+  File.hasContent p
   [ "#!/bin/bash"
   , "set -o errexit -o nounset -o xtrace"
   , "name = ${1?\"Usage: $0 <name> <path> <S3 bucket>\"}"
@@ -122,7 +124,8 @@ backupScript =
   , "  --name ${name} --full-if-older-than 2W --exclude /duplicity/${snapshot}/dumps --exclude /duplicity/${snapshot}/\\*.axiom/run/logs \\"
   , "  /duplicity/${name} ${bucket}"
   , "btrfs subvolume delete /srv/duplicity/${snapshot}"
-  ]
+  ] `onChange` (File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes)))
+  where p = "/usr/local/bin/fusion-backup"
 
 
 globalCerts :: Property HasInfo
