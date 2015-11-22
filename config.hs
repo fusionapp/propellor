@@ -166,7 +166,7 @@ standardSystem hn suite arch =
                   , "needrestart"
                   , "runit"
                   ]
-  & "/etc/needrestart/conf.d/10-local-disabled.conf" `File.hasContents`
+  & "/etc/needrestart/conf.d/10-local-disabled.conf" `File.hasContent`
   [ "$nrconf{override_rc}{q(^docker)} = 0;"
   , "$nrconf{override_rc}{q(^systemd-nspawn)} = 0;"
   ]
