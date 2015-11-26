@@ -117,7 +117,7 @@ backupScript =
   , "path=${2?\"Usage: $0 <name> <path> <S3 bucket>\"}"
   , "bucket=${3?\"Usage: $0 <name> <path> <S3 bucket>\"}"
   , "snapshot=\"${name}.$(date +%s%N)\""
-  , "docker pull fusionapp/backup"
+  , "docker pull fusionapp/backup || true"
   , "btrfs subvolume snapshot -r ${path} /srv/duplicity/${snapshot}"
   , "chpst -L /srv/locks/${name}-maintenance.lock \\"
   , "  docker run --rm --volume=/srv/duplicity:/duplicity fusionapp/backup \\"
