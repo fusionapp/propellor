@@ -361,6 +361,22 @@ nginxPrimary =
   , "    }"
   , "}"
   ]
+  & Nginx.siteEnabled "andersonquotes.co.za"
+  [ "server {"
+  , "    listen              *:80;"
+  , "    server_name         andersonquotes.co.za www.andersonquotes.co.za;"
+  , "    access_log          /var/log/nginx/anderson.access.log;"
+  , ""
+  , "    location / {"
+  , "        proxy_read_timeout 5m;"
+  , "        proxy_set_header Host quotemaster.co.za;"
+  , "        proxy_set_header X-Real-IP $remote_addr;"
+  , "        proxy_set_header X-Forwarded-Proto http;"
+  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+  , "        proxy_pass       https://quotemaster.co.za/anderson/;"
+  , "    }"
+  , "}"
+  ]
 
 
 mailRelayContainer :: Systemd.Container
