@@ -59,6 +59,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" hostContext
+       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/quotemaster.co.za.pem" hostContext
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
