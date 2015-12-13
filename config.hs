@@ -173,6 +173,10 @@ standardSystem hn suite arch =
   [ "$nrconf{override_rc}{q(^docker)} = 0;"
   , "$nrconf{override_rc}{q(^systemd-nspawn)} = 0;"
   ]
+  & "/etc/security/limits.d/10-local.conf" `File.hasContent`
+  [ "* hard nofile 1000000"
+  , "* soft nofile 1000000"
+  ]
   & Apt.serviceInstalledRunning "ntp"
   & simpleRelay
   & Systemd.installed
