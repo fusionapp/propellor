@@ -283,6 +283,10 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
 standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Systemd.Container
 standardContainer name suite arch =
   Systemd.container name chroot
+  & "/etc/security/limits.d/10-local.conf" `File.hasContent`
+  [ "* hard nofile 1000000"
+  , "* soft nofile 1000000"
+  ]
   & Apt.stdSourcesList `onChange` Apt.upgrade
   -- Need cron installed for unattended-upgrades to work
   & Apt.installed ["cron"]
