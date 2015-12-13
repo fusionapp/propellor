@@ -59,6 +59,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" hostContext
+       & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" hostContext
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
@@ -714,8 +715,8 @@ fusionSites =
   , "    root                /srv/nginx;"
   , "    access_log          /var/log/nginx/${host}_tls.access.log;"
   , "    ssl                 on;"
-  , "    ssl_certificate     /srv/certs/fusiontest.net.pem;"
-  , "    ssl_certificate_key /srv/certs/fusiontest.net.pem;"
+  , "    ssl_certificate     /srv/certs/private/fusiontest.net.pem;"
+  , "    ssl_certificate_key /srv/certs/private/fusiontest.net.pem;"
   , "    ssl_ciphers         ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH;"
   , "    ssl_prefer_server_ciphers on;"
   , "    gzip                on;"
