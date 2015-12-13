@@ -331,6 +331,9 @@ nginxPrimary :: Systemd.Container
 nginxPrimary =
   standardContainer "nginx-primary" (Stable "jessie") "amd64"
   & Systemd.running Systemd.networkd
+  & File.dirExists "/etc/systemd/system/nginx.d"
+  & "/etc/systemd/system/nginx.d/limits.conf" `File.hasContent`
+  [ "LimitNOFILE=100000" ]
   & Systemd.running "nginx" `requires` Nginx.installed
   & Systemd.bind "/srv/certs"
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
