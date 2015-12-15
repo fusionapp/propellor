@@ -340,6 +340,8 @@ nginxPrimary =
   & Systemd.running "nginx" `requires` Nginx.installed
   & Systemd.bind "/srv/certs"
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
+  & File.dirExists "/srv/nginx/cache"
+  & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
   & svnSite
   & andersonSite
   & entropySite
