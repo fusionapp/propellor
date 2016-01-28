@@ -38,15 +38,16 @@ scarlet :: Host
 scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & fusionHost
-          & Ssh.keyImported SshRsa (User "root") hostContext
+          & Ssh.userKeys (User "root") hostContext
+          [(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDPWwJxL44Tli9ynNjMurx1j7AAoC+rbKGN6yBY9B8HhOfRYKbNkkH7YNtsEuWSktAWyFdqCr5MmV9FEt5KK1SvwbYRrLcCmH6qfEruAJnSvuI5srLhdh01fMpiSGsMfhpQWBRgRvSc5ehRUdwv8VBGUZjovYlRB73VY2yIoTN0JZQKNkLoKJeuVdiJT/eOQCqtUtU5pSrsmLzNqhVZjUZxE+P5W1v63ZfzQYWh6IP4HTyWl3uANFIllt04IKGDtFPMyCXJnkN5wnQ+cQU0m1eC5ZWW1pIbSWrhHGuxx0Tapdq8soD4YFrpTG4JPOug/vMMCRTc/mRpFAzAudbtpB7njpSPmukfiMMbr7doRD6o6wJHOTYcvrqjD7KXV8NbfL5gp8DqyWTyENj5zKoZxmoDOFdZv0h0uuNGJEJofJ35q1EHrf2csFbii9LR8eNIrfeZCLpVj/cnwJedX53du4pBh7Fq1v3sAZynfnKpxhCc+3jLYAjSm4SY87vo3oWExCRGyUgUcX/IeaxV4SsgnP8GnpKFhTx4E4KeWSHwHKSenilFNM9l2fjt2ETjJIgmfyo3QA5AX/AOvDd2uWlj7PgY+wDG7KgUjjiwT2ZmbnGWYrumrMvhxvwC9wtcKDFqJznLm8/FIrUYP/TSIgBfXq4bVZVawPAc/heMwR2m/2z5YQ== Fusion build/deploy automated key")]
           -- Local private certificates
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
           & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
-          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
-          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/scarlet.fusionapp.com.pem"
-          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` "/srv/certs/private/scarlet.fusionapp.com.pem"
+          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
+          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
+          & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
           & Cron.niceJob "fusion-backup" (Cron.Times "23 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
           & Cron.niceJob "fusion-index-backup" (Cron.Times "41 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
 
@@ -64,9 +65,9 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/quotemaster.co.za.pem" (Context "fusion production")
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
-       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
-       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
-       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
        & Systemd.nspawned mailRelayContainer
@@ -304,7 +305,7 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
 
 standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Systemd.Container
 standardContainer name suite arch =
-  Systemd.container name chroot
+  Systemd.container name system chroot
   & "/etc/security/limits.d/10-local.conf" `File.hasContent`
   [ "* hard nofile 1000000"
   , "* soft nofile 1000000"
@@ -316,12 +317,12 @@ standardContainer name suite arch =
   `onChange` Apt.autoRemove
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
-  where chroot = Chroot.debootstrapped system Debootstrap.MinBase
+  where chroot = Chroot.debootstrapped Debootstrap.MinBase
         system = System (Debian suite) arch
 
 
 apacheSvn :: Systemd.Container
-apacheSvn = Systemd.container "apache-svn" chroot
+apacheSvn = Systemd.container "apache-svn" system chroot
             & Systemd.bind "/srv/svn"
             & Systemd.containerCfg "network-veth"
             & Systemd.running Systemd.networkd
@@ -345,7 +346,7 @@ apacheSvn = Systemd.container "apache-svn" chroot
             , "  </Location>"
             , "</VirtualHost>"
             ]
-  where chroot = Chroot.debootstrapped system Debootstrap.MinBase
+  where chroot = Chroot.debootstrapped Debootstrap.MinBase
         system = System (Debian (Stable "jessie")) "amd64"
 
 
@@ -371,7 +372,7 @@ nginxPrimary =
   & saxumSite
 
 
-svnSite :: RevertableProperty
+svnSite :: RevertableProperty NoInfo
 svnSite =
   Nginx.siteEnabled "svn.quotemaster.co.za"
   [ " server {"
@@ -414,7 +415,7 @@ svnSite =
   ]
 
 
-andersonSite :: RevertableProperty
+andersonSite :: RevertableProperty NoInfo
 andersonSite =
   Nginx.siteEnabled "andersonquotes.co.za"
   [ "server {"
@@ -434,7 +435,7 @@ andersonSite =
   ]
 
 
-entropySite :: RevertableProperty
+entropySite :: RevertableProperty NoInfo
 entropySite =
   Nginx.siteEnabled "entropy.fusionapp.com"
   [ "server {"
@@ -775,7 +776,7 @@ fusionSites =
   ]
 
 
-quotemasterSite :: RevertableProperty
+quotemasterSite :: RevertableProperty NoInfo
 quotemasterSite =
   Nginx.siteEnabled "quotemaster"
   [ "server {"
@@ -812,7 +813,7 @@ quotemasterSite =
   ]
 
 
-saxumSite :: RevertableProperty
+saxumSite :: RevertableProperty NoInfo
 saxumSite =
   Nginx.siteEnabled "saxumretail.com"
   [ "server {"
