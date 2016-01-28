@@ -57,12 +57,12 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & fusionHost
        -- Local private certificates
        & File.dirExists "/srv/certs/private"
-       & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" hostContext
+       & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" hostContext
-       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" hostContext
-       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" hostContext
-       & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" hostContext
-       & File.hasPrivContent "/srv/certs/private/quotemaster.co.za.pem" hostContext
+       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/quotemaster.co.za.pem" (Context "fusion production")
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` "/srv/certs/public/fusion-ca.crt.pem"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` "/srv/certs/private/onyx.fusionapp.com.pem"
