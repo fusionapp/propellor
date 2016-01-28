@@ -60,6 +60,7 @@ tree buildarch flavor = combineProperties "gitannexbuilder tree" $ props
 			, "cd " ++ gitbuilderdir
 			, "git checkout " ++ buildarch ++ fromMaybe "" flavor
 			]
+			`assume` MadeChange
 			`describe` "gitbuilder setup"
 	builddircloned = check (not <$> doesDirectoryExist builddir) $ userScriptProperty (User builduser)
 		[ "git clone git://git-annex.branchable.com/ " ++ builddir
@@ -88,24 +89,26 @@ haskellPkgsInstalled dir = flagFile go ("/haskellpkgsinstalled")
 	go = userScriptProperty (User builduser)
 		[ "cd " ++ builddir ++ " && ./standalone/" ++ dir ++ "/install-haskell-packages"
 		]
+		`assume` MadeChange
 
 -- Installs current versions of git-annex's deps from cabal, but only
 -- does so once.
 cabalDeps :: Property NoInfo
 cabalDeps = flagFile go cabalupdated
 	where
-		go = userScriptProperty (User builduser) ["cabal update && cabal install git-annex --only-dependencies || true"]
+		go = userScriptProperty (User builduser)
+			["cabal update && cabal install git-annex --only-dependencies || true"]
+			`assume` MadeChange
 		cabalupdated = homedir </> ".cabal" </> "packages" </> "hackage.haskell.org" </> "00-index.cache"
 
 autoBuilderContainer :: (System -> Flavor -> Property HasInfo) -> System -> Flavor -> Times -> TimeOut -> Systemd.Container
 autoBuilderContainer mkprop osver@(System _ arch) flavor crontime timeout =
-	Systemd.container name bootstrap
+	Systemd.container name osver (Chroot.debootstrapped mempty)
 		& mkprop osver flavor
 		& buildDepsApt
 		& autobuilder arch crontime timeout
   where
 	name = arch ++ fromMaybe "" flavor ++ "-git-annex-builder"
-	bootstrap = Chroot.debootstrapped osver mempty
 
 type Flavor = Maybe String
 
@@ -115,6 +118,7 @@ standardAutoBuilder osver@(System _ arch) flavor =
 		& os osver
 		& Apt.stdSourcesList
 		& Apt.unattendedUpgrades
+		& Apt.cacheCleaned
 		& User.accountFor (User builduser)
 		& tree arch flavor
 
@@ -144,8 +148,7 @@ androidContainer
 	-> Property i
 	-> FilePath
 	-> Systemd.Container
-androidContainer name setupgitannexdir gitannexdir = Systemd.container name bootstrap
-	& os osver
+androidContainer name setupgitannexdir gitannexdir = Systemd.container name osver bootstrap
 	& Apt.stdSourcesList
 	& User.accountFor (User builduser)
 	& File.dirExists gitbuilderdir
@@ -160,5 +163,6 @@ androidContainer name setupgitannexdir gitannexdir = Systemd.container name boot
 	chrootsetup = scriptProperty
 		[ "cd " ++ gitannexdir ++ " && ./standalone/android/buildchroot-inchroot"
 		]
+		`assume` MadeChange
 	osver = System (Debian (Stable "jessie")) "i386"
-	bootstrap = Chroot.debootstrapped osver mempty
+	bootstrap = Chroot.debootstrapped mempty

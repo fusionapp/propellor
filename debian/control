@@ -13,11 +13,12 @@ Build-Depends:
 	libghc-ansi-terminal-dev,
 	libghc-ifelse-dev,
 	libghc-network-dev,
-	libghc-quickcheck2-dev,
 	libghc-mtl-dev,
 	libghc-transformers-dev,
 	libghc-exceptions-dev (>= 0.6),
-Maintainer: Gergely Nagy <algernon@madhouse-project.org>
+	libghc-stm-dev,
+	libghc-text-dev,
+Maintainer: Joey Hess <id@joeyh.name>
 Standards-Version: 3.9.6
 Vcs-Git: git://git.joeyh.name/propellor
 Homepage: http://propellor.branchable.com/
@@ -35,10 +36,11 @@ Depends: ${misc:Depends}, ${shlibs:Depends},
 	libghc-ansi-terminal-dev,
 	libghc-ifelse-dev,
 	libghc-network-dev,
-	libghc-quickcheck2-dev,
 	libghc-mtl-dev,
 	libghc-transformers-dev,
 	libghc-exceptions-dev (>= 0.6),
+	libghc-stm-dev,
+	libghc-text-dev,
 	git,
 	make,
 Description: property-based host configuration management in haskell

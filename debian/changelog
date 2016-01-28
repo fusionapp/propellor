@@ -1,4 +1,161 @@
-propellor (2.9.0) UNRELEASED; urgency=medium
+propellor (2.15.4) UNRELEASED; urgency=medium
+
+  * Build /usr/src/propellor/propellor.git reproducibly,
+    which makes the whole Debian package build reproducibly.
+    Thanks, Sean Whitton.
+
+ -- Joey Hess <id@joeyh.name>  Mon, 18 Jan 2016 13:15:30 -0400
+
+propellor (2.15.3) unstable; urgency=medium
+
+  * Added Git.bareRepoDefaultBranch property
+    Thanks, Sean Whitton.
+  * Add missing Control.Applicative imports needed by older versions of ghc.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 12 Jan 2016 12:37:22 -0400
+
+propellor (2.15.2) unstable; urgency=medium
+
+  * Added GNUPGBIN environment variable or git.program git config
+    to control the command run for gpg. Allows eg, GNUPGBIN=gpg2
+    Thanks, Félix Sipma.
+  * Bootstrap apt-get installs run with deconf noninteractive frontend.
+  * spin --via: Avoid committing on relay host.
+  * Postfix: Add service property to enable/disable services in master.cf.
+  * Added Munin module, contributed by Jelmer Vernooij.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 03 Jan 2016 16:56:26 -0400
+
+propellor (2.15.1) unstable; urgency=medium
+
+  * Added git configs propellor.spin-branch and propellor.forbid-dirty-spin.
+    Thanks, Sean Whitton.
+  * Added User.systemAccountFor and User.systemAccountFor' properties.
+    Thanks, Félix Sipma.
+  * Gpg.keyImported converted to not use a flag file and instead check
+    if gpg has the provided key already.
+    Thanks, Félix Sipma.
+  * Clean build with ghc 7.10.
+  * Merged Utility changes from git-annex.
+
+ -- Joey Hess <id@joeyh.name>  Sat, 19 Dec 2015 16:43:09 -0400
+
+propellor (2.15.0) unstable; urgency=medium
+
+  * Added UncheckedProperty type, along with unchecked to indicate a
+    Property needs its result checked, and checkResult and changesFile
+    to check for changes.
+  * Properties that run an arbitrary command, such as cmdProperty
+    and scriptProperty are converted to use UncheckedProperty, since
+    they cannot tell on their own if the command truely made a change or not.
+    (API Change)
+    Transition guide:
+    - When GHC complains about an UncheckedProperty, add:
+    	`assume` MadeChange
+      (Since these properties used to always return MadeChange, that
+      change is always safe to make.)
+    - Or, if you know that the command should modifiy a file, use:
+    	`changesFile` filename
+  * The `trivial` combinator has been removed. (API change)
+    Instead, use:
+    	`assume` NoChange
+    Or, better, use changesFile or checkResult to accurately report
+    when a property makes a change.
+  * A few properties have had their Result improved, for example
+    Apt.buldDep and Apt.autoRemove now check if a change was made or not.
+  * User.hasDesktopGroups changed to avoid trying to add the user to
+    groups that don't exist.
+  * Added Postfix.saslPasswdSet.
+  * Added Propellor.Property.Locale.
+    Thanks, Sean Whitton.
+  * Added Propellor.Property.Fail2Ban.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 06 Dec 2015 15:33:51 -0400
+
+propellor (2.14.0) unstable; urgency=medium
+
+  * Add Propellor.Property.PropellorRepo.hasOriginUrl, an explicit way to
+    set the git repository url normally implicitly set when using --spin.
+  * Added Chroot.noServices property.
+  * DiskImage creation automatically uses Chroot.noServices.
+  * Removed the (unused) dependency on quickcheck.
+  * DebianMirror: Added a DebianMirror type for configuration (API change)
+    Thanks, Félix Sipma.
+  * DebianMirror: Add RsyncExtra to configuration.
+    Thanks, Félix Sipma.
+  * Added Git.repoConfigured and Git.repoAcceptsNonFFs properties.
+    Thanks, Sean Whitton
+  * Added User.hasDesktopGroups property.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 24 Nov 2015 16:03:55 -0400
+
+propellor (2.13.0) unstable; urgency=medium
+
+  * RevertableProperty used to be assumed to contain info, but this is
+    now made explicit, with RevertableProperty HasInfo or
+    RevertableProperty NoInfo. (API change)
+    Transition guide:
+      - If you define a RevertableProperty, expect some type check
+        failures like: "Expecting one more argument to ‘RevertableProperty’".
+      - Change it to "RevertableProperty NoInfo"
+      - The compiler will then tell you if it needs "HasInfo" instead.
+      - If you have code that uses the RevertableProperty constructor
+        that fails to type check, use the more powerful <!> operator
+        instead to create the RevertableProperty.
+  * Various property combinators that combined a RevertableProperty
+    with a non-revertable property used to yield a RevertableProperty.
+    This was a bug, because the combined property could not be fully
+    reverted in many cases, and the result is now a non-revertable property.
+  * combineWith now takes an additional parameter to control how revert
+    actions are combined (API change).
+  * Added Propellor.Property.Concurrent for concurrent properties.
+  * Made the execProcess exported by propellor, and everything built on it,
+    avoid scrambled output when run concurrently.
+  * Propellor now depends on STM and text.
+  * The cabal file now builds propellor with -O. While -O0 makes ghc
+    take less memory while building propellor, it can lead to bad memory
+    usage at runtime due to eg, disabled stream fusion.
+  * Add File.isCopyOf. Thanks, Per Olofsson.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 08 Nov 2015 14:51:15 -0400
+
+propellor (2.12.0) unstable; urgency=medium
+
+  * The DiskImage module can now make bootable images using grub.
+  * Add a ChrootTarball chroot type, for using pre-built tarballs
+    as chroots. Thanks, Ben Boeckel.
+  * HostName: Improve domain extraction code.
+  * Added Mount.fstabbed property to generate /etc/fstab to replicate
+    current mounts.
+  * HostName: Improve domain extraction code.
+  * Add File.basedOn. Thanks, Per Olofsson.
+  * Changed how the operating system is provided to Chroot (API change).
+    Where before debootstrapped and bootstrapped took a System parameter,
+    the os property should now be added to the Chroot.
+  * Follow-on change to Systemd.container, which now takes a System parameter.
+  * Generalized Property.check so it can be used with Propellor actions as
+    well as IO actions.
+  * Hostname.sane and Hostname.setTo can now safely be used as a property
+    of a chroot, and won't affect the hostname of the host system.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 23 Oct 2015 17:38:32 -0400
+
+propellor (2.11.0) unstable; urgency=medium
+
+  * Rewrote Propellor.Property.ControlHeir one more time, renaming it to
+    Propellor.Property.Conductor.
+  * Added Ssh properties to remove authorized_keys and known_hosts lines.
+
+ -- Joey Hess <id@joeyh.name>  Wed, 21 Oct 2015 19:49:00 -0400
+
+propellor (2.10.0) unstable; urgency=medium
+
+  * The Propellor.Property.Spin added in the last release is replaced
+    with a very different Propellor.Property.ControlHeir.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 20 Oct 2015 21:29:12 -0400
+
+propellor (2.9.0) unstable; urgency=medium
 
   * Added basic Uwsgi module, maintained by Félix Sipma.
   * Add Apt.hasForeignArch. Thanks, Per Olofsson.
@@ -17,8 +174,24 @@ propellor (2.9.0) UNRELEASED; urgency=medium
   * Added Propellor.Property.Spin, which can be used to make a host be a
     controller of other hosts, which will automatically spin them each time
     propellor is run.
+  * Ssh.keyImported is replaced with Ssh.userKeys. (API change)
+    The new property only gets the private key from the privdata; the
+    public key is provided as a parameter, and so is available as
+    Info that other properties can use.
+  * Ssh.keyImported' is renamed to Ssh.userKeyAt, and also changed
+    to only import the private key from the privdata. (API change)
+  * While Ssh.keyImported and Ssh.keyImported' avoided updating existing
+    keys, the new Ssh.userKeys and Ssh.userKeyAt properties will
+    always update out of date key files.
+  * Ssh.pubKey renamed to Ssh.hostPubKey. (API change)
+  * Added --unset-unused 
+  * Fix typo: propigate → propagate. Thanks, Felix Gruber.
+    (A minor API change)
+  * Chroot: Converted to use a ChrootBootstrapper type class, so
+    other ways to bootstrap chroots can easily be added in separate
+    modules. (API change)
 
- -- Joey Hess <id@joeyh.name>  Thu, 08 Oct 2015 11:09:01 -0400
+ -- Joey Hess <id@joeyh.name>  Tue, 20 Oct 2015 15:43:12 -0400
 
 propellor (2.8.1) unstable; urgency=medium
 
@@ -294,7 +467,7 @@ propellor (1.3.0) unstable; urgency=medium
 propellor (1.2.2) unstable; urgency=medium
 
   * Revert ensureProperty warning message, too many false positives in places
-    where Info is correctly propigated. Better approach needed.
+    where Info is correctly propagated. Better approach needed.
 
  -- Joey Hess <id@joeyh.name>  Sun, 21 Dec 2014 21:41:11 -0400
 

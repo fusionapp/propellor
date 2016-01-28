@@ -23,12 +23,13 @@ module Propellor.Types
 	, propertyDesc
 	, propertyChildren
 	, RevertableProperty(..)
-	, (<!>)
+	, MkRevertableProperty(..)
 	, IsProp(..)
 	, Combines(..)
 	, CombinedType
-	, combineWith
+	, ResultCombiner
 	, Propellor(..)
+	, LiftPropellor(..)
 	, EndAction(..)
 	, module Propellor.Types.OS
 	, module Propellor.Types.Dns
@@ -38,10 +39,11 @@ module Propellor.Types
 	) where
 
 import Data.Monoid
-import Control.Applicative
 import "mtl" Control.Monad.RWS.Strict
 import Control.Monad.Catch
 import Data.Typeable
+import Control.Applicative
+import Prelude
 
 import Propellor.Types.Info
 import Propellor.Types.OS
@@ -71,6 +73,15 @@ newtype Propellor p = Propellor { runWithHost :: RWST Host [EndAction] () IO p }
 		, MonadThrow
 		, MonadMask
 		)
+
+class LiftPropellor m where
+	liftPropellor :: m a -> Propellor a
+
+instance LiftPropellor Propellor where
+	liftPropellor = id
+
+instance LiftPropellor IO where
+	liftPropellor = liftIO
 
 instance Monoid (Propellor Result) where
 	mempty = return NoChange
@@ -147,9 +158,6 @@ propertySatisfy :: Property i -> Propellor Result
 propertySatisfy (IProperty _ a _ _) = a
 propertySatisfy (SProperty _ a _) = a
 
-instance Show (Property i) where
-        show p = "property " ++ show (propertyDesc p)
-
 -- | Changes the action that is performed to satisfy a property. 
 adjustPropertySatisfy :: Property i -> (Propellor Result -> Propellor Result) -> Property i
 adjustPropertySatisfy (IProperty d s i cs) f = IProperty d (f s) i cs
@@ -163,6 +171,9 @@ propertyDesc :: Property i -> Desc
 propertyDesc (IProperty d _ _ _) = d
 propertyDesc (SProperty d _ _) = d
 
+instance Show (Property i) where
+        show p = "property " ++ show (propertyDesc p)
+
 -- | A Property can include a list of child properties that it also
 -- satisfies. This allows them to be introspected to collect their info, etc.
 propertyChildren :: Property i -> [Property i]
@@ -171,11 +182,23 @@ propertyChildren (SProperty _ _ cs) = cs
 
 -- | A property that can be reverted. The first Property is run
 -- normally and the second is run when it's reverted.
-data RevertableProperty = RevertableProperty (Property HasInfo) (Property HasInfo)
+data RevertableProperty i = RevertableProperty (Property i) (Property i)
 
--- | Shorthand to construct a revertable property.
-(<!>) :: Property i1 -> Property i2 -> RevertableProperty
-p1 <!> p2 = RevertableProperty (toIProperty p1) (toIProperty p2)
+instance Show (RevertableProperty i) where
+        show (RevertableProperty p _) = show p
+
+class MkRevertableProperty i1 i2 where
+	-- | Shorthand to construct a revertable property.
+	(<!>) :: Property i1 -> Property i2 -> RevertableProperty (CInfo i1 i2)
+
+instance MkRevertableProperty HasInfo HasInfo where
+	x <!> y = RevertableProperty x y
+instance MkRevertableProperty NoInfo NoInfo where
+	x <!> y = RevertableProperty x y
+instance MkRevertableProperty NoInfo HasInfo where
+	x <!> y = RevertableProperty (toProp x) y
+instance MkRevertableProperty HasInfo NoInfo where
+	x <!> y = RevertableProperty x (toProp y)
 
 -- | Class of types that can be used as properties of a host.
 class IsProp p where
@@ -198,70 +221,116 @@ instance IsProp (Property NoInfo) where
 	getDesc = propertyDesc
 	getInfoRecursive _ = mempty
 
-instance IsProp RevertableProperty where
-	-- | Sets the description of both sides.
-	setDesc (RevertableProperty p1 p2) d = 
-		RevertableProperty (setDesc p1 d) (setDesc p2 ("not " ++ d))
+instance IsProp (RevertableProperty HasInfo) where
+	setDesc = setDescR
 	getDesc (RevertableProperty p1 _) = getDesc p1
 	toProp (RevertableProperty p1 _) = p1
 	-- | Return the Info of the currently active side.
 	getInfoRecursive (RevertableProperty p1 _p2) = getInfoRecursive p1
+instance IsProp (RevertableProperty NoInfo) where
+	setDesc = setDescR
+	getDesc (RevertableProperty p1 _) = getDesc p1
+	toProp (RevertableProperty p1 _) = toProp p1
+	getInfoRecursive (RevertableProperty _ _) = mempty
+
+-- | Sets the description of both sides.
+setDescR :: IsProp (Property i) => RevertableProperty i -> Desc -> RevertableProperty i
+setDescR (RevertableProperty p1 p2) d =
+	RevertableProperty (setDesc p1 d) (setDesc p2 ("not " ++ d))
 
 -- | Type level calculation of the type that results from combining two
 -- types of properties.
 type family CombinedType x y
 type instance CombinedType (Property x) (Property y) = Property (CInfo x y)
-type instance CombinedType RevertableProperty (Property NoInfo) = RevertableProperty
-type instance CombinedType RevertableProperty (Property HasInfo) = RevertableProperty
-type instance CombinedType RevertableProperty RevertableProperty = RevertableProperty
+type instance CombinedType (RevertableProperty x) (RevertableProperty y) = RevertableProperty (CInfo x y)
+-- When only one of the properties is revertable, the combined property is
+-- not fully revertable, so is not a RevertableProperty.
+type instance CombinedType (RevertableProperty x) (Property y) = Property (CInfo x y)
+type instance CombinedType (Property x) (RevertableProperty y) = Property (CInfo x y)
+
+type ResultCombiner = Propellor Result -> Propellor Result -> Propellor Result
 
 class Combines x y where
-	-- | Combines two properties. The second property is ensured
-	-- first, and only once it is successfully ensures will the first
-	-- be ensured. The combined property will have the description of
-	-- the first property.
-	(<<>>) :: x -> y -> CombinedType x y
-
--- | Combines together two properties, yielding a property that
--- has the description and info of the first, and that has the second
--- property as a child. The two actions to satisfy the properties
--- are passed to a function that can combine them in arbitrary ways.
-combineWith
-	:: (Combines (Property x) (Property y))
-	=> (Propellor Result -> Propellor Result -> Propellor Result)
-	-> Property x
-	-> Property y
-	-> CombinedType (Property x) (Property y)
-combineWith f x y = adjustPropertySatisfy (x <<>> y) $ \_ ->
-	f (propertySatisfy $ toSProperty x) (propertySatisfy $ toSProperty y)
+	-- | Combines together two properties, yielding a property that
+	-- has the description and info of the first, and that has the second
+	-- property as a child. 
+	combineWith 
+		:: ResultCombiner
+		-- ^ How to combine the actions to satisfy the properties.
+		-> ResultCombiner
+		-- ^ Used when combining revertable properties, to combine
+		-- their reversion actions.
+		-> x
+		-> y
+		-> CombinedType x y
 
 instance Combines (Property HasInfo) (Property HasInfo) where
-	(IProperty d1 a1 i1 cs1) <<>> y@(IProperty _d2 a2 _i2 _cs2) =
-		IProperty d1 (a2 <> a1) i1 (y : cs1)
+	combineWith f _ (IProperty d1 a1 i1 cs1) y@(IProperty _d2 a2 _i2 _cs2) =
+		IProperty d1 (f a1 a2) i1 (y : cs1)
 
 instance Combines (Property HasInfo) (Property NoInfo) where
-	(IProperty d1 a1 i1 cs1) <<>> y@(SProperty _d2 a2 _cs2) =
-		IProperty d1 (a2 <> a1) i1 (toIProperty y : cs1)
+	combineWith f _ (IProperty d1 a1 i1 cs1) y@(SProperty _d2 a2 _cs2) =
+		IProperty d1 (f a1 a2) i1 (toIProperty y : cs1)
 
 instance Combines (Property NoInfo) (Property HasInfo) where
-	(SProperty d1 a1 cs1) <<>> y@(IProperty _d2 a2 _i2 _cs2) =
-		IProperty d1 (a2 <> a1) mempty (y : map toIProperty cs1)
+	combineWith f _ (SProperty d1 a1 cs1) y@(IProperty _d2 a2 _i2 _cs2) =
+		IProperty d1 (f a1 a2) mempty (y : map toIProperty cs1)
 
 instance Combines (Property NoInfo) (Property NoInfo) where
-	(SProperty d1 a1  cs1) <<>> y@(SProperty _d2 a2 _cs2) =
-		SProperty d1 (a2 <> a1) (y : cs1)
+	combineWith f _ (SProperty d1 a1  cs1) y@(SProperty _d2 a2 _cs2) =
+		SProperty d1 (f a1 a2) (y : cs1)
 
-instance Combines RevertableProperty (Property HasInfo) where
-	(RevertableProperty p1 p2) <<>> y =
-		RevertableProperty (p1 <<>> y) p2
+instance Combines (RevertableProperty NoInfo) (RevertableProperty NoInfo) where
+	combineWith = combineWithRR
+instance Combines (RevertableProperty HasInfo) (RevertableProperty HasInfo) where
+	combineWith = combineWithRR
+instance Combines (RevertableProperty HasInfo) (RevertableProperty NoInfo) where
+	combineWith = combineWithRR
+instance Combines (RevertableProperty NoInfo) (RevertableProperty HasInfo) where
+	combineWith = combineWithRR
+instance Combines (RevertableProperty NoInfo) (Property HasInfo) where
+	combineWith = combineWithRP
+instance Combines (RevertableProperty NoInfo) (Property NoInfo) where
+	combineWith = combineWithRP
+instance Combines (RevertableProperty HasInfo) (Property HasInfo) where
+	combineWith = combineWithRP
+instance Combines (RevertableProperty HasInfo) (Property NoInfo) where
+	combineWith = combineWithRP
+instance Combines (Property HasInfo) (RevertableProperty NoInfo) where
+	combineWith = combineWithPR
+instance Combines (Property NoInfo) (RevertableProperty NoInfo) where
+	combineWith = combineWithPR
+instance Combines (Property HasInfo) (RevertableProperty HasInfo) where
+	combineWith = combineWithPR
+instance Combines (Property NoInfo) (RevertableProperty HasInfo) where
+	combineWith = combineWithPR
 
-instance Combines RevertableProperty (Property NoInfo) where
-	(RevertableProperty p1 p2) <<>> y =
-		RevertableProperty (p1 <<>> toIProperty y) p2
+combineWithRR 
+	:: Combines (Property x) (Property y)
+	=> ResultCombiner
+	-> ResultCombiner
+	-> RevertableProperty x
+	-> RevertableProperty y
+	-> RevertableProperty (CInfo x y)
+combineWithRR sf tf (RevertableProperty s1 t1) (RevertableProperty s2 t2) =
+	RevertableProperty
+		(combineWith sf tf s1 s2)
+		(combineWith tf sf t1 t2)
 
-instance Combines RevertableProperty RevertableProperty where
-	(RevertableProperty x1 x2) <<>> (RevertableProperty y1 y2) =
-		RevertableProperty
-			(x1 <<>> y1)
-			-- when reverting, run actions in reverse order
-			(y2 <<>> x2)
+combineWithRP
+	:: Combines (Property i) y
+	=> (Propellor Result -> Propellor Result -> Propellor Result)
+	-> (Propellor Result -> Propellor Result -> Propellor Result)
+	-> RevertableProperty i
+	-> y
+	-> CombinedType (Property i) y
+combineWithRP sf tf (RevertableProperty x _) y = combineWith sf tf x y
+
+combineWithPR
+	:: Combines x (Property i)
+	=> (Propellor Result -> Propellor Result -> Propellor Result)
+	-> (Propellor Result -> Propellor Result -> Propellor Result)
+	-> x
+	-> RevertableProperty i
+	-> CombinedType x (Property i)
+combineWithPR sf tf x (RevertableProperty y _) = combineWith sf tf x y

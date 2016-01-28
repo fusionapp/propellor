@@ -12,6 +12,7 @@ import Network.Socket
 import Propellor.Base
 import Propellor.Gpg
 import Propellor.Git
+import Propellor.Git.VerifiedBranch
 import Propellor.Bootstrap
 import Propellor.Spin
 import Propellor.Types.CmdLine
@@ -27,10 +28,12 @@ usage h = hPutStrLn h $ unlines
 	, "  propellor --spin targethost [--via relayhost]"
 	, "  propellor --add-key keyid"
 	, "  propellor --rm-key keyid"
-	, "  propellor --set field context"
+	, "  propellor --list-fields"
 	, "  propellor --dump field context"
 	, "  propellor --edit field context"
-	, "  propellor --list-fields"
+	, "  propellor --set field context"
+	, "  propellor --unset field context"
+	, "  propellor --unset-unused"
 	, "  propellor --merge"
 	, "  propellor --build"
 	, "  propellor --check"
@@ -54,6 +57,7 @@ processCmdLine = go =<< getArgs
 	go ("--rm-key":k:[]) = return $ RmKey k
 	go ("--set":f:c:[]) = withprivfield f c Set
 	go ("--unset":f:c:[]) = withprivfield f c Unset
+	go ("--unset-unused":[]) = return UnsetUnused
 	go ("--dump":f:c:[]) = withprivfield f c Dump
 	go ("--edit":f:c:[]) = withprivfield f c Edit
 	go ("--list-fields":[]) = return ListFields
@@ -86,7 +90,7 @@ processCmdLine = go =<< getArgs
 
 -- | Runs propellor on hosts, as controlled by command-line options.
 defaultMain :: [Host] -> IO ()
-defaultMain hostlist = do
+defaultMain hostlist = withConcurrentOutput $ do
 	Shim.cleanEnv
 	checkDebugMode
 	cmdline <- processCmdLine
@@ -98,6 +102,7 @@ defaultMain hostlist = do
 	go _ Check = return ()
 	go _ (Set field context) = setPrivData field context
 	go _ (Unset field context) = unsetPrivData field context
+	go _ (UnsetUnused) = unsetPrivDataUnused hostlist
 	go _ (Dump field context) = dumpPrivData field context
 	go _ (Edit field context) = editPrivData field context
 	go _ ListFields = listPrivDataFields hostlist
@@ -113,16 +118,14 @@ defaultMain hostlist = do
 	go _ Merge = mergeSpin
 	go True cmdline@(Spin _ _) = buildFirst cmdline $ go False cmdline
 	go True cmdline = updateFirst cmdline $ go False cmdline
-	go False (Spin hs r) = do
-		commitSpin
-		forM_ hs $ \hn -> withhost hn $
-			spin hn r mempty
-	go False cmdline@(SimpleRun hn) = buildFirst cmdline $
-		go False (Run hn)
-	go False cmdline@(ControlledRun hn cc) = buildFirst cmdline $
-		onlyprocess $ withhost hn $ mainProperties cc
+	go False (Spin hs mrelay) = do
+		unless (isJust mrelay) commitSpin
+		forM_ hs $ \hn -> withhost hn $ spin mrelay hn
+	go False cmdline@(SimpleRun hn) = do
+		forceConsole
+		buildFirst cmdline $ go False (Run hn)
 	go False (Run hn) = ifM ((==) 0 <$> getRealUserID)
-		( onlyprocess $ withhost hn $ mainProperties mempty
+		( onlyprocess $ withhost hn mainProperties
 		, go True (Spin [hn] Nothing)
 		)
 

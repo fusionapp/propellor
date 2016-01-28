@@ -4,10 +4,14 @@ module Propellor.Property.Partition where
 
 import Propellor.Base
 import qualified Propellor.Property.Apt as Apt
+import Utility.Applicative
+
+import System.Posix.Files
+import Data.List
 
 -- | Filesystems etc that can be used for a partition.
 data Fs = EXT2 | EXT3 | EXT4 | BTRFS | REISERFS | XFS | FAT | VFAT | NTFS | LinuxSwap
-	deriving (Show)
+	deriving (Show, Eq)
 
 data Eep = YesReallyFormatPartition
 
@@ -21,8 +25,9 @@ formatted = formatted' []
 type MkfsOpts = [String]
 
 formatted' :: MkfsOpts -> Eep -> Fs -> FilePath -> Property NoInfo
-formatted' opts YesReallyFormatPartition fs dev = 
-	cmdProperty cmd opts' `requires` Apt.installed [pkg]
+formatted' opts YesReallyFormatPartition fs dev = cmdProperty cmd opts'
+	`assume` MadeChange
+	`requires` Apt.installed [pkg]
   where
 	(cmd, opts', pkg) = case fs of
 		EXT2 -> ("mkfs.ext2", q $ eff optsdev, "e2fsprogs")
@@ -41,20 +46,44 @@ formatted' opts YesReallyFormatPartition fs dev =
 	-- Be quiet.
 	q l = "-q":l
 
+data LoopDev = LoopDev
+	{ partitionLoopDev :: FilePath -- ^ device for a loop partition
+	, wholeDiskLoopDev :: FilePath -- ^ corresponding device for the whole loop disk
+	} deriving (Show)
+
+isLoopDev :: LoopDev -> IO Bool
+isLoopDev l = isLoopDev' (partitionLoopDev l) <&&> isLoopDev' (wholeDiskLoopDev l)
+
+isLoopDev' :: FilePath -> IO Bool
+isLoopDev' f
+	| "loop" `isInfixOf` f = catchBoolIO $
+		isBlockDevice <$> getFileStatus f
+	| otherwise = return False
+
 -- | Uses the kpartx utility to create device maps for partitions contained
--- within a disk image file. The resulting devices are passed to the
+-- within a disk image file. The resulting loop devices are passed to the
 -- property, which can operate on them. Always cleans up after itself,
 -- by removing the device maps after the property is run.
-kpartx :: FilePath -> ([FilePath] -> Property NoInfo) -> Property NoInfo
+kpartx :: FilePath -> ([LoopDev] -> Property NoInfo) -> Property NoInfo
 kpartx diskimage mkprop = go `requires` Apt.installed ["kpartx"]
   where
 	go = property (propertyDesc (mkprop [])) $ do
 		cleanup -- idempotency
-		s <- liftIO $ readProcess "kpartx" ["-avs", diskimage]
-		r <- ensureProperty (mkprop (devlist s))
+		loopdevs <- liftIO $ kpartxParse
+			<$> readProcess "kpartx" ["-avs", diskimage]
+		bad <- liftIO $ filterM (not <$$> isLoopDev) loopdevs
+		unless (null bad) $
+			error $ "kpartx output seems to include non-loop-devices (possible parse failure): " ++ show bad
+		r <- ensureProperty (mkprop loopdevs)
 		cleanup
 		return r
-	devlist = mapMaybe (finddev . words) . lines
-	finddev ("add":"map":s:_) = Just ("/dev/mapper/" ++ s)
-	finddev _ = Nothing
 	cleanup = void $ liftIO $ boolSystem "kpartx" [Param "-d", File diskimage]
+
+kpartxParse :: String -> [LoopDev]
+kpartxParse = mapMaybe (finddev . words) . lines
+  where
+	finddev ("add":"map":ld:_:_:_:_:wd:_) = Just $ LoopDev 
+		{ partitionLoopDev = "/dev/mapper/" ++ ld
+		, wholeDiskLoopDev = wd
+		}
+	finddev _ = Nothing

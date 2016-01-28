@@ -7,7 +7,7 @@ import qualified Propellor.Property.File as File
 --
 -- signedPrimary uses this, so this property does not normally need to be
 -- used directly.
-keysInstalled :: Domain -> RevertableProperty
+keysInstalled :: Domain -> RevertableProperty HasInfo
 keysInstalled domain = setup <!> cleanup
   where
 	setup = propertyList "DNSSEC keys installed" $
@@ -37,15 +37,15 @@ keysInstalled domain = setup <!> cleanup
 --
 -- signedPrimary uses this, so this property does not normally need to be
 -- used directly.
-zoneSigned :: Domain -> FilePath -> RevertableProperty
+zoneSigned :: Domain -> FilePath -> RevertableProperty HasInfo
 zoneSigned domain zonefile = setup <!> cleanup
   where
 	setup = check needupdate (forceZoneSigned domain zonefile)
-		`requires` toProp (keysInstalled domain)
+		`requires` keysInstalled domain
 	
 	cleanup = File.notPresent (signedZoneFile zonefile)
 		`before` File.notPresent dssetfile
-		`before` toProp (revert (keysInstalled domain))
+		`before` revert (keysInstalled domain)
 	
 	dssetfile = dir </> "-" ++ domain ++ "."
 	dir = takeDirectory zonefile
@@ -71,7 +71,7 @@ forceZoneSigned domain zonefile = property ("zone signed for " ++ domain) $ lift
 		, "-3", salt
 		-- The serial number needs to be increased each time the
 		-- zone is resigned, even if there are no other changes,
-		-- so that it will propigate to secondaries. So, use the
+		-- so that it will propagate to secondaries. So, use the
 		-- unixtime serial format.
 		, "-N", "unixtime"
 		, "-o", domain

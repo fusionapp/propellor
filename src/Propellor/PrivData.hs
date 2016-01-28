@@ -9,22 +9,23 @@ module Propellor.PrivData (
 	addPrivData,
 	setPrivData,
 	unsetPrivData,
+	unsetPrivDataUnused,
 	dumpPrivData,
 	editPrivData,
 	filterPrivData,
 	listPrivDataFields,
 	makePrivDataDir,
 	decryptPrivData,
+	readPrivData,
+	readPrivDataFile,
 	PrivMap,
 	PrivInfo,
 	forceHostContext,
 ) where
 
-import Control.Applicative
 import System.IO
 import System.Directory
 import Data.Maybe
-import Data.Monoid
 import Data.List
 import Data.Typeable
 import Control.Monad
@@ -33,6 +34,11 @@ import "mtl" Control.Monad.Reader
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.ByteString.Lazy as L
+import System.Console.Concurrent
+import System.Console.Concurrent.Internal (ConcurrentProcessHandle(..))
+import Control.Applicative
+import Data.Monoid
+import Prelude
 
 import Propellor.Types
 import Propellor.Types.PrivData
@@ -51,6 +57,7 @@ import Utility.FileMode
 import Utility.Env
 import Utility.Table
 import Utility.FileSystemEncoding
+import Utility.Process
 
 -- | Allows a Property to access the value of a specific PrivDataField,
 -- for use in a specific Context or HostContext.
@@ -103,9 +110,9 @@ withPrivData' feed srclist c mkprop = addinfo $ mkprop $ \a ->
 	missing = do
 		Context cname <- mkHostContext hc <$> asks hostName
 		warningMessage $ "Missing privdata " ++ intercalate " or " fieldnames ++ " (for " ++ cname ++ ")"
-		liftIO $ putStrLn $ "Fix this by running:"
-		liftIO $ showSet $
-			map (\s -> (privDataField s, Context cname, describePrivDataSource s)) srclist
+		infoMessage $ 
+			"Fix this by running:" :
+			showSet (map (\s -> (privDataField s, Context cname, describePrivDataSource s)) srclist)
 		return FailedChange
 	addinfo p = infoProperty
 		(propertyDesc p)
@@ -118,11 +125,14 @@ withPrivData' feed srclist c mkprop = addinfo $ mkprop $ \a ->
 	fieldlist = map privDataField srclist
 	hc = asHostContext c
 
-showSet :: [(PrivDataField, Context, Maybe PrivDataSourceDesc)] -> IO ()
-showSet l = forM_ l $ \(f, Context c, md) -> do
-	putStrLn $ "  propellor --set '" ++ show f ++ "' '" ++ c ++ "' \\"
-	maybe noop (\d -> putStrLn $ "    " ++ d) md
-	putStrLn ""
+showSet :: [(PrivDataField, Context, Maybe PrivDataSourceDesc)] -> [String]
+showSet = concatMap go
+  where
+	go (f, Context c, md) = catMaybes
+		[ Just $ "  propellor --set '" ++ show f ++ "' '" ++ c ++ "' \\"
+		, maybe Nothing (\d -> Just $ "    " ++ d) md
+		, Just ""
+		]
 
 addPrivData :: (PrivDataField, Maybe PrivDataSourceDesc, HostContext) -> Property HasInfo
 addPrivData v = pureInfoProperty (show v) (PrivInfo (S.singleton v))
@@ -158,7 +168,20 @@ setPrivData field context = do
 unsetPrivData :: PrivDataField -> Context -> IO ()
 unsetPrivData field context = do
 	modifyPrivData $ M.delete (field, context)
-	putStrLn "Private data unset."
+	descUnset field context
+
+descUnset :: PrivDataField -> Context -> IO ()
+descUnset field context =
+	putStrLn $ "Private data unset: " ++ show field ++ " " ++ show context
+
+unsetPrivDataUnused :: [Host] -> IO ()
+unsetPrivDataUnused hosts = do
+	deleted <- modifyPrivData' $ \m ->
+		let (keep, del) = M.partitionWithKey (\k _ -> k `M.member` usedby) m
+		in (keep, M.keys del)
+	mapM_ (uncurry descUnset) deleted
+  where
+	usedby = mkUsedByMap hosts
 
 dumpPrivData :: PrivDataField -> Context -> IO ()
 dumpPrivData field context = do
@@ -173,7 +196,8 @@ editPrivData field context = do
 		hClose th
 		maybe noop (\p -> writeFileProtected' f (`L.hPut` privDataByteString p)) v
 		editor <- getEnvDefault "EDITOR" "vi"
-		unlessM (boolSystem editor [File f]) $
+		(_, _, _, ConcurrentProcessHandle p) <- createProcessForeground $ proc editor [f]
+		unlessM (checkSuccessProcess p) $
 			error "Editor failed; aborting."
 		PrivData <$> readFile f
 	setPrivDataTo field context v'
@@ -191,7 +215,8 @@ listPrivDataFields hosts = do
 		showtable $ map mkrow missing
 
 		section "How to set missing data:"
-		showSet $ map (\(f, c) -> (f, c, join $ M.lookup (f, c) descmap)) missing
+		mapM_ putStrLn $ showSet $
+			map (\(f, c) -> (f, c, join $ M.lookup (f, c) descmap)) missing
   where
 	header = ["Field", "Context", "Used by"]
 	mkrow k@(field, Context context) =
@@ -199,14 +224,20 @@ listPrivDataFields hosts = do
 		, shellEscape context
 		, intercalate ", " $ sort $ fromMaybe [] $ M.lookup k usedby
 		]
-	mkhostmap host mkv = M.fromList $ map (\(f, d, c) -> ((f, mkHostContext c (hostName host)), mkv d)) $
-		S.toList $ fromPrivInfo $ getInfo $ hostInfo host
-	usedby = M.unionsWith (++) $ map (\h -> mkhostmap h $ const [hostName h]) hosts
+	usedby = mkUsedByMap hosts
 	wantedmap = M.fromList $ zip (M.keys usedby) (repeat "")
-	descmap = M.unions $ map (`mkhostmap` id) hosts
+	descmap = M.unions $ map (`mkPrivDataMap` id) hosts
 	section desc = putStrLn $ "\n" ++ desc
 	showtable rows = do
 		putStr $ unlines $ formatTable $ tableWithHeader header rows
+
+mkUsedByMap :: [Host] -> M.Map (PrivDataField, Context) [HostName]
+mkUsedByMap = M.unionsWith (++) . map (\h -> mkPrivDataMap h $ const [hostName h])
+
+mkPrivDataMap :: Host -> (Maybe PrivDataSourceDesc -> a) -> M.Map (PrivDataField, Context) a
+mkPrivDataMap host mkv = M.fromList $
+	map (\(f, d, c) -> ((f, mkHostContext c (hostName host)), mkv d))
+		(S.toList $ fromPrivInfo $ getInfo $ hostInfo host)
 
 setPrivDataTo :: PrivDataField -> Context -> PrivData -> IO ()
 setPrivDataTo field context (PrivData value) = do
@@ -216,15 +247,25 @@ setPrivDataTo field context (PrivData value) = do
 	set = M.insert (field, context) value
 
 modifyPrivData :: (PrivMap -> PrivMap) -> IO ()
-modifyPrivData f = do
+modifyPrivData f = modifyPrivData' (\m -> (f m, ()))
+
+modifyPrivData' :: (PrivMap -> (PrivMap, a)) -> IO a
+modifyPrivData' f = do
 	makePrivDataDir
 	m <- decryptPrivData
-	let m' = f m
+	let (m', r) = f m
 	gpgEncrypt privDataFile (show m')
 	void $ boolSystem "git" [Param "add", File privDataFile]
+	return r
 
 decryptPrivData :: IO PrivMap
-decryptPrivData = fromMaybe M.empty . readish <$> gpgDecrypt privDataFile
+decryptPrivData = readPrivData <$> gpgDecrypt privDataFile
+
+readPrivData :: String -> PrivMap
+readPrivData = fromMaybe M.empty . readish
+
+readPrivDataFile :: FilePath -> IO PrivMap
+readPrivDataFile f = readPrivData <$> readFileStrictAnyEncoding f
 
 makePrivDataDir :: IO ()
 makePrivDataDir = createDirectoryIfMissing False privDataDir
@@ -233,10 +274,10 @@ newtype PrivInfo = PrivInfo
 	{ fromPrivInfo :: S.Set (PrivDataField, Maybe PrivDataSourceDesc, HostContext) }
 	deriving (Eq, Ord, Show, Typeable, Monoid)
 
--- PrivInfo is propigated out of containers, so that propellor can see which
+-- PrivInfo is propagated out of containers, so that propellor can see which
 -- hosts need it.
 instance IsInfo PrivInfo where
-	propigateInfo _ = True
+	propagateInfo _ = True
 
 -- | Sets the context of any privdata that uses HostContext to the
 -- provided name.

@@ -64,6 +64,7 @@ import Prelude hiding (init)
 import Data.List hiding (init)
 import Data.List.Utils
 import qualified Data.Map as M
+import System.Console.Concurrent
 
 installed :: Property NoInfo
 installed = Apt.installed ["docker.io"]
@@ -119,13 +120,13 @@ container cn image = Container image (Host cn [] info)
 -- propellor inside the container.
 --
 -- When the container's Properties include DNS info, such as a CNAME,
--- that is propigated to the Info of the Host it's docked in.
+-- that is propagated to the Info of the Host it's docked in.
 --
 -- Reverting this property ensures that the container is stopped and
 -- removed.
-docked :: Container -> RevertableProperty
+docked :: Container -> RevertableProperty HasInfo
 docked ctr@(Container _ h) =
-	(propigateContainerInfo ctr (go "docked" setup))
+	(propagateContainerInfo ctr (go "docked" setup))
 		<!>
 	(go "undocked" teardown)
   where
@@ -159,6 +160,7 @@ imageBuilt directory ctr = describe built msg
   where
 	msg = "docker image " ++ (imageIdentifier image) ++ " built from " ++ directory
 	built = Cmd.cmdProperty' dockercmd ["build", "--tag", imageIdentifier image, "./"] workDir
+		`assume` MadeChange
 	workDir p = p { cwd = Just directory }
 	image = getImageName ctr
 
@@ -168,10 +170,11 @@ imagePulled ctr = describe pulled msg
   where
 	msg = "docker image " ++ (imageIdentifier image) ++ " pulled"
 	pulled = Cmd.cmdProperty dockercmd ["pull", imageIdentifier image]
+		`assume` MadeChange
 	image = getImageName ctr
 
-propigateContainerInfo :: (IsProp (Property i)) => Container -> Property i -> Property HasInfo
-propigateContainerInfo ctr@(Container _ h) p = propigateContainer cn ctr p'
+propagateContainerInfo :: (IsProp (Property i)) => Container -> Property i -> Property HasInfo
+propagateContainerInfo ctr@(Container _ h) p = propagateContainer cn ctr p'
   where
 	p' = infoProperty
 		(propertyDesc p)
@@ -223,8 +226,11 @@ garbageCollected = propertyList "docker garbage collected"
 -- the pam config, to work around <https://github.com/docker/docker/issues/5663>
 -- which affects docker 1.2.0.
 tweaked :: Property NoInfo
-tweaked = trivial $
-	cmdProperty "sh" ["-c", "sed -ri 's/^session\\s+required\\s+pam_loginuid.so$/session optional pam_loginuid.so/' /etc/pam.d/*"]
+tweaked = cmdProperty "sh"
+	[ "-c"
+	, "sed -ri 's/^session\\s+required\\s+pam_loginuid.so$/session optional pam_loginuid.so/' /etc/pam.d/*"
+	]
+	`assume` NoChange
 	`describe` "tweaked for docker"
 
 -- | Configures the kernel to respect docker memory limits. 
@@ -236,7 +242,7 @@ tweaked = trivial $
 memoryLimited :: Property NoInfo
 memoryLimited = "/etc/default/grub" `File.containsLine` cfg
 	`describe` "docker memory limited" 
-	`onChange` cmdProperty "update-grub" []
+	`onChange` (cmdProperty "update-grub" [] `assume` MadeChange)
   where
 	cmdline = "cgroup_enable=memory swapaccount=1"
 	cfg = "GRUB_CMDLINE_LINUX_DEFAULT=\""++cmdline++"\""
@@ -540,6 +546,7 @@ init s = case toContainerId s of
 				warningMessage "Boot provision failed!"
 		void $ async $ job reapzombies
 		job $ do
+			flushConcurrentOutput
 			void $ tryIO $ ifM (inPath "bash")
 				( boolSystem "bash" [Param "-l"]
 				, boolSystem "/bin/sh" []
@@ -555,7 +562,7 @@ provisionContainer :: ContainerId -> Property NoInfo
 provisionContainer cid = containerDesc cid $ property "provisioned" $ liftIO $ do
 	let shim = Shim.file (localdir </> "propellor") (localdir </> shimdir cid)
 	let params = ["--continue", show $ toChain cid]
-	msgh <- mkMessageHandle
+	msgh <- getMessageHandle
 	let p = inContainerProcess cid
 		(if isConsole msgh then ["-it"] else [])
 		(shim : params)
@@ -583,6 +590,7 @@ chain hostlist hn s = case toContainerId s of
 			r <- runPropellor h $ ensureProperties $
 				map ignoreInfo $
 					hostProperties h
+			flushConcurrentOutput
 			putStrLn $ "\n" ++ show r
 
 stopContainer :: ContainerId -> IO Bool

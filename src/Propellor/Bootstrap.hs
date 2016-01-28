@@ -63,9 +63,9 @@ depsCommand = "( " ++ intercalate " ; " (concat [osinstall, cabalinstall]) ++ " 
 		, "cabal install --only-dependencies"
 		]
 
-	aptinstall p = "apt-get --no-upgrade --no-install-recommends -y install " ++ p
+	aptinstall p = "DEBIAN_FRONTEND=noninteractive apt-get --no-upgrade --no-install-recommends -y install " ++ p
 
-	-- This is the same build deps listed in debian/control.
+	-- This is the same deps listed in debian/control.
 	debdeps =
 		[ "gnupg"
 		, "ghc"
@@ -77,15 +77,16 @@ depsCommand = "( " ++ intercalate " ; " (concat [osinstall, cabalinstall]) ++ " 
 		, "libghc-ansi-terminal-dev"
 		, "libghc-ifelse-dev"
 		, "libghc-network-dev"
-		, "libghc-quickcheck2-dev"
 		, "libghc-mtl-dev"
 		, "libghc-transformers-dev"
 		, "libghc-exceptions-dev"
+		, "libghc-stm-dev"
+		, "libghc-text-dev"
 		, "make"
 		]
 
 installGitCommand :: ShellCommand
-installGitCommand = "if ! git --version >/dev/null; then apt-get update && apt-get --no-install-recommends --no-upgrade -y install git; fi"
+installGitCommand = "if ! git --version >/dev/null; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends --no-upgrade -y install git; fi"
 
 buildPropellor :: IO ()
 buildPropellor = unlessM (actionMessage "Propellor build" build) $

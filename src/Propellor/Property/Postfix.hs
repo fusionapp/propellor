@@ -32,7 +32,7 @@ satellite :: Property NoInfo
 satellite = check (not <$> mainCfIsSet "relayhost") setup
 	`requires` installed
   where
-	setup = trivial $ property "postfix satellite system" $ do
+	setup = property "postfix satellite system" $ do
 		hn <- asks hostName
 		let (_, domain) = separate (== '.') hn
 		ensureProperties
@@ -55,12 +55,13 @@ mappedFile
 	-> (FilePath -> Property x)
 	-> Property (CInfo x NoInfo)
 mappedFile f setup = setup f
-	`onChange` cmdProperty "postmap" [f]
+	`onChange` (cmdProperty "postmap" [f] `assume` MadeChange)
 
 -- | Run newaliases command, which should be done after changing
 -- @/etc/aliases@.
 newaliases :: Property NoInfo
-newaliases = trivial $ cmdProperty "newaliases" []
+newaliases = check ("/etc/aliases" `isNewerThan` "/etc/aliases.db")
+	(cmdProperty "newaliases" [])
 
 -- | The main config file for postfix.
 mainCfFile :: FilePath
@@ -128,12 +129,153 @@ dedupCf ls =
 		Just n | n > 1 -> dedup c (M.insert k (n - 1) kc) rest
 		_ -> dedup (fmt k v:c) kc rest
 
+-- | The master config file for postfix.
+masterCfFile :: FilePath
+masterCfFile = "/etc/postfix/master.cf"
+
+-- | A service that can be present in the master config file.
+data Service = Service
+	{ serviceType :: ServiceType
+	, serviceCommand :: String
+	, serviceOpts :: ServiceOpts
+	}
+	deriving (Show, Eq)
+
+data ServiceType 
+	= InetService (Maybe HostName) ServicePort
+	| UnixService FilePath PrivateService
+	| FifoService FilePath PrivateService
+	| PassService FilePath PrivateService
+	deriving (Show, Eq)
+
+-- Can be a port number or service name such as "smtp".
+type ServicePort = String
+
+type PrivateService = Bool
+
+-- | Options for a service.
+data ServiceOpts = ServiceOpts
+	{ serviceUnprivileged :: Maybe Bool
+	, serviceChroot :: Maybe Bool
+	, serviceWakeupTime :: Maybe Int
+	, serviceProcessLimit :: Maybe Int
+	}
+	deriving (Show, Eq)
+
+defServiceOpts :: ServiceOpts
+defServiceOpts = ServiceOpts
+	{ serviceUnprivileged = Nothing
+	, serviceChroot = Nothing
+	, serviceWakeupTime = Nothing
+	, serviceProcessLimit = Nothing
+	}
+
+formatServiceLine :: Service -> File.Line
+formatServiceLine s = unwords $ map pad
+	[ (10, case serviceType s of
+		InetService (Just h) p -> h ++ ":" ++ p
+		InetService Nothing p -> p
+		UnixService f _ -> f
+		FifoService f _ -> f
+		PassService f _ -> f)
+	, (6, case serviceType s of
+		InetService _ _ -> "inet"
+		UnixService _ _ -> "unix"
+		FifoService _ _ -> "fifo"
+		PassService _ _ -> "pass")
+	, (8, case serviceType s of
+		InetService _ _ -> bool False
+		UnixService _ b -> bool b
+		FifoService _ b -> bool b
+		PassService _ b -> bool b)
+	, (8, v bool serviceUnprivileged)
+	, (8, v bool serviceChroot)
+	, (8, v show serviceWakeupTime)
+	, (8, v show serviceProcessLimit)
+	, (0, serviceCommand s)
+	]
+  where
+	v f sel = maybe "-" f (sel (serviceOpts s))
+	bool True = "y"
+	bool False = "n"
+	pad (n, t) = t ++ replicate (n - 1 - length t) ' '
+
+-- | Note that this does not handle multi-line service entries,
+-- in which subsequent lines are indented. `serviceLine` does not generate
+-- such entries.
+parseServiceLine :: File.Line -> Maybe Service
+parseServiceLine ('#':_) = Nothing
+parseServiceLine (' ':_) = Nothing -- continuation of multiline entry
+parseServiceLine l = Service
+	<$> parsetype
+	<*> parsecommand
+	<*> parseopts
+  where
+	parsetype = do
+		t <- getword 2
+		case t of
+			"inet" -> do
+				v <- getword 1
+				let (h,p) = separate (== ':') v
+				if null p
+					then Nothing
+					else Just $ InetService
+						(if null h then Nothing else Just h) p
+			"unix" -> UnixService <$> getword 1 <*> parseprivate
+			"fifo" -> FifoService <$> getword 1 <*> parseprivate
+			"pass" -> PassService <$> getword 1 <*> parseprivate
+			_ -> Nothing
+	parseprivate = join . bool =<< getword 3
+	
+	parsecommand = case unwords (drop 7 ws) of
+		"" -> Nothing
+		s -> Just s
+
+	parseopts = ServiceOpts
+		<$> (bool =<< getword 4)
+		<*> (bool =<< getword 5)
+		<*> (int =<< getword 6)
+		<*> (int =<< getword 7)
+
+	bool "-" = Just Nothing
+	bool "y" = Just (Just True)
+	bool "n" = Just (Just False)
+	bool _ = Nothing
+
+	int "-" = Just Nothing
+	int n = maybe Nothing (Just . Just) (readish n)
+
+	getword n
+		| nws >= n = Just (ws !! (n -1))
+		| otherwise = Nothing
+	ws = words l
+	nws = length ws
+
+-- | Enables a `Service` in postfix's `masterCfFile`.
+service :: Service -> RevertableProperty NoInfo
+service s = (enable <!> disable)
+	`describe` desc
+  where
+	desc = "enabled postfix service " ++ show (serviceType s)
+	enable = masterCfFile `File.containsLine` (formatServiceLine s)
+		`onChange` reloaded
+	disable = File.fileProperty desc (filter (not . matches)) masterCfFile
+		`onChange` reloaded
+	matches l = case parseServiceLine l of
+		Just s' | s' == s -> True
+		_ -> False
+
 -- | Installs saslauthd and configures it for postfix, authenticating
 -- against PAM.
 --
 -- Does not configure postfix to use it; eg @smtpd_sasl_auth_enable = yes@
 -- needs to be set to enable use. See
 -- <https://wiki.debian.org/PostfixAndSASL>.
+--
+-- Password brute force attacks are possible when SASL auth is enabled.
+-- It would be wise to enable fail2ban, for example:
+--
+-- > Fail2Ban.jailEnabled "postfix-sasl"
 saslAuthdInstalled :: Property NoInfo
 saslAuthdInstalled = setupdaemon
 	`requires` Service.running "saslauthd"
@@ -157,3 +299,22 @@ saslAuthdInstalled = setupdaemon
 	postfixgroup = (User "postfix") `User.hasGroup` (Group "sasl")
 		`onChange` restarted
 	dir = "/var/spool/postfix/var/run/saslauthd"
+
+-- | Uses `saslpasswd2` to set the password for a user in the sasldb2 file.
+--
+-- The password is taken from the privdata.
+saslPasswdSet :: Domain -> User -> Property HasInfo
+saslPasswdSet domain (User user) = go `changesFileContent` "/etc/sasldb2"
+  where
+	go = withPrivData src ctx $ \getpw ->
+		property desc $ getpw $ \pw -> liftIO $
+			withHandle StdinHandle createProcessSuccess p $ \h -> do
+				hPutStrLn h (privDataVal pw)
+				hClose h
+				return NoChange
+	desc = "sasl password for " ++ uatd
+	uatd = user ++ "@" ++ domain
+	ps = ["-p", "-c", "-u", domain, user]
+	p = proc "saslpasswd2" ps
+	ctx = Context "sasl"
+	src = PrivDataSource (Password uatd) "enter password"

@@ -8,20 +8,50 @@ import qualified Propellor.Property.File as File
 data Eep = YesReallyDeleteHome
 
 accountFor :: User -> Property NoInfo
-accountFor user@(User u) = check (isNothing <$> catchMaybeIO (homedir user)) $ cmdProperty "adduser"
-	[ "--disabled-password"
-	, "--gecos", ""
-	, u
-	]
+accountFor user@(User u) = check nohomedir go
 	`describe` ("account for " ++ u)
+  where
+	nohomedir = isNothing <$> catchMaybeIO (homedir user)
+	go = cmdProperty "adduser"
+		[ "--disabled-password"
+		, "--gecos", ""
+		, u
+		]
+
+systemAccountFor :: User -> Property NoInfo
+systemAccountFor user@(User u) = systemAccountFor' user Nothing (Just (Group u))
+
+systemAccountFor' :: User -> Maybe FilePath -> Maybe Group -> Property NoInfo
+systemAccountFor' (User u) mhome mgroup = check nouser go
+	`describe` ("system account for " ++ u)
+  where
+	nouser = isNothing <$> catchMaybeIO (getUserEntryForName u)
+	go = cmdProperty "adduser" $
+		[ "--system" ]
+		++
+		"--home" : maybe
+			["/nonexistent", "--no-create-home"]
+			( \h -> [ h ] )
+			mhome
+		++
+		maybe [] ( \(Group g) -> ["--ingroup", g] ) mgroup
+		++
+		[ "--shell", "/usr/bin/nologin"
+		, "--disabled-login"
+		, "--disabled-password"
+		, u
+		]
 
 -- | Removes user home directory!! Use with caution.
 nuked :: User -> Eep -> Property NoInfo
-nuked user@(User u) _ = check (isJust <$> catchMaybeIO (homedir user)) $ cmdProperty "userdel"
-	[ "-r"
-	, u
-	]
+nuked user@(User u) _ = check hashomedir go
 	`describe` ("nuked user " ++ u)
+  where
+	hashomedir = isJust <$> catchMaybeIO (homedir user)
+	go = cmdProperty "userdel"
+		[ "-r"
+		, u
+		]
 
 -- | Only ensures that the user has some password set. It may or may
 -- not be a password from the PrivData.
@@ -58,21 +88,30 @@ hasPassword' (User u) context = go `requires` shadowConfig True
 setPassword :: (((PrivDataField, PrivData) -> Propellor Result) -> Propellor Result) -> Propellor Result
 setPassword getpassword = getpassword $ go
   where
-	go (Password user, password) = set user (privDataVal password) []
-	go (CryptPassword user, hash) = set user (privDataVal hash) ["--encrypted"]
+	go (Password user, password) = chpasswd (User user) (privDataVal password) []
+	go (CryptPassword user, hash) = chpasswd (User user) (privDataVal hash) ["--encrypted"]
 	go (f, _) = error $ "Unexpected type of privdata: " ++ show f
 
-	set user v ps = makeChange $ withHandle StdinHandle createProcessSuccess
-		(proc "chpasswd" ps) $ \h -> do
-			hPutStrLn h $ user ++ ":" ++ v
-			hClose h
+-- | Makes a user's password be the passed String. Highly insecure:
+-- The password is right there in your config file for anyone to see!
+hasInsecurePassword :: User -> String -> Property NoInfo
+hasInsecurePassword u@(User n) p = property (n ++ " has insecure password") $
+	chpasswd u p []
+
+chpasswd :: User -> String -> [String] -> Propellor Result
+chpasswd (User user) v ps = makeChange $ withHandle StdinHandle createProcessSuccess
+	(proc "chpasswd" ps) $ \h -> do
+		hPutStrLn h $ user ++ ":" ++ v
+		hClose h
 
 lockedPassword :: User -> Property NoInfo
-lockedPassword user@(User u) = check (not <$> isLockedPassword user) $ cmdProperty "passwd"
-	[ "--lock"
-	, u
-	]
+lockedPassword user@(User u) = check (not <$> isLockedPassword user) go
 	`describe` ("locked " ++ u ++ " password")
+  where
+	go = cmdProperty "passwd"
+		[ "--lock"
+		, u
+		]
 
 data PasswordStatus = NoPassword | LockedPassword | HasPassword
 	deriving (Eq)
@@ -92,21 +131,51 @@ homedir :: User -> IO FilePath
 homedir (User user) = homeDirectory <$> getUserEntryForName user
 
 hasGroup :: User -> Group -> Property NoInfo
-hasGroup (User user) (Group group') = check test $ cmdProperty "adduser"
-	[ user
-	, group'
-	]
+hasGroup (User user) (Group group') = check test go
 	`describe` unwords ["user", user, "in group", group']
   where
 	test = not . elem group' . words <$> readProcess "groups" [user]
+	go = cmdProperty "adduser"
+		[ user
+		, group'
+		]
+
+-- | Gives a user access to the secondary groups, including audio and
+-- video, that the OS installer normally gives a desktop user access to.
+--
+-- Note that some groups may only exit after installation of other
+-- software. When a group does not exist yet, the user won't be added to it.
+hasDesktopGroups :: User -> Property NoInfo
+hasDesktopGroups user@(User u) = property desc $ do
+	existinggroups <- map (fst . break (== ':')) . lines
+		<$> liftIO (readFile "/etc/group")
+	let toadd = filter (`elem` existinggroups) desktopgroups
+	ensureProperty $ propertyList desc $ map (hasGroup user . Group) toadd
+  where
+	desc = "user " ++ u ++ " is in standard desktop groups"
+	-- This list comes from user-setup's debconf
+	-- template named "passwd/user-default-groups"
+	desktopgroups =
+		[ "audio"
+		, "cdrom"
+		, "dip"
+		, "floppy"
+		, "video"
+		, "plugdev"
+		, "netdev"
+		, "scanner"
+		, "bluetooth"
+		, "debian-tor"
+		, "lpadmin"
+		]
 
 -- | Controls whether shadow passwords are enabled or not.
 shadowConfig :: Bool -> Property NoInfo
-shadowConfig True = check (not <$> shadowExists) $
-	cmdProperty "shadowconfig" ["on"]
+shadowConfig True = check (not <$> shadowExists)
+	(cmdProperty "shadowconfig" ["on"])
 		`describe` "shadow passwords enabled"
-shadowConfig False = check shadowExists $
-	cmdProperty "shadowconfig" ["off"]
+shadowConfig False = check shadowExists
+	(cmdProperty "shadowconfig" ["off"])
 		`describe` "shadow passwords disabled"
 
 shadowExists :: IO Bool
@@ -118,8 +187,8 @@ hasLoginShell :: User -> FilePath -> Property NoInfo
 hasLoginShell user loginshell = shellSetTo user loginshell `requires` shellEnabled loginshell
 
 shellSetTo :: User -> FilePath -> Property NoInfo
-shellSetTo (User u) loginshell = check needchangeshell $
-	cmdProperty "chsh" ["--shell", loginshell, u]
+shellSetTo (User u) loginshell = check needchangeshell
+	(cmdProperty "chsh" ["--shell", loginshell, u])
 		`describe` (u ++ " has login shell " ++ loginshell)
   where
 	needchangeshell = do

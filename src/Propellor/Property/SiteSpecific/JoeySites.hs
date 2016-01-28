@@ -6,6 +6,7 @@ module Propellor.Property.SiteSpecific.JoeySites where
 import Propellor.Base
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.File as File
+import qualified Propellor.Property.ConfFile as ConfFile
 import qualified Propellor.Property.Gpg as Gpg
 import qualified Propellor.Property.Ssh as Ssh
 import qualified Propellor.Property.Git as Git
@@ -15,6 +16,8 @@ import qualified Propellor.Property.User as User
 import qualified Propellor.Property.Obnam as Obnam
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Postfix as Postfix
+import qualified Propellor.Property.Systemd as Systemd
+import qualified Propellor.Property.Fail2Ban as Fail2Ban
 import Utility.FileMode
 
 import Data.List
@@ -36,6 +39,7 @@ scrollBox = propertyList "scroll server" $ props
 		, "cabal configure"
 		, "make"
 		]
+		`assume` MadeChange
 	& s `File.hasContent`
 		[ "#!/bin/sh"
 		, "set -e"
@@ -137,7 +141,10 @@ oldUseNetServer hosts = propertyList "olduse.net server" $ props
 		, "--client-name=spool"
 		, "--ssh-key=" ++ keyfile
 		] Obnam.OnlyClient
-		`requires` Ssh.keyImported' (Just keyfile) SshRsa (User "root") (Context "olduse.net")
+		`requires` Ssh.userKeyAt (Just keyfile)
+			(User "root")
+			(Context "olduse.net")
+			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD0F6L76SChMCIGmeyGhlFMUTgZ3BoTbATiOSs0A7KXQoI1LTE5ZtDzzUkrQRJVpJ640pfMR7cQZyBm8tv+kYIPp0238GrX43c1vgm0L78agDnBU7r2iNMyWIwhssK8O3ZAhp8Q4KCz1r8hP2nIiD0y1D1VWW8h4KWOS7I1XCEAjOTvFvEjTh6a9MyHrcIkv7teUUzTBRjNrsyijCFRk1+pEET54RueoOmEjQcWd/sK1tYRiMZjegRLBOus2wUWsUOvznJ2iniLONUTGAWRnEV+O7hLN6CD44osJ+wkZk8bPAumTS0zcSLckX1jpdHJicmAyeniWSd4FCqm1YE6/xDD")
 		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
 	keyfile = "/root/.ssh/olduse.net.key"
 
@@ -159,7 +166,9 @@ oldUseNetInstalled pkg = check (not <$> Apt.isInstalled pkg) $
 			, "dpkg -i ../" ++ pkg ++ "_*.deb || true"
 			, "apt-get -fy install" -- dependencies
 			, "rm -rf /root/tmp/oldusenet"
-			] `describe` "olduse.net built"
+			]
+			`assume` MadeChange
+			`describe` "olduse.net built"
 
 kgbServer :: Property HasInfo
 kgbServer = propertyList desc $ props
@@ -183,13 +192,19 @@ mumbleServer hosts = combineProperties hn $ props
 	& Apt.serviceInstalledRunning "mumble-server"
 	& Obnam.backup "/var/lib/mumble-server" (Cron.Times "55 5 * * *")
 		[ "--repository=sftp://2318@usw-s002.rsync.net/~/" ++ hn ++ ".obnam"
+		, "--ssh-key=" ++ sshkey
 		, "--client-name=mumble"
 		] Obnam.OnlyClient
-		`requires` Ssh.keyImported SshRsa (User "root") (Context hn)
+		`requires` Ssh.userKeyAt (Just sshkey)
+			(User "root")
+ 			(Context hn)
+			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSXXSM3mM8SNu+qel9R/LkDIkjpV3bfpUtRtYv2PTNqicHP+DdoThrr0ColFCtLH+k2vQJvR2n8uMzHn53Dq2IO3TtD27+7rJSsJwAZ8oftNzuTir8IjAwX5g6JYJs+L0Ny4RB0ausd+An0k/CPMRl79zKxpZd2MBMDNXt8hyqu0vS0v1ohq5VBEVhBBvRvmNQvWOCj7PdrKQXpUBHruZOeVVEdUUXZkVc1H0t7LVfJnE+nGKyWbw2jM+7r3Rn5Semc4R1DxsfaF8lKkZyE88/5uZQ/ddomv8ptz6YZ5b+Bg6wfooWPC3RWAALjxnHaC2yN1VONAvHmT0uNn1o6v0b")
 		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
-	& trivial (cmdProperty "chown" ["-R", "mumble-server:mumble-server", "/var/lib/mumble-server"])
+	& cmdProperty "chown" ["-R", "mumble-server:mumble-server", "/var/lib/mumble-server"]
+		`assume` NoChange
   where
 	hn = "mumble.debian.net"
+	sshkey = "/root/.ssh/mumble.debian.net.key"
 
 -- git.kitenet.net and git.joeyh.name
 gitServer :: [Host] -> Property HasInfo
@@ -199,7 +214,10 @@ gitServer hosts = propertyList "git.kitenet.net setup" $ props
 		, "--ssh-key=" ++ sshkey
 		, "--client-name=wren" -- historical
 		] Obnam.OnlyClient (Gpg.GpgKeyId "1B169BE1")
-		`requires` Ssh.keyImported' (Just sshkey) SshRsa (User "root") (Context "git.kitenet.net")
+		`requires` Ssh.userKeyAt (Just sshkey)
+			(User "root")
+			(Context "git.kitenet.net")
+			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD0F6L76SChMCIGmeyGhlFMUTgZ3BoTbATiOSs0A7KXQoI1LTE5ZtDzzUkrQRJVpJ640pfMR7cQZyBm8tv+kYIPp0238GrX43c1vgm0L78agDnBU7r2iNMyWIwhssK8O3ZAhp8Q4KCz1r8hP2nIiD0y1D1VWW8h4KWOS7I1XCEAjOTvFvEjTh6a9MyHrcIkv7teUUzTBRjNrsyijCFRk1+pEET54RueoOmEjQcWd/sK1tYRiMZjegRLBOus2wUWsUOvznJ2iniLONUTGAWRnEV+O7hLN6CD44osJ+wkZk8bPAumTS0zcSLckX1jpdHJicmAyeniWSd4FCqm1YE6/xDD")
 		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
 		`requires` Ssh.authorizedKeys (User "family") (Context "git.kitenet.net")
 		`requires` User.accountFor (User "family")
@@ -260,6 +278,7 @@ annexWebSite origin hn uuid remotes = propertyList (hn ++" website using git-ann
 	dir = "/srv/web/" ++ hn
 	postupdatehook = dir </> ".git/hooks/post-update"
 	setup = userScriptProperty (User "joey") setupscript
+		`assume` MadeChange
 	setupscript = 
 		[ "cd " ++ shellEscape dir
 		, "git annex reinit " ++ shellEscape uuid
@@ -286,7 +305,7 @@ annexWebSite origin hn uuid remotes = propertyList (hn ++" website using git-ann
 		, "  </Directory>"
 		]
 
-apacheSite :: HostName -> Bool -> Apache.ConfigFile -> RevertableProperty
+apacheSite :: HostName -> Bool -> Apache.ConfigFile -> RevertableProperty NoInfo
 apacheSite hn withssl middle = Apache.siteEnabled hn $ apachecfg hn withssl middle
 
 apachecfg :: HostName -> Bool -> Apache.ConfigFile -> Apache.ConfigFile
@@ -335,6 +354,7 @@ gitAnnexDistributor = combineProperties "git-annex distributor, including rsync 
 		`onChange` Service.restarted "rsync"
 	& "/etc/default/rsync" `File.containsLine` "RSYNC_ENABLE=true"
 		`onChange` Service.running "rsync"
+	& Systemd.enabled "rsync"
 	& endpoint "/srv/web/downloads.kitenet.net/git-annex/autobuild"
 	& endpoint "/srv/web/downloads.kitenet.net/git-annex/autobuild/x86_64-apple-yosemite"
 	& endpoint "/srv/web/downloads.kitenet.net/git-annex/autobuild/windows"
@@ -378,6 +398,7 @@ twitRss = combineProperties "twitter rss" $ props
 		[ "cd " ++ dir
 		, "ghc --make twitRss" 
 		]
+		`assume` NoChange
 		`requires` Apt.installed
 			[ "libghc-xml-dev"
 			, "libghc-feed-dev"
@@ -398,7 +419,8 @@ ircBouncer = propertyList "IRC bouncer" $ props
 	& File.ownerGroup conf (User "znc") (Group "znc")
 	& Cron.job "znconboot" (Cron.Times "@reboot") (User "znc") "~" "znc"
 	-- ensure running if it was not already
-	& trivial (userScriptProperty (User "znc") ["znc || true"])
+	& userScriptProperty (User "znc") ["znc || true"]
+		`assume` NoChange
 		`describe` "znc running"
   where
 	conf = "/home/znc/.znc/configs/znc.conf"
@@ -455,7 +477,7 @@ githubMirrors =
 	, ("etckeeper", plzuseurl "http://etckeeper.branchable.com/todo/")
 	]
   where
-	plzuseurl u = "Please submit changes to " ++ u ++ " instead of using github pull requests, which are not part of my workflow. -- A robot acting on behalf of Joey Hess"
+	plzuseurl u = "Please submit changes to " ++ u ++ " instead of using github pull requests, which are not part of my workflow. Just open a todo item there and link to a git repository containing your changes. Did you know, git is a distributed system? The git repository doesn't even need to be on github! Please send any complaints to Github; they don't allow turning off pull requests or redirecting them elsewhere.  -- A robot acting on behalf of Joey Hess"
 
 rsyncNetBackup :: [Host] -> Property NoInfo
 rsyncNetBackup hosts = Cron.niceJob "rsync.net copied in daily" (Cron.Times "30 5 * * *")
@@ -527,6 +549,10 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 	& dkimInstalled
 
 	& Postfix.saslAuthdInstalled
+	& Fail2Ban.installed
+	& Fail2Ban.jailEnabled "postfix-sasl"
+	& "/etc/default/saslauthd" `File.containsLine` "MECHANISMS=sasldb"
+	& Postfix.saslPasswdSet "kitenet.net" (User "errol")
 
 	& Apt.installed ["maildrop"]
 	& "/etc/maildroprc" `File.hasContent`
@@ -668,16 +694,23 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		`describe` "pine configured to use local imap server"
 	
 	& Apt.serviceInstalledRunning "mailman"
+
+	& Postfix.service ssmtp
   where
 	ctx = Context "kitenet.net"
 	pinescript = "/usr/local/bin/pine"
 	dovecotusers = "/etc/dovecot/users"
 
+	ssmtp = Postfix.Service 
+		(Postfix.InetService Nothing "ssmtp")
+		"smtpd" Postfix.defServiceOpts
+
 -- Configures postfix to relay outgoing mail to kitenet.net, with
 -- verification via tls cert.
 postfixClientRelay :: Context -> Property HasInfo
 postfixClientRelay ctx = Postfix.mainCfFile `File.containsLines`
-	[ "relayhost = kitenet.net"
+	-- Using smtps not smtp because more networks firewall smtp
+	[ "relayhost = kitenet.net:smtps"
 	, "smtp_tls_CAfile = /etc/ssl/certs/joeyca.pem"
 	, "smtp_tls_cert_file = /etc/ssl/certs/postfix.pem"
 	, "smtp_tls_key_file = /etc/ssl/private/postfix.pem"
@@ -725,7 +758,7 @@ dkimInstalled = go `onChange` Service.restarted "opendkim"
 -- This value can be included in a domain's additional records to make
 -- it use this domainkey.
 domainKey :: (BindDomain, Record)
-domainKey = (RelDomain "mail._domainkey", TXT "v=DKIM1; k=rsa; t=y; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCc+/rfzNdt5DseBBmfB3C6sVM7FgVvf4h1FeCfyfwPpVcmPdW6M2I+NtJsbRkNbEICxiP6QY2UM0uoo9TmPqLgiCCG2vtuiG6XMsS0Y/gGwqKM7ntg/7vT1Go9vcquOFFuLa5PnzpVf8hB9+PMFdS4NPTvWL2c5xxshl/RJzICnQIDAQAB")
+domainKey = (RelDomain "mail._domainkey", TXT "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCc+/rfzNdt5DseBBmfB3C6sVM7FgVvf4h1FeCfyfwPpVcmPdW6M2I+NtJsbRkNbEICxiP6QY2UM0uoo9TmPqLgiCCG2vtuiG6XMsS0Y/gGwqKM7ntg/7vT1Go9vcquOFFuLa5PnzpVf8hB9+PMFdS4NPTvWL2c5xxshl/RJzICnQIDAQAB")
 
 hasJoeyCAChain :: Property HasInfo
 hasJoeyCAChain = "/etc/ssl/certs/joeyca.pem" `File.hasPrivContentExposed`
@@ -908,11 +941,51 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "rewriterule (.*) http://joeyh.name$1 [r]"
 		]
 
-userDirHtml :: Property HasInfo
+userDirHtml :: Property NoInfo
 userDirHtml = File.fileProperty "apache userdir is html" (map munge) conf
 	`onChange` Apache.reloaded
-	`requires` (toProp $ Apache.modEnabled "userdir")
+	`requires` Apache.modEnabled "userdir"
   where
 	munge = replace "public_html" "html"
 	conf = "/etc/apache2/mods-available/userdir.conf"
 
+-- Alarm clock: see
+-- <http://joeyh.name/blog/entry/a_programmable_alarm_clock_using_systemd/>
+--
+-- oncalendar example value: "*-*-* 7:30"
+alarmClock :: String -> User -> String -> Property NoInfo
+alarmClock oncalendar (User user) command = combineProperties
+	"goodmorning timer installed"
+	[ "/etc/systemd/system/goodmorning.timer" `File.hasContent`
+		[ "[Unit]"
+		, "Description=good morning"
+		, ""
+		, "[Timer]"
+		, "Unit=goodmorning.service"
+		, "OnCalendar=" ++ oncalendar
+		, "WakeSystem=true"
+		, "Persistent=false"
+		, ""
+		, "[Install]"
+		, "WantedBy=multi-user.target"
+		]
+		`onChange` (Systemd.daemonReloaded
+			`before` Systemd.restarted "goodmorning.timer")
+	, "/etc/systemd/system/goodmorning.service" `File.hasContent`
+		[ "[Unit]"
+		, "Description=good morning"
+		, "RefuseManualStart=true"
+		, "RefuseManualStop=true"
+		, "ConditionACPower=true"
+		, "StopWhenUnneeded=yes"
+		, ""
+		, "[Service]"
+		, "Type=oneshot"
+		, "ExecStart=/bin/systemd-inhibit --what=handle-lid-switch --why=goodmorning /bin/su " ++ user ++ " -c \"" ++ command ++ "\""
+		]
+		`onChange` Systemd.daemonReloaded
+	, Systemd.enabled "goodmorning.timer"
+	, Systemd.started "goodmorning.timer"
+	, "/etc/systemd/logind.conf" `ConfFile.containsIniSetting`
+		("Login", "LidSwitchIgnoreInhibited", "no")
+	]

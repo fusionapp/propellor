@@ -18,14 +18,19 @@ data BIOS = PC | EFI64 | EFI32 | Coreboot | Xen
 -- | Installs the grub package. This does not make grub be used as the
 -- bootloader.
 --
--- This includes running update-grub, so that the grub boot menu is
--- created. It will be automatically updated when kernel packages are
--- installed.
+-- This includes running update-grub.
 installed :: BIOS -> Property NoInfo
-installed bios = 
-	Apt.installed [pkg] `describe` "grub package installed"
-		`before`
-	cmdProperty "update-grub" []
+installed bios = installed' bios `onChange` mkConfig
+
+-- Run update-grub, to generate the grub boot menu. It will be
+-- automatically updated when kernel packages are installed.
+mkConfig :: Property NoInfo
+mkConfig = cmdProperty "update-grub" []
+	`assume` MadeChange
+
+-- | Installs grub; does not run update-grub.
+installed' :: BIOS -> Property NoInfo
+installed' bios = Apt.installed [pkg] `describe` "grub package installed"
   where
 	pkg = case bios of
 		PC -> "grub-pc"
@@ -45,6 +50,7 @@ installed bios =
 -- onChange after OS.cleanInstallOnce.
 boots :: OSDevice -> Property NoInfo
 boots dev = cmdProperty "grub-install" [dev]
+	`assume` MadeChange
 	`describe` ("grub boots " ++ dev)
 
 -- | Use PV-grub chaining to boot
@@ -70,8 +76,9 @@ chainPVGrub rootdev bootdev timeout = combineProperties desc
 	, "/boot/load.cf" `File.hasContent`
 		[ "configfile (" ++ bootdev ++ ")/boot/grub/grub.cfg" ]
 	, installed Xen
-	, flagFile (scriptProperty ["grub-mkimage --prefix '(" ++ bootdev ++ ")/boot/grub' -c /boot/load.cf -O x86_64-xen /usr/lib/grub/x86_64-xen/*.mod > /boot/xen-shim"]) "/boot/xen-shim"
-			`describe` "/boot-xen-shim"
+	, flip flagFile "/boot/xen-shim" $ scriptProperty ["grub-mkimage --prefix '(" ++ bootdev ++ ")/boot/grub' -c /boot/load.cf -O x86_64-xen /usr/lib/grub/x86_64-xen/*.mod > /boot/xen-shim"]
+		`assume` MadeChange
+		`describe` "/boot-xen-shim"
 	]
   where
 	desc = "chain PV-grub"

@@ -26,11 +26,11 @@ gitServer :: [Host] -> Property HasInfo
 gitServer knownhosts = propertyList "iabak git server" $ props
 	& Git.cloned (User "root") repo "/usr/local/IA.BAK" (Just "server")
 	& Git.cloned (User "root") repo "/usr/local/IA.BAK/client" (Just "master")
-	& Ssh.keyImported SshRsa (User "root") (Context "IA.bak.users.git")
+	& Ssh.userKeys (User "root") (Context "IA.bak.users.git") sshKeys
 	& Ssh.knownHost knownhosts "gitlab.com" (User "root")
 	& Git.cloned (User "root") userrepo "/usr/local/IA.BAK/pubkeys" (Just "master")
 	& Apt.serviceInstalledRunning "apache2"
-	& cmdProperty "ln" ["-sf", "/usr/local/IA.BAK/pushme.cgi", "/usr/lib/cgi-bin/pushme.cgi"]
+	& "/usr/lib/cgi-bin/pushme.cgi" `File.isSymlinkedTo` File.LinkTarget "/usr/local/IA.BAK/pushme.cgi"
 	& File.containsLine "/etc/sudoers" "www-data ALL=NOPASSWD:/usr/local/IA.BAK/pushed.sh"
 	& Cron.niceJob "shardstats" (Cron.Times "*/30 * * * *") (User "root") "/"
 		"/usr/local/IA.BAK/shardstats-all"
@@ -45,20 +45,26 @@ gitServer knownhosts = propertyList "iabak git server" $ props
 registrationServer :: [Host] -> Property HasInfo
 registrationServer knownhosts = propertyList "iabak registration server" $ props
 	& User.accountFor (User "registrar")
-	& Ssh.keyImported SshRsa (User "registrar") (Context "IA.bak.users.git")
+	& Ssh.userKeys (User "registrar") (Context "IA.bak.users.git") sshKeys
 	& Ssh.knownHost knownhosts "gitlab.com" (User "registrar")
 	& Git.cloned (User "registrar") repo "/home/registrar/IA.BAK" (Just "server")
 	& Git.cloned (User "registrar") userrepo "/home/registrar/users" (Just "master")
 	& Apt.serviceInstalledRunning "apache2"
 	& Apt.installed ["perl", "perl-modules"]
-	& cmdProperty "ln" ["-sf", "/home/registrar/IA.BAK/registrar/register.cgi", link]
+	& link `File.isSymlinkedTo` File.LinkTarget "/home/registrar/IA.BAK/registrar/register.cgi"
 	& cmdProperty "chown" ["-h", "registrar:registrar", link]
+		`changesFile` link
 	& File.containsLine "/etc/sudoers" "www-data ALL=(registrar) NOPASSWD:/home/registrar/IA.BAK/registrar/register.pl"
 	& Apt.installed ["kgb-client"]
 	& File.hasPrivContentExposed "/etc/kgb-bot/kgb-client.conf" anyContext
 		`requires` File.dirExists "/etc/kgb-bot/"
   where
 	link = "/usr/lib/cgi-bin/register.cgi"
+
+sshKeys :: [(SshKeyType, Ssh.PubKeyText)]
+sshKeys = 
+	[ (SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCoiE+CPiIQyfWnl/E9iKG3eo4QzlH30vi7xAgKolGaTu6qKy4XPtl+8MNm2Dqn9QEYRVyyOT/XH0yP5dRc6uyReT8dBy03MmLkVbj8Q+nKCz5YOMTxrY3sX6RRXU1zVGjeVd0DtC+rKRT7reoCxef42LAJTm8nCyZu/enAuso5qHqBbqulFz2YXEKfU1SEEXLawtvgGck1KmCyg+pqazeI1eHWXrojQf5isTBKfPQLWVppBkWAf5cA4wP5U1vN9dVirIdw66ds1M8vnGlkTBjxP/HLGBWGYhZHE7QXjXRsk2RIXlHN9q6GdNu8+F3HXS22mst47E4UAeRoiXSMMtF5")
+	]
 
 graphiteServer :: Property HasInfo
 graphiteServer = propertyList "iabak graphite server" $ props
@@ -79,11 +85,15 @@ graphiteServer = propertyList "iabak graphite server" $ props
 		, "retentions = 60s:1d"
 		]
 	& graphiteCSRF
-	& cmdProperty "graphite-manage" ["syncdb", "--noinput"] `flagFile` "/etc/flagFiles/graphite-syncdb"
-	& cmdProperty "graphite-manage" ["createsuperuser", "--noinput", "--username=joey", "--email=joey@localhost"] `flagFile` "/etc/flagFiles/graphite-user-joey"
-		`flagFile` "/etc/graphite-superuser-joey"
-	& cmdProperty "graphite-manage" ["createsuperuser", "--noinput", "--username=db48x", "--email=db48x@localhost"] `flagFile` "/etc/flagFiles/graphite-user-db48x"
-		`flagFile` "/etc/graphite-superuser-db48x"
+	& cmdProperty "graphite-manage" ["syncdb", "--noinput"]
+		`assume` MadeChange
+		`flagFile` "/etc/flagFiles/graphite-syncdb"
+	& cmdProperty "graphite-manage" ["createsuperuser", "--noinput", "--username=joey", "--email=joey@localhost"]
+		`assume` MadeChange
+		`flagFile` "/etc/flagFiles/graphite-user-joey"
+	& cmdProperty "graphite-manage" ["createsuperuser", "--noinput", "--username=db48x", "--email=db48x@localhost"]
+		`assume` MadeChange
+		`flagFile` "/etc/flagFiles/graphite-user-db48x"
 	-- TODO: deal with passwords somehow
 	& File.ownerGroup "/var/lib/graphite/graphite.db" (User "_graphite") (Group "_graphite")
 	& "/etc/apache2/ports.conf" `File.containsLine` "Listen 8080"

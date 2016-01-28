@@ -4,7 +4,7 @@ import Propellor.Base
 import Utility.FileMode
 
 import System.Posix.Files
-import System.PosixCompat.Types
+import System.Exit
 
 type Line = String
 
@@ -67,6 +67,16 @@ f `containsLines` ls = fileProperty (f ++ " contains:" ++ show ls) go f
 lacksLine :: FilePath -> Line -> Property NoInfo
 f `lacksLine` l = fileProperty (f ++ " remove: " ++ l) (filter (/= l)) f
 
+lacksLines :: FilePath -> [Line] -> Property NoInfo
+f `lacksLines` ls = fileProperty (f ++ " remove: " ++ show [ls]) (filter (`notElem` ls)) f
+
+-- | Replaces the content of a file with the transformed content of another file
+basedOn :: FilePath -> (FilePath, [Line] -> [Line]) -> Property NoInfo
+f `basedOn` (f', a) = property desc $ go =<< (liftIO $ readFile f')
+  where
+	desc = "replace " ++ f
+	go tmpl = ensureProperty $ fileProperty desc (\_ -> a $ lines $ tmpl) f
+
 -- | Removes a file. Does not remove symlinks or non-plain-files.
 notPresent :: FilePath -> Property NoInfo
 notPresent f = check (doesFileExist f) $ property (f ++ " not present") $ 
@@ -97,10 +107,14 @@ dirExists :: FilePath -> Property NoInfo
 dirExists d = check (not <$> doesDirectoryExist d) $ property (d ++ " exists") $
 	makeChange $ createDirectoryIfMissing True d
 
--- | Creates or atomically updates a symbolic link. Does not overwrite regular
--- files or directories.
-isSymlinkedTo :: FilePath -> FilePath -> Property NoInfo
-link `isSymlinkedTo` target = property desc $
+-- | The location that a symbolic link points to.
+newtype LinkTarget = LinkTarget FilePath
+
+-- | Creates or atomically updates a symbolic link.
+--
+-- Does not overwrite regular files or directories.
+isSymlinkedTo :: FilePath -> LinkTarget -> Property NoInfo
+link `isSymlinkedTo` (LinkTarget target) = property desc $
 	go =<< (liftIO $ tryIO $ getSymbolicLinkStatus link)
   where
 	desc = link ++ " is symlinked to " ++ target
@@ -120,21 +134,42 @@ link `isSymlinkedTo` target = property desc $
 			else makeChange updateLink
 	updateLink = createSymbolicLink target `viaStableTmp` link
 
+-- | Ensures that a file is a copy of another (regular) file.
+isCopyOf :: FilePath -> FilePath -> Property NoInfo
+f `isCopyOf` f' = property desc $ go =<< (liftIO $ tryIO $ getFileStatus f')
+  where
+	desc = f ++ " is copy of " ++ f'
+	go (Right stat) = if isRegularFile stat
+		then gocmp =<< (liftIO $ cmp)
+		else warningMessage (f' ++ " is not a regular file") >>
+			return FailedChange
+	go (Left e) = warningMessage (show e) >> return FailedChange
+
+	cmp = safeSystem "cmp" [Param "-s", Param "--", File f, File f']
+	gocmp ExitSuccess = noChange
+	gocmp (ExitFailure 1) = doit
+	gocmp _ = warningMessage "cmp failed" >> return FailedChange
+
+	doit = makeChange $ copy f' `viaStableTmp` f
+	copy src dest = unlessM (runcp src dest) $ errorMessage "cp failed"
+	runcp src dest = boolSystem "cp"
+		[Param "--preserve=all", Param "--", File src, File dest]
+
 -- | Ensures that a file/dir has the specified owner and group.
 ownerGroup :: FilePath -> User -> Group -> Property NoInfo
-ownerGroup f (User owner) (Group group) = property (f ++ " owner " ++ og) $ do
-	r <- ensureProperty $ cmdProperty "chown" [og, f]
-	if r == FailedChange
-		then return r
-		else noChange
+ownerGroup f (User owner) (Group group) = p `describe` (f ++ " owner " ++ og)
   where
+	p = cmdProperty "chown" [og, f]
+		`changesFile` f
 	og = owner ++ ":" ++ group
 
 -- | Ensures that a file/dir has the specfied mode.
 mode :: FilePath -> FileMode -> Property NoInfo
-mode f v = property (f ++ " mode " ++ show v) $ do
-	liftIO $ modifyFileMode f (const v)
-	noChange
+mode f v = p `changesFile` f
+  where
+	p = property (f ++ " mode " ++ show v) $ do
+		liftIO $ modifyFileMode f (const v)
+		return NoChange
 
 -- | A temp file to use when writing new content for a file.
 --

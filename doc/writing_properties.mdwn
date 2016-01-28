@@ -4,17 +4,17 @@ you'll want to write a property of your own.
 This isn't hard. Often propellor has some properties you can use to build
 the property you want. Need to modify the content of a file? Use any of
 the properties in
-[Propellor.Property.File](http://hackage.haskell.org/package/propellor-2.2.1/docs/Propellor-Property-File.htm)
-Need to run some commands? Use [Propellor.Property.Cmd](http://hackage.haskell.org/package/propellor-2.2.1/docs/Propellor-Property-Cmd.html).
+[Propellor.Property.File](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-File.htm)
+Need to run some commands? Use [Propellor.Property.Cmd](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-Cmd.html).
 
 To combine properties, the easiest way is to use `requires`.
 
 	someproperty `requires` otherproperty
 
-[Propellor.Property.List](http://hackage.haskell.org/package/propellor-2.2.1/docs/Propellor-Property-List.html)
+[Propellor.Property.List](http://hackage.haskell.org/package/propellor/docs/Propellor-Property-List.html)
 has a `propertyList` combinator that's also useful.
 
-[Propellor.Property](http://hackage.haskell.org/package/propellor-2.2.1/docs/Propellor-Property.html)
+[Propellor.Property](http://hackage.haskell.org/package/propellor/docs/Propellor-Property.html)
 has some other functions to modify Properties in useful ways.
 For example, `check` makes a Property call an `IO Bool` to check if the 
 Property needs be run.
@@ -53,13 +53,12 @@ run:
 The only remaining problem with this is that shellSetTo runs chsh every
 time, and propellor will always display that it's made a change each time
 it runs, even when it didn't really do much. Now, there's an easy way to
-avoid that problem, we could just tell propellor that it's a trivial
-property, and then it will run chsh every time and not think it made any
-change:
+avoid that problem, we could just tell propellor to assume that chsh
+has not made a change:
 	
 	shellSetTo :: UserName -> FilePath -> Property
-	shellSetTo user shell = trivial $
-		cmdProperty "chsh" ["--shell", shell, user]
+	shellSetTo user shell = cmdProperty "chsh" ["--shell", shell, user]
+		`assume` NoChange
 
 But, it's not much harder to do this right. Let's make the property
 check if the user's shell is already set to the desired value and avoid

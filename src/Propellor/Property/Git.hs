@@ -11,7 +11,7 @@ import Data.List
 -- using git-daemon, run from inetd.
 --
 -- Note that reverting this property does not remove or stop inetd.
-daemonRunning :: FilePath -> RevertableProperty
+daemonRunning :: FilePath -> RevertableProperty NoInfo
 daemonRunning exportdir = setup <!> unsetup
   where
 	setup = containsLine conf (mkl "tcp4")
@@ -79,18 +79,20 @@ cloned owner url dir mbranch = check originurl (property desc checkout)
 			whenM (doesDirectoryExist dir) $
 				removeDirectoryRecursive dir
 			createDirectoryIfMissing True (takeDirectory dir)
-		ensureProperty $ userScriptProperty owner $ catMaybes
-			-- The </dev/null fixes an intermittent
-			-- "fatal: read error: Bad file descriptor"
-			-- when run across ssh with propellor --spin
-			[ Just $ "git clone " ++ shellEscape url ++ " " ++ shellEscape dir ++ " < /dev/null"
-			, Just $ "cd " ++ shellEscape dir
-			, ("git checkout " ++) <$> mbranch
-			-- In case this repo is exposted via the web,
-			-- although the hook to do this ongoing is not
-			-- installed here.
-			, Just "git update-server-info"
-			]
+		ensureProperty $ userScriptProperty owner (catMaybes checkoutcmds)
+			`assume` MadeChange
+	checkoutcmds = 
+		-- The </dev/null fixes an intermittent
+		-- "fatal: read error: Bad file descriptor"
+		-- when run across ssh with propellor --spin
+		[ Just $ "git clone " ++ shellEscape url ++ " " ++ shellEscape dir ++ " < /dev/null"
+		, Just $ "cd " ++ shellEscape dir
+		, ("git checkout " ++) <$> mbranch
+		-- In case this repo is exposted via the web,
+		-- although the hook to do this ongoing is not
+		-- installed here.
+		, Just "git update-server-info"
+		]
 
 isGitDir :: FilePath -> IO Bool
 isGitDir dir = isNothing <$> catchMaybeIO (readProcess "git" ["rev-parse", "--resolve-git-dir", dir])
@@ -103,14 +105,58 @@ bareRepo repo user gitshared = check (isRepo repo) $ propertyList ("git repo: " 
 		NotShared ->
 			[ ownerGroup repo user (userGroup user)
 			, userScriptProperty user ["git init --bare --shared=false " ++ shellEscape repo]
+				`assume` MadeChange
 			]
 		SharedAll ->
 			[ ownerGroup repo user (userGroup user)
 			, userScriptProperty user ["git init --bare --shared=all " ++ shellEscape repo]
+				`assume` MadeChange
 			]
 		Shared group' ->
 			[ ownerGroup repo user group'
 			, userScriptProperty user ["git init --bare --shared=group " ++ shellEscape repo]
+				`assume` MadeChange
 			]
   where
 	isRepo repo' = isNothing <$> catchMaybeIO (readProcess "git" ["rev-parse", "--resolve-git-dir", repo'])
+
+-- | Set a key value pair in a git repo's configuration.
+repoConfigured :: FilePath -> (String, String) -> Property NoInfo
+repo `repoConfigured` (key, value) = check (not <$> alreadyconfigured) $
+	userScriptProperty (User "root")
+		[ "cd " ++ repo
+		, "git config " ++ key ++ " " ++ value
+		]
+		`assume` MadeChange
+		`describe` desc
+  where
+	alreadyconfigured = do
+		vs <- getRepoConfig repo key
+		return $ value `elem` vs
+	desc = "git repo at " ++ repo  ++ " config setting " ++ key ++ " set to " ++ value
+
+-- | Gets the value that a key is set to in a git repo's configuration.
+getRepoConfig :: FilePath -> String -> IO [String]
+getRepoConfig repo key = catchDefaultIO [] $
+	lines <$> readProcess "git" ["-C", repo, "config", key]
+
+-- | Whether a repo accepts non-fast-forward pushes.
+repoAcceptsNonFFs :: FilePath -> RevertableProperty NoInfo
+repoAcceptsNonFFs repo = accepts <!> refuses
+  where
+	accepts = repoConfigured repo ("receive.denyNonFastForwards", "false")
+		`describe` desc "accepts"
+	refuses = repoConfigured repo ("receive.denyNonFastForwards", "true")
+		`describe` desc "rejects"
+	desc s = "git repo " ++ repo ++ " " ++ s ++ " non-fast-forward pushes"
+
+-- | Sets a bare repository's default branch, which will be checked out
+-- when cloning it.
+bareRepoDefaultBranch :: FilePath -> String -> Property NoInfo
+bareRepoDefaultBranch repo branch =
+	userScriptProperty (User "root")
+		[ "cd " ++ repo
+		, "git symbolic-ref HEAD refs/heads/" ++ branch
+		]
+	`changesFileContent` (repo </> "HEAD")
+	`describe` ("git repo at " ++ repo ++ " has default branch " ++ branch)

@@ -7,48 +7,40 @@ module Propellor.Engine (
 	ensureProperty,
 	ensureProperties,
 	fromHost,
+	fromHost',
 	onlyProcess,
-	processChainOutput,
 ) where
 
 import System.Exit
 import System.IO
 import Data.Monoid
-import Control.Applicative
-import System.Console.ANSI
 import "mtl" Control.Monad.RWS.Strict
 import System.PosixCompat
 import System.Posix.IO
 import System.FilePath
 import System.Directory
+import Control.Applicative
+import Prelude
 
 import Propellor.Types
 import Propellor.Message
 import Propellor.Exception
 import Propellor.Info
-import Propellor.Types.Info
-import Propellor.Types.CmdLine
 import Propellor.Property
 import Utility.Exception
-import Utility.PartialPrelude
-import Utility.Monad
 
 -- | Gets the Properties of a Host, and ensures them all,
 -- with nice display of what's being done.
-mainProperties :: ControllerChain -> Host -> IO ()
-mainProperties cc host = do
-	ret <- runPropellor host' $
+mainProperties :: Host -> IO ()
+mainProperties host = do
+	ret <- runPropellor host $
 		ensureProperties [ignoreInfo $ infoProperty "overall" (ensureProperties ps) mempty mempty]
-	h <- mkMessageHandle
-        whenConsole h $
-		setTitle "propellor: done"
-	hFlush stdout
+	messagesDone
 	case ret of
 		FailedChange -> exitWith (ExitFailure 1)
 		_ -> exitWith ExitSuccess
   where
-	ps = map ignoreInfo $ hostProperties host'
-	host' = addHostInfo host (InfoVal cc)
+	ps = map ignoreInfo $ hostProperties host
 
 -- | Runs a Propellor action with the specified host.
 --
@@ -57,7 +49,7 @@ mainProperties cc host = do
 -- are then also run.
 runPropellor :: Host -> Propellor Result -> IO Result
 runPropellor host a = do
-	(res, _s, endactions) <- runRWST (runWithHost a) host ()
+	(res, endactions) <- evalRWST (runWithHost a) host ()
 	endres <- mapM (runEndAction host res) endactions
 	return $ mconcat (res:endres)
 
@@ -76,17 +68,19 @@ ensureProperties ps = ensure ps NoChange
 		r <- actionMessageOn hn (propertyDesc p) (ensureProperty p)
 		ensure ls (r <> rs)
 
--- | Lifts an action into a different host.
+-- | Lifts an action into the context of a different host.
 --
--- > fromHost hosts "otherhost" getPubKey
+-- > fromHost hosts "otherhost" Ssh.getHostPubKey
 fromHost :: [Host] -> HostName -> Propellor a -> Propellor (Maybe a)
 fromHost l hn getter = case findHost l hn of
 	Nothing -> return Nothing
-	Just h -> do
-		(ret, _s, runlog) <- liftIO $
-			runRWST (runWithHost getter) h ()
-		tell runlog
-		return (Just ret)
+	Just h -> Just <$> fromHost' h getter
+
+fromHost' :: Host -> Propellor a -> Propellor a
+fromHost' h getter = do
+	(ret, _s, runlog) <- liftIO $ runRWST (runWithHost getter) h ()
+	tell runlog
+	return ret
 
 onlyProcess :: FilePath -> IO a -> IO a
 onlyProcess lockfile a = bracket lock unlock (const a)
@@ -99,28 +93,3 @@ onlyProcess lockfile a = bracket lock unlock (const a)
 		return l
 	unlock = closeFd
 	alreadyrunning = error "Propellor is already running on this host!"
-
--- | Reads and displays each line from the Handle, except for the last line
--- which is a Result.
-processChainOutput :: Handle -> IO Result
-processChainOutput h = go Nothing
-  where
-	go lastline = do
-		v <- catchMaybeIO (hGetLine h)
-		debug ["read from chained propellor: ", show v]
-		case v of
-			Nothing -> case lastline of
-				Nothing -> do
-					debug ["chained propellor output nothing; assuming it failed"]
-					return FailedChange
-				Just l -> case readish l of
-					Just r -> pure r
-					Nothing -> do
-						debug ["chained propellor output did not end with a Result; assuming it failed"]
-						putStrLn l
-						hFlush stdout
-						return FailedChange
-			Just s -> do
-				maybe noop (\l -> unless (null l) (putStrLn l)) lastline
-				hFlush stdout
-				go (Just s)

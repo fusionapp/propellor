@@ -7,11 +7,12 @@ import Propellor.Types.Empty
 import Propellor.Types.Info
 
 import Data.Word
-import Data.Monoid
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.List
 import Data.String.Utils (split, replace)
+import Data.Monoid
+import Prelude
 
 type Domain = String
 
@@ -26,7 +27,7 @@ newtype AliasesInfo = AliasesInfo (S.Set HostName)
 	deriving (Show, Eq, Ord, Monoid, Typeable)
 
 instance IsInfo AliasesInfo where
-	propigateInfo _ = False
+	propagateInfo _ = False
 
 toAliasesInfo :: [HostName] -> AliasesInfo
 toAliasesInfo l = AliasesInfo (S.fromList l)
@@ -40,10 +41,10 @@ newtype DnsInfo = DnsInfo { fromDnsInfo :: S.Set Record }
 toDnsInfo :: S.Set Record -> DnsInfo
 toDnsInfo = DnsInfo
 
--- | DNS Info is propigated, so that eg, aliases of a container
+-- | DNS Info is propagated, so that eg, aliases of a container
 -- are reflected in the dns for the host where it runs.
 instance IsInfo DnsInfo where
-	propigateInfo _ = True
+	propagateInfo _ = True
 
 -- | Represents a bind 9 named.conf file.
 data NamedConf = NamedConf
@@ -155,7 +156,7 @@ newtype NamedConfMap = NamedConfMap (M.Map Domain NamedConf)
 	deriving (Eq, Ord, Show, Typeable)
 
 instance IsInfo NamedConfMap where
-	propigateInfo _ = False
+	propagateInfo _ = False
 
 -- | Adding a Master NamedConf stanza for a particulr domain always
 -- overrides an existing Secondary stanza for that domain, while a
