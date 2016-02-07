@@ -274,14 +274,14 @@ tristanKeys user = propertyList "keys for tristan" $ map (Ssh.authorizedKey user
 
 
 jjKeys :: User -> Property NoInfo
-jjKeys user = propertyList "keys for jj" $ map (Ssh.unauthorizedKey user)
+jjKeys user = propertyList "keys for jj" $ map (Ssh.authorizedKey user)
               [ "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAtd+yaE7w3PDdM9MLyDlMa4QoUOHNLjva/CGZe+1v4u7oOXDe4d6RLSJd1fZf1De2qZhrgPzOf7yh8MSK1nSW/dZrlt+Fd6aHIPG05lnTEV6SqxkhwaadixqqVZjtVAv3NpSjXfOGitAcIltkwourQKvAmYWzMMyYe4iF21XPcaU39PQud5b84hChAnHRBjyA0TFOpu3qs+SVetRsmU4S9ii1B/XbS6ktxwXqcXjc8HCG0G53VoR8dCmqVpyk3k5rcvSHa2gctXyQGbOIeO8un+613KWc2dTB/xhRUhF3bgoo846e3wFyFu85W/RdCj32BXW2FQZvPIJyciuWbX0TBw== jonathan@Callisto.local"
               , "ssh-dss AAAAB3NzaC1kc3MAAACBAJxgWfVKcnIBUYs8ymiEbbHbX5SLyHeN20Vofhbrpw6h5XujNy1aChTDupJ7p/YZIP4jhgZmvhm33hosbM3P4r2SBKSQ2SK3q4HbGkwPdy5N+bPgtcuNUkCwgBU0EKvUjM7/i7zFq9BD40402OeAX5zz9bwZ39BhI3d2oQ64+2s9AAAAFQC8cxb2WSfUYczmaIS6dxcnjYsXRQAAAIBz28PfwuI4qLaf1LRu6YJLGPEvT8FBVfCDGBCWmlE1NnJG+DfUEFXsSElpra4k/5p9fYEPpf1WRCKSDYzR2T5zWfI/A2eAxviixOVhlghj8N26eqQF8WacZtD+zgm06QUHWRwUgw3OJXiFdLVlSI5/QG6MeR4kVc3xKIxG8V9KsAAAAIB6T3L2PIqbnK5NOzGPvMnzA5bgk2NelrXhssNZTGbYNnIXwNHzDVWCqAHwX6iwGN4+ra+XwqW0FPvN45CP5PMsCdZqLl7mtk7gtO5ig6hPNEQ4wWXW/IyYpdRTtcA//Hbvmf1rvzRCWUweyzoDoVtoGwo9jMztyHnJrrPOXWf9cw== JJ@Triton"
               ]
 
 
 darrenKeys :: User -> Property NoInfo
-darrenKeys user = propertyList "keys for darren" $ map (Ssh.authorizedKey user)
+darrenKeys user = propertyList "keys for darren" $ map (Ssh.unauthorizedKey user)
                   [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC/KNDsEPU/5cJ4bKN4Vd6XRXJlI+m2d6iW+1VWHDWqkJ313+3/8RXndZHk3dhngVtNIBk2HxwrsiZocMXRh5+MouZfAlonMFHOXrD3f1MHSvjM9m1IDPIUhVT7qOao509MAYcKlpBroxNL8yYbg/7UE4Y+ML5VQHAkr+/4KoGYzqod5qkWjv15qqVFZKFovoFz0S+fSIEuEIH6gnJc76KPzDfXs3GJTN7icFFWyx9XW7bMv/QZMLjt1p7bHv8kbe6aZ0/lRyiTKTPAYePctuKtFMssU1QZzVlKCOCnc444HZVYERUdEJDKmXSOrVYFKBIK7IMfbwnIYm39L05W9JIX5jxhciE7/MSeW2HRpT9CtfglyTmwK9FVViGAR/Vz1lGXH7Jnaq8MiLJvfpVASbBTKq24KBrXo9a04AE6AnoCz43z7tk/H7Z4xWdUvt2bJ3brRS1hLtX5QEUVREiDDRCtzgtfvZrDab2lHTvVpagQeZwew9QikLw2uOFNOEaMbIDH3nQVG2l1JEBykogiiHyPRlMr2wfeHbJ6TSBjuQZl5EWrN3C5ajx0rNyv8VIHmHPqGO+Ym9HDls5wkCetsM2qxbnDobL46asOfrr/QXFaGwd+IqW1TeENrH3tfp+c2F20HP1cOCKMGk4q0gvqE9ybwhydTQlC9lvF6U3BZXZdIQ== potato@freyr"
                   , "ssh-dss AAAAB3NzaC1kc3MAAACBAPbbMpY6lrl3v5arAVaOESEfAr1kjQBquS6DXjgtA+5rnrIJ/mhZDE4nynfS9BHaJfsXe4hT9Dnzbt2UfiB5jcKxgRxS8L0iXStjfy6SfBe/jnJyYp/NPRUtMsmZebGrHk82L3xef10HwlBw6CQIoOoaWUUHgNKXm9L5JXGHpzrTAAAAFQDbY2/2rjLZ0E6/f5Y6gZEprdnGIQAAAIEA5iFM6upGNgorTyo+KmnRY0x6RQOTWzBVneyqFqEYgWx+F3l/LO89M7Zrao08QYY03i8JiKtdrRl1zkmiHIZ5MfhsESN8VD2OoRVU//YZcBTd3RBwPjaL4xaL70JdJz1xQppDfCAtXFC5bQlNVxfpdyHPrHuTnszptoLAZj4qMCwAAACAY664fkO6wJAKjSaNh+UjOGRUY/gdNRbKCSIrNK30cKkQpKzI/IxU64GYbprab5jUIGA8yyf1h5T+QAP/oPW+Xh/oYPQKQ1Z3lkCyaAEPrHwRgleI+No7KIBZMpLj9GwnNVO9d+iE3j+pCsLlm6dk4eY3jHDlwN+AX+RRhMlnIso= potato@vm"
                   , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCx+BiVfTdyZ4dDyethjL4PHltDB1jBJI65iKIzrg6DBkG/DJxNShCbrS/SsR9xkJVlUhyUxjdLQvdGTsbIxPphCuRivk71ccMj1/iN32PkoNIujSCa66rGL/NKO000Ir/ZWiBXG+p5svSZuojTfL+BEPsEfpLoLhBvt8M1TbhyCJl+bQ7wW0Djlp/tYcpSkmAg5fXXragf4Q6t8UrTjkigzDqi0SAttGylflPlQBo23ImJdEbduYQJdtOx8E7675bodSADqK03ouBXti1/1ZKYO6e1X8KMzvJZEmRTz7JcNFB7ICJJJWIYSW05uoJCTKk2ZACa8XyM+b3vXRvqXzVd darren@yk2"
