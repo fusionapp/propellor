@@ -133,7 +133,7 @@ backupScript =
   , "  --name ${name} --full-if-older-than 2W --exclude /duplicity/${snapshot}/dumps --exclude /duplicity/${snapshot}/\\*.axiom/run/logs \\"
   , "  /duplicity/${snapshot} ${bucket}"
   , "btrfs subvolume delete /srv/duplicity/${snapshot}"
-  ] `onChange` (File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes)))
+  ] `onChange` File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes))
   where p = "/usr/local/bin/fusion-backup"
 
 
@@ -152,7 +152,7 @@ restoreScript =
   , "  --volume=${path}:${path} fusionapp/backup \\"
   , "  --no-encryption --no-print-statistics --verbosity error \\"
   , "  --name ${name} ${bucket} ${path}"
-  ] `onChange` (File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes)))
+  ] `onChange` File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes))
   where p = "/usr/local/bin/fusion-restore"
 
 
@@ -854,7 +854,7 @@ mailRelay =
   `onChange` Postfix.reloaded
   `describe` "postfix configured"
   & Postfix.mappedFile "/etc/postfix/master.cf"
-  (flip File.containsLines
+  (`File.containsLines`
    [ "submission inet n - - - - smtpd"
    ])
   `describe` "postfix master.cf configured"
