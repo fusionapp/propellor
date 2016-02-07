@@ -461,6 +461,7 @@ entropySite =
   , "        proxy_buffering         off;"
   , "        allow 41.72.130.248/29;"
   , "        allow 41.72.135.84;"
+  , "        allow 172.17.0.0/16;"
   , "        allow 192.168.50.10;"
   , "        allow 197.189.229.122;"
   , "        deny all;"
