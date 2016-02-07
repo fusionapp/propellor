@@ -116,7 +116,7 @@ defaultMain hostlist = withConcurrentOutput $ do
 	go _ (Update Nothing) = forceConsole >> fetchFirst (onlyprocess (update Nothing))
 	go _ (Update (Just h)) = update (Just h)
 	go _ Merge = mergeSpin
-	go True cmdline@(Spin _ _) = buildFirst cmdline $ go False cmdline
+	go True cmdline@(Spin _ _) = go False cmdline
 	go True cmdline = updateFirst cmdline $ go False cmdline
 	go False (Spin hs mrelay) = do
 		unless (isJust mrelay) commitSpin

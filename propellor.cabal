@@ -49,6 +49,8 @@ Executable propellor-config
    IfElse, process, bytestring, hslogger, unix-compat, ansi-terminal,
    containers (>= 0.5), network, async, time, mtl, transformers,
    exceptions (>= 0.6), stm, text, unix
+  Other-Modules:
+    Utility.FileMode
 
 Library
   GHC-Options: -Wall -fno-warn-tabs
