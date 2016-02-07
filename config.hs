@@ -20,7 +20,6 @@ import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.User as User
 import           System.Posix.Files
 import           Utility.FileMode
-import           Prelude
 
 main :: IO ()
 main = defaultMain hosts
