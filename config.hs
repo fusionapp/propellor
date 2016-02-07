@@ -63,7 +63,6 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/quotemaster.co.za.pem" (Context "fusion production")
-       & File.hasPrivContent "/srv/certs/private/aatl.jks" (Context "diamond production")
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
