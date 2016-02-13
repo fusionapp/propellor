@@ -858,7 +858,7 @@ mailRelay =
   , "root: dev@fusionapp.com"
   ] `onChange` Postfix.newaliases
   & Postfix.mainCfFile `File.containsLines`
-  [ "mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 41.72.130.248/29 41.72.129.157/32 129.232.129.136/29 197.189.229.120/29 41.72.135.80/29"
+  [ "mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 41.72.130.248/29 41.72.129.157/32 129.232.129.136/29 197.189.229.120/29 41.72.135.80/29 172.17.0.0/16"
   ]
   `onChange` Postfix.dedupMainCf
   `onChange` Postfix.reloaded
