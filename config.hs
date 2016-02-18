@@ -49,7 +49,6 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
           & Cron.niceJob "fusion-backup" (Cron.Times "23 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
-          & Cron.niceJob "fusion-index-backup" (Cron.Times "41 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
           & File.dirExists "/srv/drone"
           & File.hasPrivContent "/srv/drone/dronerc" (Context "fusion builds")
 
@@ -73,6 +72,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
        & Systemd.nspawned mailRelayContainer
+       & Cron.niceJob "fusion-index-backup" (Cron.Times "41 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
 
 
 fusionHost :: Property HasInfo
