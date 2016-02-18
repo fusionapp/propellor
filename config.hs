@@ -147,7 +147,7 @@ restoreScript =
   , "name=${1?\"Usage: $0 <name> <path> <S3 bucket>\"}"
   , "path=${2?\"Usage: $0 <name> <path> <S3 bucket>\"}"
   , "bucket=${3?\"Usage: $0 <name> <path> <S3 bucket>\"}"
-  , "[[ -d \"${path}\" ]] && { echo \"Refusing to overwrite ${path}!\"; exit 1 }"
+  , "[[ -d \"${path}\" ]] && { echo \"Refusing to overwrite ${path}!\"; exit 1; }"
   , "docker pull fusionapp/backup || true"
   , "chpst -L \"/srv/locks/${name}-maintenance.lock\" \\"
   , "  docker run --rm --volume /srv/duplicity:/duplicity \\"
