@@ -72,7 +72,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
        & Systemd.nspawned mailRelayContainer
-       & Cron.niceJob "fusion-index-backup" (Cron.Times "41 * * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
+       & Cron.niceJob "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
 
 
 fusionHost :: Property HasInfo
