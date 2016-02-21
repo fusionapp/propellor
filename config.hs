@@ -309,6 +309,7 @@ droneKeys :: Property NoInfo
 droneKeys = propertyList "drone.io CI deployment keys"
   . map (Ssh.authorizedKey (User "root")) $
   [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4NcWgAGV+mmTQgMS56MmZBWs6wQzBDh5q36pE+iCztI+tzTSPAPd6yoZthDtk1OkHfNAqfSEnxhYneKF1a893jPhNCwJ1BgIYmuVUvX4NPy0A62iI3xaNKx9fXrW679TIYm21pkmkNs2O81P7oUl+wfuo5j33GRdNQxZKas8uJZ/HE09h+Vd4OH6GsjklBWJTSliidrzOWNyv7XvzUIBMOey6dfZOVMraKxTux0xhb28ITklMWLxZwJJzK9uzUlbZJa2P5lO3e30+IWbMZnFiRQqrPwofjsWxR7OUk4qn/KE4MejsNVo6YrnHGj9VKZQMWBJNS8aARq+zq8A8Fre1 fusionapp-diamond@drone"
+  , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCaL+2DoGktW0DRLBpLdJm4icbotFQwHMwRmyTQc+XTXmpq0w3FiO2xE2Vr0wDlaFKWfMsscVDbmfK6ViihVUOPSlG2rjaEnSHVRdw68yvl5uEA84Xtqu7D/lnjgOwHZT9wC3mCi2e0LpVvQSU4g27e0SSb+EyxTd7JrvVjJpR7+ycAqx0xnC0jHvjTDO1n5nDqiAicStk6W/BmXARIb0YoeKyowqTpyl2brmzjnmuDy28cmLSZXbshHUxaL1C2ZmJh6oVbBPQmBhZ4SsrGP4CgY66EVt3SlCQ4IE6dL+kOklRrxcnDGCh8uNKXs/dkZyT5Um0q6xhsy/JnDjQ+ruo7 fusionapp-fusion@drone"
   ]
 
 
