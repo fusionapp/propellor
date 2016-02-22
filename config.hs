@@ -54,6 +54,8 @@ onyx :: Host
 onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
        & fusionHost
+       & Ssh.userKeys (User "root") hostContext [(SshEd25519, pubKey)]
+       & Ssh.authorizedKey (User "root") pubKey
        -- Local private certificates
        & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" (Context "fusion production")
@@ -70,6 +72,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
        & Systemd.nspawned mailRelayContainer
        & Cron.niceJob "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
+       where pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
 
 
 fusionHost :: Property HasInfo
@@ -82,6 +85,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & File.dirExists "/srv/duplicity"
              & File.hasPrivContent "/srv/duplicity/credentials.sh" hostContext
              & File.dirExists "/srv/locks"
+             & Git.cloned (User "root") "https://github.com/fusionapp/fusion-fab.git" "/srv/fab" Nothing
              & backupScript
              & restoreScript
 
