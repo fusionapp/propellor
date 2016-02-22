@@ -37,8 +37,6 @@ scarlet :: Host
 scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & fusionHost
-          & Ssh.userKeys (User "root") hostContext
-          [(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDPWwJxL44Tli9ynNjMurx1j7AAoC+rbKGN6yBY9B8HhOfRYKbNkkH7YNtsEuWSktAWyFdqCr5MmV9FEt5KK1SvwbYRrLcCmH6qfEruAJnSvuI5srLhdh01fMpiSGsMfhpQWBRgRvSc5ehRUdwv8VBGUZjovYlRB73VY2yIoTN0JZQKNkLoKJeuVdiJT/eOQCqtUtU5pSrsmLzNqhVZjUZxE+P5W1v63ZfzQYWh6IP4HTyWl3uANFIllt04IKGDtFPMyCXJnkN5wnQ+cQU0m1eC5ZWW1pIbSWrhHGuxx0Tapdq8soD4YFrpTG4JPOug/vMMCRTc/mRpFAzAudbtpB7njpSPmukfiMMbr7doRD6o6wJHOTYcvrqjD7KXV8NbfL5gp8DqyWTyENj5zKoZxmoDOFdZv0h0uuNGJEJofJ35q1EHrf2csFbii9LR8eNIrfeZCLpVj/cnwJedX53du4pBh7Fq1v3sAZynfnKpxhCc+3jLYAjSm4SY87vo3oWExCRGyUgUcX/IeaxV4SsgnP8GnpKFhTx4E4KeWSHwHKSenilFNM9l2fjt2ETjJIgmfyo3QA5AX/AOvDd2uWlj7PgY+wDG7KgUjjiwT2ZmbnGWYrumrMvhxvwC9wtcKDFqJznLm8/FIrUYP/TSIgBfXq4bVZVawPAc/heMwR2m/2z5YQ== Fusion build/deploy automated key")]
           & droneKeys
           -- Local private certificates
           & File.dirExists "/srv/certs/private"
