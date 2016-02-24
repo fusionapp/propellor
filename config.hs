@@ -440,7 +440,7 @@ andersonSite =
   , "        proxy_set_header X-Real-IP $remote_addr;"
   , "        proxy_set_header X-Forwarded-Proto http;"
   , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       https://quotemaster.co.za/anderson/;"
+  , "        proxy_pass       http://41.72.129.157/anderson/;"
   , "    }"
   , "}"
   ]
@@ -838,7 +838,7 @@ saxumSite =
   , "        proxy_set_header X-Real-IP $remote_addr;"
   , "        proxy_set_header X-Forwarded-Proto http;"
   , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       https://quotemaster.co.za/quickquote/;"
+  , "        proxy_pass       http://41.72.129.157/quickquote/;"
   , "    }"
   , "}"
   ]
