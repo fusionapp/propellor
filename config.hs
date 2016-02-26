@@ -199,6 +199,10 @@ standardSystem hn suite arch =
   -- Can't turn this on because 127.0.1.1 in /etc/hosts is a problem
   -- & Hostname.sane
   & Hostname.searchDomain
+  -- Locales
+  & Locale.available "en_ZA.UTF-8"
+  & Locale.available "en_US.UTF-8"
+  -- Base setup
   & Apt.installed ["libnss-myhostname"]
   & standardNsSwitch
   & Apt.stdSourcesList
@@ -244,9 +248,6 @@ standardSystem hn suite arch =
     , "net.ipv4.tcp_ecn=1"
     ]
   & globalCerts
-  -- Locales
-  & Locale.available "en_ZA.UTF-8"
-  & Locale.available "en_US.UTF-8"
   & "en_ZA.UTF-8" `Locale.selectedFor` ["LANG"]
   -- Useful utilities
   & Apt.installed [ "ethtool"
