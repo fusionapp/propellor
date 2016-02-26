@@ -29,6 +29,7 @@ main = defaultMain hosts
 hosts :: [Host]
 hosts = [ scarlet
         , onyx
+        , onyx_dr
         ]
 
 
@@ -73,6 +74,19 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & Systemd.nspawned mailRelayContainer
        & Cron.niceJob "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        where pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
+
+
+onyx_dr :: Host
+onyx_dr = standardSystem "onyx-dr.fusionapp.com" (Stable "jessie") "amd64"
+       & ipv4 "52.50.53.169"
+       & fusionHost
+       -- Local private certificates
+       & File.dirExists "/srv/certs/private"
+       & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" (Context "onyx.fusionapp.com")
+       & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
+       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
 
 
 fusionHost :: Property HasInfo
