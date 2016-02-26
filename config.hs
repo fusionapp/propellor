@@ -163,12 +163,11 @@ restoreScript =
   , "name=${1?\"Usage: $0 <name> <path> <S3 bucket>\"}"
   , "path=${2?\"Usage: $0 <name> <path> <S3 bucket>\"}"
   , "bucket=${3?\"Usage: $0 <name> <path> <S3 bucket>\"}"
-  , "[[ -d \"${path}\" ]] && { echo \"Refusing to overwrite ${path}!\"; exit 1; }"
   , "docker pull fusionapp/backup || true"
   , "chpst -L \"/srv/locks/${name}-maintenance.lock\" \\"
   , "  docker run --rm --volume /srv/duplicity:/duplicity \\"
   , "  --volume \"${path}\":\"${path}\" fusionapp/backup \\"
-  , "  --no-encryption --no-print-statistics --verbosity error \\"
+  , "  --no-encryption --no-print-statistics \\"
   , "  --name \"${name}\" \"${bucket}\" \"${path}\""
   ] `onChange` File.mode p (combineModes (ownerWriteMode:readModes ++ executeModes))
   where p = "/usr/local/bin/fusion-restore"
