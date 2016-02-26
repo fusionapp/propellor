@@ -1,5 +1,5 @@
 Name: propellor
-Version: 2.15.3
+Version: 2.16.0
 Cabal-Version: >= 1.8
 License: BSD3
 Maintainer: Joey Hess <id@joeyh.name>
@@ -91,6 +91,7 @@ Library
     Propellor.Property.Grub
     Propellor.Property.Journald
     Propellor.Property.Kerberos
+    Propellor.Property.LetsEncrypt
     Propellor.Property.List
     Propellor.Property.LightDM
     Propellor.Property.Locale

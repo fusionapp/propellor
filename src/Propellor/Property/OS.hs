@@ -85,8 +85,8 @@ cleanInstallOnce confirmation = check (not <$> doesFileExist flagfile) $
 
 	osbootstrapped = withOS (newOSDir ++ " bootstrapped") $ \o -> case o of
 		(Just d@(System (Debian _) _)) -> debootstrap d
-		(Just u@(System (Ubuntu _) _)) -> debootstrap u
-		_ -> error "os is not declared to be Debian or Ubuntu"
+		(Just u@(System (Buntish _) _)) -> debootstrap u
+		_ -> error "os is not declared to be Debian or *buntu"
 	
 	debootstrap targetos = ensureProperty $
 		-- Ignore the os setting, and install debootstrap from
@@ -221,7 +221,7 @@ preserveRootSshAuthorized :: Property NoInfo
 preserveRootSshAuthorized = check (fileExist oldloc) $
 	property (newloc ++ " copied from old OS") $ do
 		ks <- liftIO $ lines <$> readFile oldloc
-		ensureProperties (map (Ssh.authorizedKey (User "root")) ks)
+		ensureProperties (map (setupRevertableProperty . Ssh.authorizedKey (User "root")) ks)
   where
 	newloc = "/root/.ssh/authorized_keys"
 	oldloc = oldOSDir ++ newloc

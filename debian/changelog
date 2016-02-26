@@ -1,10 +1,41 @@
-propellor (2.15.4) UNRELEASED; urgency=medium
+propellor (2.16.0) UNRELEASED; urgency=medium
+
+  * Obnam: Only let one backup job run at a time when a host has multiple
+    different backup properties, to avoid concurrent jobs fighting over
+    scarce resources (particularly memory). Other jobs block on a lock
+    file.
+  * Removed references to a Debian derivative from code and documentation
+    because of an unfortunate trademark use policy.
+    http://joeyh.name/blog/entry/trademark_nonsense/
+  * That included changing a data constructor to "Buntish", an API change.
+  * Firewall: add InIFace/OutIFace Rules, add Source/Destination Rules,
+    add CustomTarget, and more improvements.
+    Thanks, Félix Sipma.
+  * Firewall.rule: Now takes a Table parameter. (API change)
+  * Ssh.authorizedKey: Fix bug preventing it from working when the
+    authorized_keys file does not yet exist.
+  * Removed Ssh.unauthorizedKey and made Ssh.authorizedKey revertable.
+    (API change)
+
+ -- Joey Hess <id@joeyh.name>  Fri, 19 Feb 2016 11:29:53 -0400
+
+propellor (2.15.4) unstable; urgency=medium
 
   * Build /usr/src/propellor/propellor.git reproducibly,
     which makes the whole Debian package build reproducibly.
     Thanks, Sean Whitton.
+  * Obnam: To cause old generations to be forgotten, keepParam can be
+    passed to a backup property; this causes obnam forget to be run.
+  * Delete /etc/apt/apt.conf.d/50unattended-upgrades.ucf-dist when
+    unattended-upgrades is installed, to work around #812380 which results
+    in many warnings from apt, including in cron mails.
+  * Added Propellor.Property.LetsEncrypt
+  * Apache.httpsVirtualHost: New property, setting up a https vhost
+    with the certificate automatically obtained using letsencrypt.
+  * Allow using combineProperties and propertyList with lists of
+    RevertableProperty.
 
- -- Joey Hess <id@joeyh.name>  Mon, 18 Jan 2016 13:15:30 -0400
+ -- Joey Hess <id@joeyh.name>  Thu, 11 Feb 2016 12:49:10 -0400
 
 propellor (2.15.3) unstable; urgency=medium
 
