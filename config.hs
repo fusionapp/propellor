@@ -84,6 +84,7 @@ onyx_dr = standardSystem "onyx-dr.fusionapp.com" (Stable "jessie") "amd64"
   -- Local private certificates
   & File.dirExists "/srv/certs/private"
   & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" (Context "onyx.fusionapp.com")
+  & File.hasPrivContent "/srv/certs/private/onyx-dr.fusionapp.com.pem" hostContext
   & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
   & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
   & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
