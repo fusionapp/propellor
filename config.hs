@@ -11,6 +11,7 @@ import qualified Propellor.Property.Debootstrap as Debootstrap
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Git as Git
 import qualified Propellor.Property.Hostname as Hostname
+import qualified Propellor.Property.Locale as Locale
 import qualified Propellor.Property.Nginx as Nginx
 import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Ssh as Ssh
@@ -243,6 +244,10 @@ standardSystem hn suite arch =
     , "net.ipv4.tcp_ecn=1"
     ]
   & globalCerts
+  -- Locales
+  & Locale.available "en_ZA.UTF-8"
+  & Locale.available "en_US.UTF-8"
+  & "en_ZA.UTF-8" `Locale.selectedFor` ["LANG"]
   -- Useful utilities
   & Apt.installed [ "ethtool"
                   , "htop"
