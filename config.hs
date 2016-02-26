@@ -79,15 +79,15 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
 
 onyx_dr :: Host
 onyx_dr = standardSystem "onyx-dr.fusionapp.com" (Stable "jessie") "amd64"
-       & ipv4 "52.50.53.169"
-       & fusionHost
-       -- Local private certificates
-       & File.dirExists "/srv/certs/private"
-       & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" (Context "onyx.fusionapp.com")
-       & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
-       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
-       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
-       & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
+  & ipv4 "52.31.216.9"
+  & fusionHost
+  -- Local private certificates
+  & File.dirExists "/srv/certs/private"
+  & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" (Context "onyx.fusionapp.com")
+  & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
+  & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/ca.crt" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/public/fusion-ca.crt.pem"
+  & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
+  & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
 
 
 fusionHost :: Property HasInfo
