@@ -86,7 +86,9 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & File.dirExists "/srv/duplicity"
              & File.hasPrivContent "/srv/duplicity/credentials.sh" hostContext
              & File.dirExists "/srv/locks"
-             & Git.cloned (User "root") "https://github.com/fusionapp/fusion-fab.git" "/srv/fab" Nothing
+             & Cron.niceJob "update fusion-fab" Cron.Daily (User "root") "/srv/fab" "/usr/bin/git fetch && /usr/bin/git reset --hard && /usr/bin/git clean -dfx"
+             `requires` Git.cloned (User "root") "https://github.com/fusionapp/fusion-fab.git" "/srv/fab" Nothing
+             & Apt.installed ["fabric"]
              & backupScript
              & restoreScript
 
