@@ -61,6 +61,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" hostContext
+       & File.hasPrivContent "/srv/certs/private/prod.fusionapp.com.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
