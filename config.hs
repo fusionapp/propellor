@@ -492,6 +492,8 @@ entropySite =
 fusionSites :: Property HasInfo
 fusionSites =
   propertyList "Fusion sites" $ props
+  ! Nginx.siteEnabled "fusion-prod" []
+  ! Nginx.siteEnabled "fusion-prod-tls" []
   & Nginx.siteEnabled "fusion-prod-bz"
   [ "server {"
   , "    listen              41.72.130.253:80;"
