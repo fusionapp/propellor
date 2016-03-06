@@ -76,7 +76,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & Systemd.nspawned mailRelayContainer
        & Cron.niceJob "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.niceJob "fusion-prod backup" (Cron.Times "17 0-23/6 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
-       & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard &F git clean -dfx && fab fusion.deploy"
+       & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard && git clean -dfx && fab fusion.deploy"
        where pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
 
 
