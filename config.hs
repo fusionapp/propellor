@@ -55,8 +55,12 @@ onyx :: Host
 onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
        & fusionHost
-       & Ssh.userKeys (User "root") hostContext [(SshEd25519, pubKey)]
-       & Ssh.authorizedKey (User "root") pubKey
+       & Ssh.userKeys (User "root") hostContext
+       [ (SshEd25519, pubKeyEd25519)
+       , (SshEcdsa, pubKeyEcdsa)
+       ]
+       & Ssh.authorizedKey (User "root") pubKeyEd25519
+       & Ssh.authorizedKey (User "root") pubKeyEcdsa
        -- Local private certificates
        & File.dirExists "/srv/certs/private"
        & File.hasPrivContent "/srv/certs/private/star.fusionapp.com.pem" (Context "fusion production")
@@ -77,7 +81,8 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & Cron.niceJob "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.niceJob "fusion-prod backup" (Cron.Times "17 0-23/6 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard origin/master && git clean -dfx && fab fusion.deploy"
-       where pubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
+       where pubKeyEd25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
+             pubKeyEcdsa = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBN3UsIwUsSCgItsJv6gdisBYfuxIwP5/jhfe+g1JD6NXqzgj7mUGjMO+tiatgNYauqaFB3JPoS2NsPo6t0jKbzs= root@onyx.fusionapp.com"
 
 
 fusionHost :: Property HasInfo
