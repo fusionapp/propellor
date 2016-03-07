@@ -597,7 +597,7 @@ fusionSites =
   , "    ssl_certificate_key /srv/certs/private/star.fusionapp.com.pem;"
   , "    ssl_prefer_server_ciphers on;"
   , "    ssl_ciphers         EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH;"
-  , "    ssl_session_cache   shared:SSL:10m;"
+  , "    ssl_session_cache   shared:SSL:50m;"
   , "    ssl_session_tickets off;"
   , "    ssl_dhparam         /srv/certs/dhparam.pem;"
   , "    gzip                on;"
