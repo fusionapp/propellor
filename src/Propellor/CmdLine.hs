@@ -119,7 +119,7 @@ defaultMain hostlist = withConcurrentOutput $ do
 		fetchFirst (onlyprocess (update Nothing))
 	go _ (Update (Just h)) = update (Just h)
 	go _ Merge = mergeSpin
-	go cr cmdline@(Spin hs mrelay) = buildFirst NoRebuild cmdline $ do
+	go _ cmdline@(Spin hs mrelay) = buildFirst NoRebuild cmdline $ do
 		unless (isJust mrelay) commitSpin
 		forM_ hs $ \hn -> withhost hn $ spin mrelay hn
 	go cr (Run hn) = fetchFirst $
