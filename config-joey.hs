@@ -87,7 +87,7 @@ darkstar = host "darkstar.kitenet.net"
 	& JoeySites.alarmClock "*-*-* 7:30" (User "joey")
 		"/usr/bin/timeout 45m /home/joey/bin/goodmorning"
 
-	& imageBuilt "/tmp/img" c MSDOS (grubBooted PC)
+	! imageBuilt "/tmp/img" c MSDOS (grubBooted PC)
 		[ partition EXT2 `mountedAt` "/boot"
 			`setFlag` BootFlag
 		, partition EXT4 `mountedAt` "/"
@@ -190,17 +190,15 @@ orca = standardSystem "orca.kitenet.net" Unstable "amd64"
 
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		(System (Debian Unstable) "amd64") Nothing fifteenpast "2h")
+		(System (Debian Unstable) "amd64") Nothing (Cron.Times "15 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		(System (Debian Unstable) "i386") Nothing fifteenpast "2h")
+		(System (Debian Unstable) "i386") Nothing (Cron.Times "30 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		(System (Debian (Stable "jessie")) "i386") (Just "ancient") fifteenpast "2h")
+		GitAnnexBuilder.stackAutoBuilder
+		(System (Debian (Stable "jessie")) "i386") (Just "ancient") (Cron.Times "45 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.androidAutoBuilderContainer
 		(Cron.Times "1 1 * * *") "3h")
-  where
-	fifteenpast = Cron.Times "15 * * * *"
 
 honeybee :: Host
 honeybee = standardSystem "honeybee.kitenet.net" Testing "armhf"

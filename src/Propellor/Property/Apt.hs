@@ -123,10 +123,29 @@ update = runApt ["update"]
 	`assume` MadeChange
 	`describe` "apt update"
 
+-- | Have apt upgrade packages, adding new packages and removing old as
+-- necessary.
 upgrade :: Property NoInfo
-upgrade = runApt ["-y", "dist-upgrade"]
+upgrade = upgrade' "dist-upgrade"
+
+upgrade' :: String -> Property NoInfo
+upgrade' p = combineProperties ("apt " ++ p)
+	[ pendingConfigured
+	, runApt ["-y", p]
+		`assume` MadeChange
+	]
+
+-- | Have apt upgrade packages, but never add new packages or remove
+-- old packages. Not suitable for upgrading acrocess major versions
+-- of the distribution.
+safeUpgrade :: Property NoInfo
+safeUpgrade = upgrade' "upgrade"
+
+-- | Have dpkg try to configure any packages that are not fully configured.
+pendingConfigured :: Property NoInfo
+pendingConfigured = cmdPropertyEnv "dpkg" ["--configure", "--pending"] noninteractiveEnv
 	`assume` MadeChange
-	`describe` "apt dist-upgrade"
+	`describe` "dpkg configured pending"
 
 type Package = String
 
@@ -135,7 +154,7 @@ installed = installed' ["-y"]
 
 installed' :: [String] -> [Package] -> Property NoInfo
 installed' params ps = robustly $ check (isInstallable ps) go
-	`describe` (unwords $ "apt installed":ps)
+	`describe` unwords ("apt installed":ps)
   where
 	go = runApt (params ++ ["install"] ++ ps)
 
@@ -144,12 +163,12 @@ installedBackport ps = withOS desc $ \o -> case o of
 	Nothing -> error "cannot install backports; os not declared"
 	(Just (System (Debian suite) _)) -> case backportSuite suite of
 		Nothing -> notsupported o
-		Just bs -> ensureProperty $ 
+		Just bs -> ensureProperty $
 			runApt (["install", "-t", bs, "-y"] ++ ps)
 				`changesFile` dpkgStatus
 	_ -> notsupported o
   where
-	desc = (unwords $ "apt installed backport":ps)
+	desc = unwords ("apt installed backport":ps)
 	notsupported o = error $ "backports not supported on " ++ show o
 
 -- | Minimal install of package, without recommends.
@@ -158,12 +177,12 @@ installedMin = installed' ["--no-install-recommends", "-y"]
 
 removed :: [Package] -> Property NoInfo
 removed ps = check (or <$> isInstalled' ps) (runApt (["-y", "remove"] ++ ps))
-	`describe` (unwords $ "apt removed":ps)
+	`describe` unwords ("apt removed":ps)
 
 buildDep :: [Package] -> Property NoInfo
 buildDep ps = robustly $ go
 	`changesFile` dpkgStatus
-	`describe` (unwords $ "apt build-dep":ps)
+	`describe` unwords ("apt build-dep":ps)
   where
 	go = runApt $ ["-y", "build-dep"] ++ ps
 
@@ -256,8 +275,8 @@ reConfigure :: Package -> [(DebconfTemplate, DebconfTemplateType, DebconfTemplat
 reConfigure package vals = reconfigure `requires` setselections
 	`describe` ("reconfigure " ++ package)
   where
-	setselections = property "preseed" $ 
-		if null vals 
+	setselections = property "preseed" $
+		if null vals
 			then noChange
 			else makeChange $
 				withHandle StdinHandle createProcessSuccess
@@ -312,7 +331,7 @@ hasForeignArch :: String -> Property NoInfo
 hasForeignArch arch = check notAdded (add `before` update)
 	`describe` ("dpkg has foreign architecture " ++ arch)
   where
-	notAdded = (not . elem arch . lines) <$> readProcess "dpkg" ["--print-foreign-architectures"]
+	notAdded = (notElem arch . lines) <$> readProcess "dpkg" ["--print-foreign-architectures"]
 	add = cmdProperty "dpkg" ["--add-architecture", arch]
 		`assume` MadeChange
 
