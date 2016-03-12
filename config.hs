@@ -36,6 +36,7 @@ hosts = [ scarlet
 scarlet :: Host
 scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
+          & hetznerResolv
           & fusionHost
           & droneKeys
           -- Local private certificates
@@ -54,6 +55,7 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
 onyx :: Host
 onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
+       & hetznerResolv
        & fusionHost
        & Ssh.userKeys (User "root") hostContext
        [ (SshEd25519, pubKeyEd25519)
@@ -186,6 +188,18 @@ simpleRelay =
   , "RewriteDomain=fusionapp.com"
   , "FromLineOverride=yes"
   ] `requires` Apt.installed ["ssmtp"]
+
+
+hetznerResolv :: Property NoInfo
+hetznerResolv =
+  "/etc/resolv.conf" `File.hasContent`
+  [ "search fusionapp.com"
+  , "domain fusionapp.com"
+  , "nameserver 41.203.18.183"
+  , "nameserver 196.22.142.222"
+  , "nameserver 41.204.202.244"
+  , "nameserver 197.221.0.5"
+  ]
 
 
 standardSystem :: HostName -> DebianSuite -> Architecture -> Host
