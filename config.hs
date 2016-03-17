@@ -570,7 +570,7 @@ fusionSites =
   , ""
   , "    location @fetch {"
   , "        internal;"
-  , "        proxy_pass              http://bz-int.fusionapp.com;"
+  , "        proxy_pass              http://onyx.fusionapp.com:8001;"
   , "        proxy_store             on;"
   , "        proxy_store_access      user:rw  group:rw  all:r;"
   , "        proxy_temp_path         /srv/nginx/tmp;"
