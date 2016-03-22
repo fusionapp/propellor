@@ -315,6 +315,7 @@ jjKeys user = propertyList "keys for jj" $ map (Ssh.authorizedKey user)
 darrenKeys :: User -> Property NoInfo
 darrenKeys user = propertyList "keys for darren" $ map (Ssh.authorizedKey user)
                   [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQD0SNokEjxqHvWbdyHs2pkf7gTpL464wv2I4vmIzFIjmd+8G5OMZkDme1CrS7jhi33dGM99zMZF1TC6Wbi7DshL9jX8Q8A2VJBN8Tm8FH1bmVM1eV44biAzvFmV9J2xeiGX2cM1rJMYn9CSbYBhwoi32OhvWxEV7FsKI6sipZiHtP0ClxyNbd8foM/AEfrRIEmTQad+ep6OvKsdkTwcJoywvqtgF0giiCMYkuXAYZzAm5+0ZcgYhdQdLXf8cCoxWxjX7cpwx+3CGJPbWVejmAunOjSuTQ1sfl73OrtjZd7hDdhtvQXhmJaJc8+bqoODUP94mS6zIKv8e09kY/ijcMRpHMC6ERtf3bB5qc+yWFGVwcIzwvta3IZ1nbmbea3gMv1yGXc5Qf4KSqrQvghZ7N/8Ava36njj3Zab6DqYNtnpdIeGUK5mGApE7PSHiVQWYtK11IPaYrnhiAQlN2V91G1J3hu6DkuO6d+ZdfzBEEfcCosW1MWdUyzX2X+34YOyFNEDVGy6gOk26Y9W57yPwH0FRmcOqNfWVqFGQuwrNY3m9J6XjJuhmhwTOeLUjePo68NDeEoabQ4IfPdMX5G3+mI6DgbwhOKlWLI8Lj35n8n0m0HwkIn6pm1Fov8eboE8oAzMoAoJH7Xb9zAgJxf2m+f1X/Dsks4Vv9X+rJza4xDCqQ== potato@potatop"
+                  , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCx+BiVfTdyZ4dDyethjL4PHltDB1jBJI65iKIzrg6DBkG/DJxNShCbrS/SsR9xkJVlUhyUxjdLQvdGTsbIxPphCuRivk71ccMj1/iN32PkoNIujSCa66rGL/NKO000Ir/ZWiBXG+p5svSZuojTfL+BEPsEfpLoLhBvt8M1TbhyCJl+bQ7wW0Djlp/tYcpSkmAg5fXXragf4Q6t8UrTjkigzDqi0SAttGylflPlQBo23ImJdEbduYQJdtOx8E7675bodSADqK03ouBXti1/1ZKYO6e1X8KMzvJZEmRTz7JcNFB7ICJJJWIYSW05uoJCTKk2ZACa8XyM+b3vXRvqXzVd darren@yk2"
                   ]
 
 
