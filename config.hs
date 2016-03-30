@@ -39,6 +39,11 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & hetznerResolv
           & fusionHost
           & droneKeys
+          -- Upgraded Docker
+          &
+          Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
+          `before`
+          (Apt.installed ["docker-engine"] `requires` Apt.removed ["docker.io"])
           -- Local private certificates
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
@@ -91,7 +96,7 @@ fusionHost :: Property HasInfo
 fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
              & Apt.installed ["mercurial", "git"]
-             & Apt.installed ["docker.io"]
+             -- & Apt.installed ["docker.io"]
              & propertyList "admin docker access"
              (flip User.hasGroup (Group "docker") <$> admins)
              & File.dirExists "/srv/duplicity"
@@ -215,7 +220,7 @@ standardSystem hn suite arch =
   -- Base setup
   & Apt.installed ["libnss-myhostname"]
   & standardNsSwitch
-  & Apt.stdSourcesList
+  & Apt.stdSourcesList `onChange` Apt.upgrade
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
   & Apt.installed [ "openssh-server"
