@@ -139,6 +139,7 @@ fusionCa =
   ]
 
 
+dockerKey :: Apt.AptKey
 dockerKey =
   Apt.AptKey "docker" $ unlines
   [ "-----BEGIN PGP PUBLIC KEY BLOCK-----"
