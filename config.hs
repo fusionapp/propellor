@@ -281,6 +281,7 @@ standardSystem hn suite arch =
   & Cron.runPropellor (Cron.Times "30 * * * *")
   & Ssh.randomHostKeys
   & Ssh.permitRootLogin Ssh.WithoutPassword
+  & Ssh.setSshdConfigBool "UseDNS" False
   & Apt.installed ["sudo"]
   & propertyList "admin accounts" ([ User.accountFor
                                    , User.lockedPassword
