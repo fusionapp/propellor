@@ -451,6 +451,7 @@ nginxPrimary =
   & fusionSites
   & quotemasterSite
   & saxumSite
+  & saxumBrokersSite
 
 
 svnSite :: RevertableProperty NoInfo
@@ -838,6 +839,25 @@ saxumSite =
   , "        proxy_set_header X-Forwarded-Proto http;"
   , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
   , "        proxy_pass       http://41.72.129.157/quickquote/;"
+  , "    }"
+  , "}"
+  ]
+
+
+saxumBrokersSite :: RevertableProperty NoInfo
+saxumBrokersSite =
+  Nginx.siteEnabled "saxumbrokers.co.za"
+  [ "server {"
+  , "    listen              41.72.131.181:80;"
+  , "    server_name         www.saxumbrokers.co.za;"
+  , "    access_log          /var/log/nginx/saxumbrokers.access.log;"
+  , "    location / {"
+  , "        proxy_read_timeout 5m;"
+  , "        proxy_set_header Host quotemaster.co.za;"
+  , "        proxy_set_header X-Real-IP $remote_addr;"
+  , "        proxy_set_header X-Forwarded-Proto http;"
+  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+  , "        proxy_pass       http://41.72.129.157/saxumbroker/;"
   , "    }"
   , "}"
   ]
