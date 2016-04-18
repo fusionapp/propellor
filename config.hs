@@ -849,7 +849,7 @@ saxumBrokersSite =
   Nginx.siteEnabled "saxumbrokers.co.za"
   [ "server {"
   , "    listen              41.72.131.181:80;"
-  , "    server_name         www.saxumbrokers.co.za;"
+  , "    server_name         www.saxumbrokers.co.za saxumbrokers.co.za;"
   , "    access_log          /var/log/nginx/saxumbrokers.access.log;"
   , "    location / {"
   , "        proxy_read_timeout 5m;"
