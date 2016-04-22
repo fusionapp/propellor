@@ -38,7 +38,6 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & hetznerResolv
           & fusionHost
-          & droneKeys
           -- Upgraded Docker
           &
           (Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
@@ -108,6 +107,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & Apt.installed ["fabric"]
              & backupScript
              & restoreScript
+             & droneKeys
 
 
 fusionCa :: [String]
