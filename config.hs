@@ -93,6 +93,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              -- Upgraded Docker
              &
              (Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
+              `requires` Apt.installed ["apt-transport-https"]
               `requires` Apt.trustsKey dockerKey)
              `before`
              (Apt.installed ["docker-engine"] `requires` Apt.removed ["docker.io"])
