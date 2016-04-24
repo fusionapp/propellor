@@ -38,12 +38,6 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & hetznerResolv
           & fusionHost
-          -- Upgraded Docker
-          &
-          (Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
-           `requires` Apt.trustsKey dockerKey)
-          `before`
-          (Apt.installed ["docker-engine"] `requires` Apt.removed ["docker.io"])
           -- Local private certificates
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
@@ -96,7 +90,12 @@ fusionHost :: Property HasInfo
 fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
              & Apt.installed ["mercurial", "git"]
-             -- & Apt.installed ["docker.io"]
+             -- Upgraded Docker
+             &
+             (Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
+              `requires` Apt.trustsKey dockerKey)
+             `before`
+             (Apt.installed ["docker-engine"] `requires` Apt.removed ["docker.io"])
              & propertyList "admin docker access"
              (flip User.hasGroup (Group "docker") <$> admins)
              & File.dirExists "/srv/duplicity"
