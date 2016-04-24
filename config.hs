@@ -91,12 +91,10 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
              & Apt.installed ["mercurial", "git"]
              -- Upgraded Docker
-             &
-             (Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
-              `requires` Apt.installed ["apt-transport-https"]
-              `requires` Apt.trustsKey dockerKey)
-             `before`
-             (Apt.installed ["docker-engine"] `requires` Apt.removed ["docker.io"])
+             & Apt.installed ["docker-engine"]
+             `requires` Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
+             `requires` Apt.installed ["apt-transport-https"]
+             `requires` Apt.trustsKey dockerKey
              & propertyList "admin docker access"
              (flip User.hasGroup (Group "docker") <$> admins)
              & File.dirExists "/srv/duplicity"
