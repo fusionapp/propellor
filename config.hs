@@ -438,7 +438,7 @@ nginxPrimary =
   & "/etc/systemd/system/nginx.service.d/limits.conf" `File.hasContent`
   [ "[Service]"
   , "LimitNOFILE=100000"
-  , "LimitCORE=500M"
+  , "LimitCORE=500000000"
   ]
   & Systemd.running "nginx" `requires` Nginx.installed
   & Systemd.bind "/srv/certs"
