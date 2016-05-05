@@ -106,6 +106,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & backupScript
              & restoreScript
              & droneKeys
+             & duplicityLocksCleaned
 
 
 fusionCa :: [String]
@@ -903,3 +904,10 @@ dhparam2048 =
   , "6YHa2mdiITbsIILkNoRGtUSwFsKbyQaUcwIBAg=="
   , "-----END DH PARAMETERS-----"
   ]
+
+
+duplicityLocksCleaned :: RevertableProperty NoInfo
+duplicityLocksCleaned =
+  confpath `File.hasContent` ["r! /srv/duplicity/cache/*/lockfile.lock"]
+  <!> File.notPresent confpath
+  where confpath = "/etc/tmpfiles.d/duplicity-lockfiles.conf"
