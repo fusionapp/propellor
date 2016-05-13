@@ -914,8 +914,8 @@ duplicityLocksCleaned =
   where confpath = "/etc/tmpfiles.d/duplicity-lockfiles.conf"
 
 
-caddyfile :: PropList
-caddyfile = props
+caddyfile :: Property HasInfo
+caddyfile = propertyList "Configuration for Caddy" $ props
   & File.dirExists "/srv/caddy"
   & File.hasContent "/srv/caddy/Caddyfile"
   [ ":443"
