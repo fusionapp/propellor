@@ -49,6 +49,7 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
           & Cron.niceJob "fusion-backup" (Cron.Times "23 3 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
           & File.dirExists "/srv/drone"
           & File.hasPrivContent "/srv/drone/dronerc" (Context "fusion builds")
+          & caddyfile
 
 
 onyx :: Host
@@ -911,3 +912,20 @@ duplicityLocksCleaned =
   confpath `File.hasContent` ["r! /srv/duplicity/cache/*/lockfile.lock"]
   <!> File.notPresent confpath
   where confpath = "/etc/tmpfiles.d/duplicity-lockfiles.conf"
+
+
+caddyfile :: PropList
+caddyfile = props
+  & File.dirExists "/srv/caddy"
+  & File.hasContent "/srv/caddy/Caddyfile"
+  [ ":443"
+  , "proxy / rancher-server:8080 {"
+  , " proxy_header Host {host}"
+  , " proxy_header X-Real-IP {remote}"
+  , " proxy_header X-Forwarded-Proto {scheme}"
+  , " websocket"
+  , "}"
+  , "tls tristan@fusionapp.com {"
+  , " max_certs 10"
+  , "}"
+  ]
