@@ -918,7 +918,8 @@ caddyfile :: Property HasInfo
 caddyfile = propertyList "Configuration for Caddy" $ props
   & File.dirExists "/srv/caddy"
   & File.hasContent "/srv/caddy/Caddyfile"
-  [ ":443"
+  [ ":80"
+  , ":443"
   , "log stdout"
   , "proxy / rancher-server:8080 {"
   , " proxy_header Host {host}"
