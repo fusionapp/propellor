@@ -927,7 +927,5 @@ caddyfile = propertyList "Configuration for Caddy" $ props
   , " proxy_header X-Forwarded-Proto {scheme}"
   , " websocket"
   , "}"
-  , "tls tristan@fusionapp.com {"
-  , " max_certs 10"
-  , "}"
+  , "tls tristan@fusionapp.com"
   ]
