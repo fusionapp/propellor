@@ -1,10 +1,9 @@
-{-# LANGUAGE FlexibleContexts #-}
-
 module Propellor.Property.Debootstrap (
 	Url,
 	DebootstrapConfig(..),
 	built,
 	built',
+	extractSuite,
 	installed,
 	sourceInstall,
 	programPath,
@@ -23,7 +22,7 @@ import System.Posix.Files
 
 type Url = String
 
--- | A monoid for debootstrap configuration. 
+-- | A monoid for debootstrap configuration.
 -- mempty is a default debootstrapped system.
 data DebootstrapConfig
 	= DefaultConfig
@@ -34,8 +33,8 @@ data DebootstrapConfig
 	deriving (Show)
 
 instance Monoid DebootstrapConfig where
-        mempty  = DefaultConfig
-        mappend = (:+)
+	mempty  = DefaultConfig
+	mappend = (:+)
 
 toParams :: DebootstrapConfig -> [CommandParam]
 toParams DefaultConfig = []
@@ -48,14 +47,15 @@ toParams (c1 :+ c2) = toParams c1 <> toParams c2
 --
 -- The System can be any OS and architecture that debootstrap
 -- and the kernel support.
-built :: FilePath -> System -> DebootstrapConfig -> Property HasInfo
-built target system config = built' (toProp installed) target system config
+built :: FilePath -> System -> DebootstrapConfig -> Property Linux
+built target system config = built' (setupRevertableProperty installed) target system config
 
-built' :: (Combines (Property NoInfo) (Property i)) => Property i -> FilePath -> System -> DebootstrapConfig -> Property (CInfo NoInfo i)
-built' installprop target system@(System _ arch) config = 
+built' :: Property Linux -> FilePath -> System -> DebootstrapConfig -> Property Linux
+built' installprop target system@(System _ arch) config =
 	check (unpopulated target <||> ispartial) setupprop
 		`requires` installprop
   where
+	setupprop :: Property Linux
 	setupprop = property ("debootstrapped " ++ target) $ liftIO $ do
 		createDirectoryIfMissing True target
 		-- Don't allow non-root users to see inside the chroot,
@@ -88,49 +88,45 @@ built' installprop target system@(System _ arch) config =
 			return True
 		, return False
 		)
-	
+
 extractSuite :: System -> Maybe String
 extractSuite (System (Debian s) _) = Just $ Apt.showSuite s
 extractSuite (System (Buntish r) _) = Just r
+extractSuite (System (FreeBSD _) _) = Nothing
 
 -- | Ensures debootstrap is installed.
 --
 -- When necessary, falls back to installing debootstrap from source.
 -- Note that installation from source is done by downloading the tarball
 -- from a Debian mirror, with no cryptographic verification.
-installed :: RevertableProperty NoInfo
+installed :: RevertableProperty Linux Linux
 installed = install <!> remove
   where
-	install = withOS "debootstrap installed" $ \o -> 
-		ifM (liftIO $ isJust <$> programPath)
-			( return NoChange
-			, ensureProperty (installon o)
-			)
+	install = check (isJust <$> programPath) $
+		(aptinstall `pickOS` sourceInstall)
+			`describe` "debootstrap installed"
 
-	installon (Just (System (Debian _) _)) = aptinstall
-	installon (Just (System (Buntish _) _)) = aptinstall
-	installon _ = sourceInstall
+	remove = (aptremove `pickOS` sourceRemove)
+		`describe` "debootstrap removed"
 
-	remove = withOS "debootstrap removed" $ ensureProperty . removefrom
-	removefrom (Just (System (Debian _) _)) = aptremove
-	removefrom (Just (System (Buntish _) _)) = aptremove
-	removefrom _ = sourceRemove
-			
 	aptinstall = Apt.installed ["debootstrap"]
 	aptremove = Apt.removed ["debootstrap"]
 
-sourceInstall :: Property NoInfo
-sourceInstall = property "debootstrap installed from source" (liftIO sourceInstall')
+sourceInstall :: Property Linux
+sourceInstall = go
 	`requires` perlInstalled
 	`requires` arInstalled
+  where
+	go :: Property Linux
+	go = property "debootstrap installed from source" (liftIO sourceInstall')
 
-perlInstalled :: Property NoInfo
+perlInstalled :: Property Linux
 perlInstalled = check (not <$> inPath "perl") $ property "perl installed" $
 	liftIO $ toResult . isJust <$> firstM id
 		[ yumInstall "perl"
 		]
 
-arInstalled :: Property NoInfo
+arInstalled :: Property Linux
 arInstalled = check (not <$> inPath "ar") $ property "ar installed" $
 	liftIO $ toResult . isJust <$> firstM id
 		[ yumInstall "binutils"
@@ -174,7 +170,7 @@ sourceInstall' = withTmpDir "debootstrap" $ \tmpd -> do
 				return MadeChange
 			_ -> errorMessage "debootstrap tar file did not contain exactly one dirctory"
 
-sourceRemove :: Property NoInfo
+sourceRemove :: Property Linux
 sourceRemove = property "debootstrap not installed from source" $ liftIO $
 	ifM (doesDirectoryExist sourceInstallDir)
 		( do
@@ -273,9 +269,9 @@ extractUrls base = collect [] . map toLower
 		_ -> findend l r
 	collect l (_:cs) = collect l cs
 
-	findend l s = 
+	findend l s =
 		let (u, r) = break (== '"') s
 		    u' = if "http" `isPrefixOf` u
-		    	then u
+			then u
 			else base </> u
 		in collect (u':l) r

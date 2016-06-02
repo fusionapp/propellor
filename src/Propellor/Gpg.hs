@@ -1,8 +1,6 @@
 module Propellor.Gpg where
 
 import System.IO
-import System.FilePath
-import System.Directory
 import Data.Maybe
 import Data.List.Utils
 import Control.Monad
@@ -20,6 +18,7 @@ import Utility.Misc
 import Utility.Tmp
 import Utility.FileSystemEncoding
 import Utility.Env
+import Utility.Directory
 
 type KeyId = String
 
@@ -30,22 +29,28 @@ getGpgBin = do
 		Nothing -> getEnvDefault "GNUPGBIN" "gpg"
 		Just b -> return b
 
-keyring :: FilePath
-keyring = privDataDir </> "keyring.gpg"
-
 -- Lists the keys in propellor's keyring.
 listPubKeys :: IO [KeyId]
 listPubKeys = do
+	keyring <- privDataKeyring
+	map fst <$> listKeys ("--list-public-keys" : useKeyringOpts keyring)
+
+listSecretKeys :: IO [(KeyId, String)]
+listSecretKeys = listKeys ["--list-secret-keys"]
+
+listKeys :: [String] -> IO [(KeyId, String)]
+listKeys ps = do
 	gpgbin <- getGpgBin
 	parse . lines <$> readProcess gpgbin listopts
   where
-	listopts = useKeyringOpts ++ ["--with-colons", "--list-public-keys"]
+	listopts = ps ++ ["--with-colons"]
 	parse = mapMaybe (keyIdField . split ":")
-	keyIdField ("pub":_:_:_:f:_) = Just f
+	keyIdField (t:_:_:_:f:_:_:_:_:n:_)
+		| t == "pub" || t == "sec" = Just (f, n)
 	keyIdField _ = Nothing
 
-useKeyringOpts :: [String]
-useKeyringOpts =
+useKeyringOpts :: FilePath -> [String]
+useKeyringOpts keyring =
 	[ "--options"
 	, "/dev/null"
 	, "--no-default-keyring"
@@ -55,20 +60,21 @@ useKeyringOpts =
 addKey :: KeyId -> IO ()
 addKey keyid = do
 	gpgbin <- getGpgBin
+	keyring <- privDataKeyring
 	exitBool =<< allM (uncurry actionMessage)
-		[ ("adding key to propellor's keyring", addkeyring gpgbin)
+		[ ("adding key to propellor's keyring", addkeyring keyring gpgbin)
 		, ("staging propellor's keyring", gitAdd keyring)
 		, ("updating encryption of any privdata", reencryptPrivData)
 		, ("configuring git commit signing to use key", gitconfig gpgbin)
 		, ("committing changes", gitCommitKeyRing "add-key")
 		]
   where
-	addkeyring gpgbin' = do
+	addkeyring keyring' gpgbin' = do
 		createDirectoryIfMissing True privDataDir
 		boolSystem "sh"
 			[ Param "-c"
 			, Param $ gpgbin' ++ " --export " ++ keyid ++ " | gpg " ++
-				unwords (useKeyringOpts ++ ["--import"])
+				unwords (useKeyringOpts keyring' ++ ["--import"])
 			]
 
 	gitconfig gpgbin' = ifM (snd <$> processTranscript gpgbin' ["--list-secret-keys", keyid] Nothing)
@@ -85,16 +91,17 @@ addKey keyid = do
 rmKey :: KeyId -> IO ()
 rmKey keyid = do
 	gpgbin <- getGpgBin
+	keyring <- privDataKeyring
 	exitBool =<< allM (uncurry actionMessage)
-		[ ("removing key from propellor's keyring", rmkeyring gpgbin)
+		[ ("removing key from propellor's keyring", rmkeyring keyring gpgbin)
 		, ("staging propellor's keyring", gitAdd keyring)
 		, ("updating encryption of any privdata", reencryptPrivData)
 		, ("configuring git commit signing to not use key", gitconfig)
 		, ("committing changes", gitCommitKeyRing "rm-key")
 		]
   where
-	rmkeyring gpgbin' = boolSystem gpgbin' $
-		(map Param useKeyringOpts) ++
+	rmkeyring keyring' gpgbin' = boolSystem gpgbin' $
+		(map Param (useKeyringOpts keyring')) ++
 		[ Param "--batch"
 		, Param "--yes"
 		, Param "--delete-key", Param keyid
@@ -110,12 +117,14 @@ rmKey keyid = do
 		)
 
 reencryptPrivData :: IO Bool
-reencryptPrivData = ifM (doesFileExist privDataFile)
-	( do
-		gpgEncrypt privDataFile =<< gpgDecrypt privDataFile
-		gitAdd privDataFile
-	, return True
-	)
+reencryptPrivData = do
+	f <- privDataFile
+	ifM (doesFileExist f)
+		( do
+			gpgEncrypt f =<< gpgDecrypt f
+			gitAdd f
+		, return True
+		)
 
 gitAdd :: FilePath -> IO Bool
 gitAdd f = boolSystem "git"
@@ -125,17 +134,21 @@ gitAdd f = boolSystem "git"
 
 gitCommitKeyRing :: String -> IO Bool
 gitCommitKeyRing action = do
+	keyring <- privDataKeyring
+	privdata <- privDataFile
 	-- Commit explicitly the keyring and privdata files, as other
 	-- changes may be staged by the user and shouldn't be committed.
-	tocommit <- filterM doesFileExist [ privDataFile, keyring]
+	tocommit <- filterM doesFileExist [ privdata, keyring]
 	gitCommit (Just ("propellor " ++ action)) (map File tocommit)
 
 -- Adds --gpg-sign if there's a keyring.
 gpgSignParams :: [CommandParam] -> IO [CommandParam]
-gpgSignParams ps = ifM (doesFileExist keyring)
-	( return (ps ++ [Param "--gpg-sign"])
-	, return ps
-	)
+gpgSignParams ps = do
+	keyring <- privDataKeyring
+	ifM (doesFileExist keyring)
+		( return (ps ++ [Param "--gpg-sign"])
+		, return ps
+		)
 
 -- Automatically sign the commit if there'a a keyring.
 gitCommit :: Maybe String -> [CommandParam] -> IO Bool

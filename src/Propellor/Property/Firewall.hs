@@ -26,10 +26,10 @@ import Propellor.Base
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Network as Network
 
-installed :: Property NoInfo
+installed :: Property DebianLike
 installed = Apt.installed ["iptables"]
 
-rule :: Chain -> Table -> Target -> Rules -> Property NoInfo
+rule :: Chain -> Table -> Target -> Rules -> Property Linux
 rule c tb tg rs = property ("firewall rule: " <> show r) addIpTable
   where
 	r = Rule c tb tg rs
@@ -51,9 +51,9 @@ toIpTable r =  map Param $
 toIpTableArg :: Rules -> [String]
 toIpTableArg Everything = []
 toIpTableArg (Proto proto) = ["-p", map toLower $ show proto]
-toIpTableArg (DPort (Port port)) = ["--dport", show port]
-toIpTableArg (DPortRange (Port f, Port t)) =
-	["--dport", show f ++ ":" ++ show t]
+toIpTableArg (DPort port) = ["--dport", fromPort port]
+toIpTableArg (DPortRange (portf, portt)) =
+	["--dport", fromPort portf ++ ":" ++ fromPort portt]
 toIpTableArg (InIFace iface) = ["-i", iface]
 toIpTableArg (OutIFace iface) = ["-o", iface]
 toIpTableArg (Ctstate states) =
@@ -79,6 +79,12 @@ toIpTableArg (TCPFlags m c) =
 	, intercalate "," (map show c)
 	]
 toIpTableArg TCPSyn = ["--syn"]
+toIpTableArg (GroupOwner (Group g)) =
+	[ "-m"
+	, "owner"
+	, "--gid-owner"
+	, g
+	]
 toIpTableArg (Source ipwm) =
 	[ "-s"
 	, intercalate "," (map fromIPWithMask ipwm)
@@ -86,6 +92,15 @@ toIpTableArg (Source ipwm) =
 toIpTableArg (Destination ipwm) =
 	[ "-d"
 	, intercalate "," (map fromIPWithMask ipwm)
+	]
+toIpTableArg (NotDestination ipwm) =
+	[ "!"
+	, "-d"
+	, intercalate "," (map fromIPWithMask ipwm)
+	]
+toIpTableArg (NatDestination ip mport) =
+	[ "--to-destination"
+	, fromIPAddr ip ++ maybe "" (\p -> ":" ++ fromPort p) mport
 	]
 toIpTableArg (r :- r') = toIpTableArg r <> toIpTableArg r'
 
@@ -167,7 +182,7 @@ data Rules
 	-- ^There is actually some order dependency between proto and port so this should be a specific
 	-- data type with proto + ports
 	| DPort Port
-	| DPortRange (Port,Port)
+	| DPortRange (Port, Port)
 	| InIFace Network.Interface
 	| OutIFace Network.Interface
 	| Ctstate [ ConnectionState ]
@@ -175,8 +190,11 @@ data Rules
 	| RateLimit Frequency
 	| TCPFlags TCPFlagMask TCPFlagComp
 	| TCPSyn
+	| GroupOwner Group
 	| Source [ IPWithMask ]
 	| Destination [ IPWithMask ]
+	| NotDestination [ IPWithMask ]
+	| NatDestination IPAddr (Maybe Port)
 	| Rules :- Rules   -- ^Combine two rules
 	deriving (Eq, Show)
 

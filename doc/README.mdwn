@@ -2,6 +2,8 @@
 configuration management system using Haskell and Git.
 Each system has a list of properties, which Propellor ensures
 are satisfied.
+[Linux](http://propellor.branchable.com/Linux/) and
+[FreeBSD](http://propellor.branchable.com/FreeBSD/) are supported.
 
 This repository contains the Propellor configuration for
 [Fusion](https://fusionapp.com/) infrastructure, and is probably not of
