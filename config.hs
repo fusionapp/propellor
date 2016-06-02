@@ -34,7 +34,8 @@ hosts = [ scarlet
 
 
 scarlet :: Host
-scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
+scarlet = host "scarlet.fusionapp.com" $ props
+          & standardSystem (Stable "jessie") "amd64"
           & ipv4 "197.189.229.122"
           & hetznerResolv
           & fusionHost
@@ -53,7 +54,8 @@ scarlet = standardSystem "scarlet.fusionapp.com" (Stable "jessie") "amd64"
 
 
 onyx :: Host
-onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
+onyx = host "onyx.fusionapp.com" $ props
+       & standardSystem (Stable "jessie") "amd64"
        & ipv4 "41.72.130.249"
        & hetznerResolv
        & fusionHost
@@ -87,7 +89,7 @@ onyx = standardSystem "onyx.fusionapp.com" (Stable "jessie") "amd64"
              pubKeyEcdsa = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBN3UsIwUsSCgItsJv6gdisBYfuxIwP5/jhfe+g1JD6NXqzgj7mUGjMO+tiatgNYauqaFB3JPoS2NsPo6t0jKbzs= root@onyx.fusionapp.com"
 
 
-fusionHost :: Property HasInfo
+fusionHost :: Property (HasInfo + DebianLike)
 fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
              & Apt.installed ["mercurial", "git"]
@@ -97,7 +99,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              `requires` Apt.installed ["apt-transport-https"]
              `requires` Apt.trustsKey dockerKey
              & propertyList "admin docker access"
-             (flip User.hasGroup (Group "docker") <$> admins)
+             (toProps (flip User.hasGroup (Group "docker") <$> admins))
              & File.dirExists "/srv/duplicity"
              & File.hasPrivContent "/srv/duplicity/credentials.sh" hostContext
              & File.dirExists "/srv/locks"
@@ -174,7 +176,7 @@ dockerKey =
   ]
 
 
-backupScript :: Property NoInfo
+backupScript :: Property UnixLike
 backupScript =
   File.hasContent p
   [ "#!/bin/bash"
@@ -195,7 +197,7 @@ backupScript =
   where p = "/usr/local/bin/fusion-backup"
 
 
-restoreScript :: Property NoInfo
+restoreScript :: Property UnixLike
 restoreScript =
   File.hasContent p
   [ "#!/bin/bash"
@@ -213,7 +215,7 @@ restoreScript =
   where p = "/usr/local/bin/fusion-restore"
 
 
-globalCerts :: Property HasInfo
+globalCerts :: Property UnixLike
 globalCerts = propertyList "Certificates installed globally" $ props
               & File.dirExists "/srv/certs"
               & File.hasContent "/srv/certs/dhparam.pem" dhparam2048
@@ -221,17 +223,7 @@ globalCerts = propertyList "Certificates installed globally" $ props
               & File.hasContent "/srv/certs/public/fusion-ca.crt.pem" fusionCa
 
 
-simpleRelay :: Property NoInfo
-simpleRelay =
-  "/etc/ssmtp/ssmtp.conf" `File.hasContent`
-  [ "Root=dev@fusionapp.com"
-  , "Mailhub=smtp.fusionapp.com:587"
-  , "RewriteDomain=fusionapp.com"
-  , "FromLineOverride=yes"
-  ] `requires` Apt.installed ["ssmtp"]
-
-
-hetznerResolv :: Property NoInfo
+hetznerResolv :: Property UnixLike
 hetznerResolv =
   "/etc/resolv.conf" `File.hasContent`
   [ "search fusionapp.com"
@@ -243,10 +235,10 @@ hetznerResolv =
   ]
 
 
-standardSystem :: HostName -> DebianSuite -> Architecture -> Host
-standardSystem hn suite arch =
-  host hn
-  & os (System (Debian suite) arch)
+standardSystem :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
+standardSystem suite arch =
+  propertyList "standard system" $ props
+  & osDebian suite arch
   -- Can't turn this on because 127.0.1.1 in /etc/hosts is a problem
   -- & Hostname.sane
   & Hostname.searchDomain
@@ -283,12 +275,14 @@ standardSystem hn suite arch =
   & Ssh.permitRootLogin Ssh.WithoutPassword
   & Ssh.setSshdConfigBool "UseDNS" False
   & Apt.installed ["sudo"]
-  & propertyList "admin accounts" ([ User.accountFor
-                                   , User.lockedPassword
-                                   , Sudo.enabledFor
-                                   , flip User.hasGroup (Group "systemd-journal")
-                                   , flip User.hasGroup (Group "adm")
-                                   ] <*> admins)
+  & propertyList "admin accounts"
+  (toProps $
+   [ User.accountFor
+   , User.lockedPassword
+   , Sudo.enabledFor
+   , flip User.hasGroup (Group "systemd-journal")
+   , flip User.hasGroup (Group "adm")
+   ] <*> admins)
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
@@ -315,9 +309,16 @@ standardSystem hn suite arch =
                   , "ncdu"
                   , "iftop"
                   ]
+  where simpleRelay =
+          "/etc/ssmtp/ssmtp.conf" `File.hasContent`
+          [ "Root=dev@fusionapp.com"
+          , "Mailhub=smtp.fusionapp.com:587"
+          , "RewriteDomain=fusionapp.com"
+          , "FromLineOverride=yes"
+          ] `requires` Apt.installed ["ssmtp"]
 
 
-standardNsSwitch :: Property NoInfo
+standardNsSwitch :: Property UnixLike
 standardNsSwitch =
   File.hasContent "/etc/nsswitch.conf"
   [ "passwd:         compat mymachines"
@@ -340,35 +341,43 @@ admins :: [User]
 admins = map User ["tristan", "jj", "darren", "william"]
 
 
-tristanKeys :: User -> Property NoInfo
-tristanKeys user = propertyList "keys for tristan" $ map (Ssh.authorizedKey user)
+tristanKeys :: User -> Property UnixLike
+tristanKeys user = propertyList "keys for tristan"
+                   . toProps
+                   . map (setupRevertableProperty . Ssh.authorizedKey user) $
                    [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTItuXoGILFK8Y7+y07e5pomUwNfsvptD/jiep8MA8ChcVYZMe/Pl++eBXPz71fjGUWR8H86chPYa5omMLaaJQ0KNjmqzyp27GKVxrSYxt3pkv34xkxkN0HYoGRR6a7JiV2vjOI7Av71lh6WOMA315I+y7vpIenLU/kWiy/YkRO6fe7Bh9ZbMCspmREupsnHH8Zxu13xakQFZ2OzxhbDjWDHG42zZnbR3KCEVAE5/IM+RREZfFGiqTlbCEe2pCRKAntk2CS9E9f360KxMerRJAoQtHzuF1EZ+A1rn2lNLm9KW7n99EyuUt5W1E0dnB0Au7uYs7tUyAKjIZIg9OrHjR cardno000603011845"
                    , "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOg4PwvtqWHhan0rGxKAQn+n1IIKJJ0JsTMFdZiTFeOj mithrandi@lorien"
                    ]
 
 
-jjKeys :: User -> Property NoInfo
-jjKeys user = propertyList "keys for jj" $ map (Ssh.authorizedKey user)
+jjKeys :: User -> Property UnixLike
+jjKeys user = propertyList "keys for jj"
+              . toProps
+              . map (setupRevertableProperty . Ssh.authorizedKey user) $
               [ "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAtd+yaE7w3PDdM9MLyDlMa4QoUOHNLjva/CGZe+1v4u7oOXDe4d6RLSJd1fZf1De2qZhrgPzOf7yh8MSK1nSW/dZrlt+Fd6aHIPG05lnTEV6SqxkhwaadixqqVZjtVAv3NpSjXfOGitAcIltkwourQKvAmYWzMMyYe4iF21XPcaU39PQud5b84hChAnHRBjyA0TFOpu3qs+SVetRsmU4S9ii1B/XbS6ktxwXqcXjc8HCG0G53VoR8dCmqVpyk3k5rcvSHa2gctXyQGbOIeO8un+613KWc2dTB/xhRUhF3bgoo846e3wFyFu85W/RdCj32BXW2FQZvPIJyciuWbX0TBw== jonathan@Callisto.local"
               , "ssh-dss AAAAB3NzaC1kc3MAAACBAJxgWfVKcnIBUYs8ymiEbbHbX5SLyHeN20Vofhbrpw6h5XujNy1aChTDupJ7p/YZIP4jhgZmvhm33hosbM3P4r2SBKSQ2SK3q4HbGkwPdy5N+bPgtcuNUkCwgBU0EKvUjM7/i7zFq9BD40402OeAX5zz9bwZ39BhI3d2oQ64+2s9AAAAFQC8cxb2WSfUYczmaIS6dxcnjYsXRQAAAIBz28PfwuI4qLaf1LRu6YJLGPEvT8FBVfCDGBCWmlE1NnJG+DfUEFXsSElpra4k/5p9fYEPpf1WRCKSDYzR2T5zWfI/A2eAxviixOVhlghj8N26eqQF8WacZtD+zgm06QUHWRwUgw3OJXiFdLVlSI5/QG6MeR4kVc3xKIxG8V9KsAAAAIB6T3L2PIqbnK5NOzGPvMnzA5bgk2NelrXhssNZTGbYNnIXwNHzDVWCqAHwX6iwGN4+ra+XwqW0FPvN45CP5PMsCdZqLl7mtk7gtO5ig6hPNEQ4wWXW/IyYpdRTtcA//Hbvmf1rvzRCWUweyzoDoVtoGwo9jMztyHnJrrPOXWf9cw== JJ@Triton"
               ]
 
 
-darrenKeys :: User -> Property NoInfo
-darrenKeys user = propertyList "keys for darren" $ map (Ssh.authorizedKey user)
+darrenKeys :: User -> Property UnixLike
+darrenKeys user = propertyList "keys for darren"
+                  . toProps
+                  . map (setupRevertableProperty . Ssh.authorizedKey user) $
                   [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQD0SNokEjxqHvWbdyHs2pkf7gTpL464wv2I4vmIzFIjmd+8G5OMZkDme1CrS7jhi33dGM99zMZF1TC6Wbi7DshL9jX8Q8A2VJBN8Tm8FH1bmVM1eV44biAzvFmV9J2xeiGX2cM1rJMYn9CSbYBhwoi32OhvWxEV7FsKI6sipZiHtP0ClxyNbd8foM/AEfrRIEmTQad+ep6OvKsdkTwcJoywvqtgF0giiCMYkuXAYZzAm5+0ZcgYhdQdLXf8cCoxWxjX7cpwx+3CGJPbWVejmAunOjSuTQ1sfl73OrtjZd7hDdhtvQXhmJaJc8+bqoODUP94mS6zIKv8e09kY/ijcMRpHMC6ERtf3bB5qc+yWFGVwcIzwvta3IZ1nbmbea3gMv1yGXc5Qf4KSqrQvghZ7N/8Ava36njj3Zab6DqYNtnpdIeGUK5mGApE7PSHiVQWYtK11IPaYrnhiAQlN2V91G1J3hu6DkuO6d+ZdfzBEEfcCosW1MWdUyzX2X+34YOyFNEDVGy6gOk26Y9W57yPwH0FRmcOqNfWVqFGQuwrNY3m9J6XjJuhmhwTOeLUjePo68NDeEoabQ4IfPdMX5G3+mI6DgbwhOKlWLI8Lj35n8n0m0HwkIn6pm1Fov8eboE8oAzMoAoJH7Xb9zAgJxf2m+f1X/Dsks4Vv9X+rJza4xDCqQ== potato@potatop"
                   , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCx+BiVfTdyZ4dDyethjL4PHltDB1jBJI65iKIzrg6DBkG/DJxNShCbrS/SsR9xkJVlUhyUxjdLQvdGTsbIxPphCuRivk71ccMj1/iN32PkoNIujSCa66rGL/NKO000Ir/ZWiBXG+p5svSZuojTfL+BEPsEfpLoLhBvt8M1TbhyCJl+bQ7wW0Djlp/tYcpSkmAg5fXXragf4Q6t8UrTjkigzDqi0SAttGylflPlQBo23ImJdEbduYQJdtOx8E7675bodSADqK03ouBXti1/1ZKYO6e1X8KMzvJZEmRTz7JcNFB7ICJJJWIYSW05uoJCTKk2ZACa8XyM+b3vXRvqXzVd darren@yk2"
                   ]
 
 
-williamKeys :: User -> Property NoInfo
-williamKeys user = propertyList "keys for william" $ map (Ssh.authorizedKey user)
+williamKeys :: User -> Property UnixLike
+williamKeys user = propertyList "keys for william"
+                   . toProps
+                   . map (setupRevertableProperty . Ssh.authorizedKey user) $
                    [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCiy5Sx5pADzWP9Aq+ecagisuc2jZJaR/DV4PoVWxNAH4HngybzBBUtTL/9BsLcTn5OKNGqc1Kk916PENBPN3sqNQJj1u+OUyibAT8Em/sEfaDZ5ykh++E0/ycKYFs2chXR7fPhe+68hLAMNS3GlKvf5ErmScz3oyDEwR73b00LfABz3rpy7YuxoNiA/PgPv4+5oaULUxo0ysGx+mcoAvrXwQ5u3KHPOKNNzN9E3gF5AhML+qGF5i7T3dYcZ0OsqkEJ4gSRG8PPVmX2rKMI+Ldvh0LI0Xa9fgaEgtC5X38u+0WalEE5EhBv5LUZKRu+9bzkR71jl9kbI86ld/QLYf9Z js@mvp.gg"
                    ]
 
 
-adminKeys :: User -> Property NoInfo
-adminKeys user = propertyList "admin keys" . map ($ user) $
+adminKeys :: User -> Property UnixLike
+adminKeys user = propertyList "admin keys" . toProps . map ($ user) $
                  [ tristanKeys
                  , jjKeys
                  , darrenKeys
@@ -376,18 +385,20 @@ adminKeys user = propertyList "admin keys" . map ($ user) $
                  ]
 
 
-droneKeys :: Property NoInfo
+droneKeys :: Property UnixLike
 droneKeys = propertyList "drone.io CI deployment keys"
-  . map (Ssh.authorizedKey (User "root")) $
-  [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4NcWgAGV+mmTQgMS56MmZBWs6wQzBDh5q36pE+iCztI+tzTSPAPd6yoZthDtk1OkHfNAqfSEnxhYneKF1a893jPhNCwJ1BgIYmuVUvX4NPy0A62iI3xaNKx9fXrW679TIYm21pkmkNs2O81P7oUl+wfuo5j33GRdNQxZKas8uJZ/HE09h+Vd4OH6GsjklBWJTSliidrzOWNyv7XvzUIBMOey6dfZOVMraKxTux0xhb28ITklMWLxZwJJzK9uzUlbZJa2P5lO3e30+IWbMZnFiRQqrPwofjsWxR7OUk4qn/KE4MejsNVo6YrnHGj9VKZQMWBJNS8aARq+zq8A8Fre1 fusionapp-diamond@drone"
-  , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCaL+2DoGktW0DRLBpLdJm4icbotFQwHMwRmyTQc+XTXmpq0w3FiO2xE2Vr0wDlaFKWfMsscVDbmfK6ViihVUOPSlG2rjaEnSHVRdw68yvl5uEA84Xtqu7D/lnjgOwHZT9wC3mCi2e0LpVvQSU4g27e0SSb+EyxTd7JrvVjJpR7+ycAqx0xnC0jHvjTDO1n5nDqiAicStk6W/BmXARIb0YoeKyowqTpyl2brmzjnmuDy28cmLSZXbshHUxaL1C2ZmJh6oVbBPQmBhZ4SsrGP4CgY66EVt3SlCQ4IE6dL+kOklRrxcnDGCh8uNKXs/dkZyT5Um0q6xhsy/JnDjQ+ruo7 fusionapp-fusion@drone"
-  , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC1lvZPseVOYjIKm8jrxpvI1CcOo7aSkkk61u6/LJMPfD2nJOalGzMdUHU7dLlZDLkY4adH9/YlHOleP1u2Jw38PjA6wkuaLVXcGwo7zrkU8ufGlsG/yZL1ZZNk/5ltaz34pZ5DFkQuCq7NUDTZYN+tXkhH31EfbpOPMFPLurQFG5heG7spf1LxNybHd3tYUPm+/3n1tAZpWAzcGjHm03Ubw0ByM0zNt+fDG3+VF80j/x9/v0SpXXpHxYVANHAm+w8It0EmWht2dYexQF8ixvmAqXKZu6b3vTqYSn3xSrEIucGaZ0F0kK/Khw4u+B/QLbkYvIPTAk0W/9vh+wTU+FTv fusionapp-entropy@drone"
-  ]
+            . toProps
+            . map (setupRevertableProperty . Ssh.authorizedKey (User "root")) $
+            [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4NcWgAGV+mmTQgMS56MmZBWs6wQzBDh5q36pE+iCztI+tzTSPAPd6yoZthDtk1OkHfNAqfSEnxhYneKF1a893jPhNCwJ1BgIYmuVUvX4NPy0A62iI3xaNKx9fXrW679TIYm21pkmkNs2O81P7oUl+wfuo5j33GRdNQxZKas8uJZ/HE09h+Vd4OH6GsjklBWJTSliidrzOWNyv7XvzUIBMOey6dfZOVMraKxTux0xhb28ITklMWLxZwJJzK9uzUlbZJa2P5lO3e30+IWbMZnFiRQqrPwofjsWxR7OUk4qn/KE4MejsNVo6YrnHGj9VKZQMWBJNS8aARq+zq8A8Fre1 fusionapp-diamond@drone"
+            , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCaL+2DoGktW0DRLBpLdJm4icbotFQwHMwRmyTQc+XTXmpq0w3FiO2xE2Vr0wDlaFKWfMsscVDbmfK6ViihVUOPSlG2rjaEnSHVRdw68yvl5uEA84Xtqu7D/lnjgOwHZT9wC3mCi2e0LpVvQSU4g27e0SSb+EyxTd7JrvVjJpR7+ycAqx0xnC0jHvjTDO1n5nDqiAicStk6W/BmXARIb0YoeKyowqTpyl2brmzjnmuDy28cmLSZXbshHUxaL1C2ZmJh6oVbBPQmBhZ4SsrGP4CgY66EVt3SlCQ4IE6dL+kOklRrxcnDGCh8uNKXs/dkZyT5Um0q6xhsy/JnDjQ+ruo7 fusionapp-fusion@drone"
+            , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC1lvZPseVOYjIKm8jrxpvI1CcOo7aSkkk61u6/LJMPfD2nJOalGzMdUHU7dLlZDLkY4adH9/YlHOleP1u2Jw38PjA6wkuaLVXcGwo7zrkU8ufGlsG/yZL1ZZNk/5ltaz34pZ5DFkQuCq7NUDTZYN+tXkhH31EfbpOPMFPLurQFG5heG7spf1LxNybHd3tYUPm+/3n1tAZpWAzcGjHm03Ubw0ByM0zNt+fDG3+VF80j/x9/v0SpXXpHxYVANHAm+w8It0EmWht2dYexQF8ixvmAqXKZu6b3vTqYSn3xSrEIucGaZ0F0kK/Khw4u+B/QLbkYvIPTAk0W/9vh+wTU+FTv fusionapp-entropy@drone"
+            ]
 
 
-standardContainer :: Systemd.MachineName -> DebianSuite -> Architecture -> Systemd.Container
-standardContainer name suite arch =
-  Systemd.container name system chroot
+standardContainer :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
+standardContainer suite arch =
+  propertyList "standard container" $ props
+  & osDebian suite arch
   & "/etc/security/limits.d/10-local.conf" `File.hasContent`
   [ "* hard nofile 1000000"
   , "* soft nofile 1000000"
@@ -399,42 +410,40 @@ standardContainer name suite arch =
   `onChange` Apt.autoRemove
   & Apt.unattendedUpgrades
   & Apt.cacheCleaned
-  where chroot = Chroot.debootstrapped Debootstrap.MinBase
-        system = System (Debian suite) arch
 
 
 apacheSvn :: Systemd.Container
-apacheSvn = Systemd.container "apache-svn" system chroot
-            & Systemd.bind "/srv/svn"
-            & Systemd.containerCfg "network-veth"
-            & Systemd.running Systemd.networkd
-            & Systemd.running "apache2" `requires` Apt.installed ["apache2"]
-            & Apache.modEnabled "dav_svn" `requires` Apt.installed ["libapache2-svn"]
-            & Apache.siteDisabled "000-default"
-            & Apache.listenPorts [Port 8100]
-            & Apache.siteEnabled "svn.quotemaster.co.za"
-            [ "<VirtualHost *:8100>"
-            , "  ServerName svn.quotemaster.co.za;"
-            , "  <Location /svn>"
-            , "      DAV             svn"
-            , "      SVNParentPath   /srv/svn"
-            , "      AuthName        Subversion"
-            , "      AuthType        Basic"
-            , "      AuthUserFile    /srv/svn/dav_svn.passwd"
-            , "      <LimitExcept GET PROPFIND OPTIONS REPORT>"
-            , "          Require valid-user"
-            , "      </LimitExcept>"
-            , Apache.allowAll
-            , "  </Location>"
-            , "</VirtualHost>"
-            ]
-  where chroot = Chroot.debootstrapped Debootstrap.MinBase
-        system = System (Debian (Stable "jessie")) "amd64"
+apacheSvn = Systemd.debContainer "apache-svn" $ props
+  & osDebian (Stable "jessie") "amd64"
+  & Systemd.bind "/srv/svn"
+  & Systemd.containerCfg "network-veth"
+  & Systemd.running Systemd.networkd
+  & Systemd.running "apache2" `requires` Apt.installed ["apache2"]
+  & Apache.modEnabled "dav_svn" `requires` Apt.installed ["libapache2-svn"]
+  & Apache.siteDisabled "000-default"
+  & Apache.listenPorts [Port 8100]
+  & Apache.siteEnabled "svn.quotemaster.co.za"
+  [ "<VirtualHost *:8100>"
+  , "  ServerName svn.quotemaster.co.za;"
+  , "  <Location /svn>"
+  , "      DAV             svn"
+  , "      SVNParentPath   /srv/svn"
+  , "      AuthName        Subversion"
+  , "      AuthType        Basic"
+  , "      AuthUserFile    /srv/svn/dav_svn.passwd"
+  , "      <LimitExcept GET PROPFIND OPTIONS REPORT>"
+  , "          Require valid-user"
+  , "      </LimitExcept>"
+  , Apache.allowAll
+  , "  </Location>"
+  , "</VirtualHost>"
+  ]
 
 
 nginxPrimary :: Systemd.Container
 nginxPrimary =
-  standardContainer "nginx-primary" (Stable "jessie") "amd64"
+  Systemd.debContainer "nginx-primary" $ props
+  & standardContainer (Stable "jessie") "amd64"
   & Systemd.running Systemd.networkd
   & File.dirExists "/etc/systemd/system/nginx.service.d"
   & "/etc/systemd/system/nginx.service.d/limits.conf" `File.hasContent`
@@ -456,7 +465,7 @@ nginxPrimary =
   & saxumBrokersSite
 
 
-svnSite :: RevertableProperty NoInfo
+svnSite :: RevertableProperty DebianLike DebianLike
 svnSite =
   Nginx.siteEnabled "svn.quotemaster.co.za"
   [ " server {"
@@ -499,7 +508,7 @@ svnSite =
   ]
 
 
-andersonSite :: RevertableProperty NoInfo
+andersonSite :: RevertableProperty DebianLike DebianLike
 andersonSite =
   Nginx.siteEnabled "andersonquotes.co.za"
   [ "server {"
@@ -519,7 +528,7 @@ andersonSite =
   ]
 
 
-entropySite :: RevertableProperty NoInfo
+entropySite :: RevertableProperty DebianLike DebianLike
 entropySite =
   Nginx.siteEnabled "entropy.fusionapp.com"
   [ "server {"
@@ -556,7 +565,7 @@ entropySite =
   ]
 
 
-fusionSites :: Property HasInfo
+fusionSites :: Property DebianLike
 fusionSites =
   propertyList "Fusion sites" $ props
   ! Nginx.siteEnabled "fusion-prod" []
@@ -792,7 +801,7 @@ fusionSites =
   ]
 
 
-quotemasterSite :: RevertableProperty NoInfo
+quotemasterSite :: RevertableProperty DebianLike DebianLike
 quotemasterSite =
   Nginx.siteEnabled "quotemaster"
   [ "server {"
@@ -829,7 +838,7 @@ quotemasterSite =
   ]
 
 
-saxumSite :: RevertableProperty NoInfo
+saxumSite :: RevertableProperty DebianLike DebianLike
 saxumSite =
   Nginx.siteEnabled "saxumretail.com"
   [ "server {"
@@ -848,7 +857,7 @@ saxumSite =
   ]
 
 
-saxumBrokersSite :: RevertableProperty NoInfo
+saxumBrokersSite :: RevertableProperty DebianLike DebianLike
 saxumBrokersSite =
   Nginx.siteEnabled "saxumbrokers.co.za"
   [ "server {"
@@ -868,12 +877,14 @@ saxumBrokersSite =
 
 
 mailRelayContainer :: Systemd.Container
-mailRelayContainer = standardContainer "mail-relay" (Stable "jessie") "amd64"
-                     & Systemd.running Systemd.networkd
-                     & mailRelay
+mailRelayContainer =
+  Systemd.debContainer "mail-relay" $ props
+  & standardContainer (Stable "jessie") "amd64"
+  & Systemd.running Systemd.networkd
+  & mailRelay
 
 
-mailRelay :: Property HasInfo
+mailRelay :: Property DebianLike
 mailRelay =
   propertyList "fusionapp.com mail relay" $ props
   & Systemd.running Systemd.networkd
@@ -909,14 +920,14 @@ dhparam2048 =
   ]
 
 
-duplicityLocksCleaned :: RevertableProperty NoInfo
+duplicityLocksCleaned :: RevertableProperty UnixLike UnixLike
 duplicityLocksCleaned =
   confpath `File.hasContent` ["r! /srv/duplicity/cache/*/lockfile.lock"]
   <!> File.notPresent confpath
   where confpath = "/etc/tmpfiles.d/duplicity-lockfiles.conf"
 
 
-caddyfile :: Property HasInfo
+caddyfile :: Property UnixLike
 caddyfile = propertyList "Configuration for Caddy" $ props
   & File.dirExists "/srv/caddy"
   & File.hasContent "/srv/caddy/Caddyfile"
