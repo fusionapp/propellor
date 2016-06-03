@@ -5,9 +5,7 @@ import           Control.Applicative ((<$>), (<*>))
 import           Propellor
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Apt as Apt
-import qualified Propellor.Property.Chroot as Chroot
 import qualified Propellor.Property.Cron as Cron
-import qualified Propellor.Property.Debootstrap as Debootstrap
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Git as Git
 import qualified Propellor.Property.Hostname as Hostname
