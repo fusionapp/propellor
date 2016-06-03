@@ -48,8 +48,6 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
           & Cron.niceJob "fusion-backup" (Cron.Times "23 3 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
-          & File.dirExists "/srv/drone"
-          & File.hasPrivContent "/srv/drone/dronerc" (Context "fusion builds")
           & caddyfile
 
 
