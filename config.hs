@@ -449,6 +449,7 @@ nginxPrimary =
   , "LimitNOFILE=100000"
   , "LimitCORE=500000000"
   ]
+  & Apt.installed ["logrotate"]
   & Systemd.running "nginx" `requires` Nginx.installed
   & Systemd.bind "/srv/certs"
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
