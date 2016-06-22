@@ -401,6 +401,8 @@ standardContainer suite arch =
   [ "* hard nofile 1000000"
   , "* soft nofile 1000000"
   ]
+  & Locale.available "en_ZA.UTF-8"
+  & "en_ZA.UTF-8" `Locale.selectedFor` ["LANG"]
   & Apt.stdSourcesList `onChange` Apt.upgrade
   -- Need cron installed for unattended-upgrades to work
   & Apt.installed ["cron"]
