@@ -83,6 +83,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard origin/master && git clean -dfx && fab fusion.deploy"
+       & fusionDumpsCleaned
        where pubKeyEd25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
              pubKeyEcdsa = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBN3UsIwUsSCgItsJv6gdisBYfuxIwP5/jhfe+g1JD6NXqzgj7mUGjMO+tiatgNYauqaFB3JPoS2NsPo6t0jKbzs= root@onyx.fusionapp.com"
 
@@ -950,6 +951,13 @@ duplicityLocksCleaned =
   confpath `File.hasContent` ["r! /srv/duplicity/cache/*/lockfile.lock"]
   <!> File.notPresent confpath
   where confpath = "/etc/tmpfiles.d/duplicity-lockfiles.conf"
+
+
+fusionDumpsCleaned :: RevertableProperty UnixLike UnixLike
+fusionDumpsCleaned =
+  confpath `File.hasContent` ["d /srv/db/fusion/dumps 0755 root root 30d -"]
+  <!> File.notPresent confpath
+  where confpath = "/etc/tmpfiles.d/fusion-dumps.conf"
 
 
 caddyfile :: Property UnixLike
