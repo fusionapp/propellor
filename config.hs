@@ -485,7 +485,13 @@ nginxPrimary =
   & andersonSite
   & entropySite
   & fusionSites
+  & File.dirExists "/srv/www/quotemaster.co.za"
   & quotemasterSite
+  & LetsEncrypt.letsEncrypt
+  (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
+  "quotemaster.co.za"
+  "/srv/www/quotemaster.co.za"
+  `onChange` Nginx.reloaded
   & saxumSite
   & saxumBrokersSite
 
@@ -835,6 +841,10 @@ quotemasterSite =
   , "    access_log          /var/log/nginx/quotemaster.co.za.access.log;"
   , "    location / {"
   , "        rewrite ^(.*)$ https://quotemaster.co.za$1 permanent;"
+  , "    }"
+  , "    location '/.well-known/acme-challenge' {"
+  , "        default_type 'text/plain';"
+  , "        root /srv/www/quotemaster.co.za"
   , "    }"
   , "}"
   , ""
