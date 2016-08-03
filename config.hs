@@ -488,6 +488,7 @@ nginxPrimary =
   & fusionSites
   & File.dirExists "/srv/www/quotemaster.co.za"
   & quotemasterSite
+  & Apt.backportsInstalled ["certbot"]
   & LetsEncrypt.letsEncrypt
   (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
   "quotemaster.co.za"
