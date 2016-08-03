@@ -10,6 +10,7 @@ import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Git as Git
 import qualified Propellor.Property.Hostname as Hostname
 import qualified Propellor.Property.Locale as Locale
+import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
 import qualified Propellor.Property.Nginx as Nginx
 import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Ssh as Ssh
