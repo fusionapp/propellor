@@ -66,8 +66,7 @@ path `hasLimits` limit = go `requires` installed
 			cmdPropertyEnv "ccache" params' [("CCACHE_DIR", path)]
 			`changesFileContent` (path </> "ccache.conf")
 		| otherwise = property "couldn't parse ccache limits" $
-			sequence_ (errorMessage <$> errors)
-			>> return FailedChange
+			errorMessage $ unlines errors
 
 	params = limitToParams limit
 	(errors, params') = partitionEithers params
@@ -96,13 +95,39 @@ group@(Group g) `hasCache` limit = (make `requires` installed) <!> delete
 			& File.dirExists path
 			& File.ownerGroup path (User "root") group
 			& File.mode path (combineModes $
-				readModes ++ executeModes
-				++ [ownerWriteMode, groupWriteMode])
+					readModes ++ executeModes ++
+					[ ownerWriteMode
+					, groupWriteMode
+					, setGroupIDMode
+					]) `onChange` fixSetgidBit
+				-- here, we use onChange to catch upgrades from
+				-- 3.0.5 where the setGroupIDMode line was not
+				-- present
 			& hasLimits path limit
 
 	delete = check (doesDirectoryExist path) $
 		cmdProperty "rm" ["-r", path] `assume` MadeChange
 		`describe` ("ccache for " ++ g ++ " does not exist")
+
+	-- Here we deal with a bug in Propellor 3.0.5.  If the ccache was
+	-- created with that version, it will not have the setgid bit set.  That
+	-- means its subdirectories won't have inherited the setgid bit, and
+	-- then the files in those directories won't be owned by group sbuild.
+	-- This breaks ccache.
+	fixSetgidBit :: Property UnixLike
+	fixSetgidBit =
+		(cmdProperty "find"
+			[ path
+			, "-type", "d"
+			, "-exec", "chmod", "g+s"
+			, "{}", "+"
+			] `assume` MadeChange)
+		`before`
+		(cmdProperty "chown"
+			[ "-R"
+			, "root:" ++ g
+			, path
+			] `assume` MadeChange)
 
 	path = "/var/cache/ccache-" ++ g
 

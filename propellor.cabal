@@ -1,5 +1,5 @@
 Name: propellor
-Version: 3.0.4
+Version: 3.1.1
 Cabal-Version: >= 1.8
 License: BSD2
 Maintainer: Joey Hess <id@joeyh.name>
@@ -99,6 +99,7 @@ Library
     Propellor.Property.Docker
     Propellor.Property.Fail2Ban
     Propellor.Property.File
+    Propellor.Property.Firejail
     Propellor.Property.Firewall
     Propellor.Property.FreeBSD
     Propellor.Property.FreeBSD.Pkg
@@ -145,6 +146,7 @@ Library
     Propellor.Property.ZFS.Properties
     Propellor.Property.HostingProvider.CloudAtCost
     Propellor.Property.HostingProvider.DigitalOcean
+    Propellor.Property.HostingProvider.Exoscale
     Propellor.Property.HostingProvider.Linode
     Propellor.Property.SiteSpecific.GitHome
     Propellor.Property.SiteSpecific.JoeySites
@@ -170,6 +172,7 @@ Library
     Propellor.Types.Docker
     Propellor.Types.Dns
     Propellor.Types.Empty
+    Propellor.Types.Exception
     Propellor.Types.Info
     Propellor.Types.MetaTypes
     Propellor.Types.OS

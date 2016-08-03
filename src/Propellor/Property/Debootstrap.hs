@@ -67,7 +67,7 @@ built' installprop target system@(System _ arch) config =
 			Nothing -> errorMessage $ "don't know how to debootstrap " ++ show system
 			Just s -> pure s
 		let params = toParams config ++
-			[ Param $ "--arch=" ++ arch
+			[ Param $ "--arch=" ++ architectureToDebianArchString arch
 			, Param suite
 			, Param target
 			]
@@ -90,7 +90,7 @@ built' installprop target system@(System _ arch) config =
 		)
 
 extractSuite :: System -> Maybe String
-extractSuite (System (Debian s) _) = Just $ Apt.showSuite s
+extractSuite (System (Debian _ s) _) = Just $ Apt.showSuite s
 extractSuite (System (Buntish r) _) = Just r
 extractSuite (System (FreeBSD _) _) = Nothing
 

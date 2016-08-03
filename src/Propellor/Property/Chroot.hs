@@ -91,7 +91,7 @@ data Debootstrapped = Debootstrapped Debootstrap.DebootstrapConfig
 
 instance ChrootBootstrapper Debootstrapped where
 	buildchroot (Debootstrapped cf) system loc = case system of
-		(Just s@(System (Debian _) _)) -> Right $ debootstrap s
+		(Just s@(System (Debian _ _) _)) -> Right $ debootstrap s
 		(Just s@(System (Buntish _) _)) -> Right $ debootstrap s
 		(Just (System (FreeBSD _) _)) -> Left "FreeBSD not supported by debootstrap."
 		Nothing -> Left "Cannot debootstrap; OS not specified"
@@ -105,7 +105,7 @@ instance ChrootBootstrapper Debootstrapped where
 -- to bootstrap.
 --
 -- > debootstrapped Debootstrap.BuildD "/srv/chroot/ghc-dev" $ props
--- >	& osDebian Unstable "amd64"
+-- >	& osDebian Unstable X86_64
 -- >	& Apt.installed ["ghc", "haskell-platform"]
 -- >	& ...
 debootstrapped :: Debootstrap.DebootstrapConfig -> FilePath -> Props metatypes -> Chroot

@@ -1,4 +1,75 @@
-propellor (3.0.5) UNRELEASED; urgency=medium
+propellor (3.1.2) UNRELEASED; urgency=medium
+
+  * Ssh.knownHost: Bug fix: Only fix up the owner of the known_hosts
+    file after it exists.
+  * Sbuild.keypairInsecurelyGenerated: Improved to be more robust.
+    Thanks, Sean Whitton.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 24 Jul 2016 13:34:37 -0400
+
+propellor (3.1.1) unstable; urgency=medium
+
+  * Haddock build fix.
+    Thanks, Sean Whitton
+
+ -- Joey Hess <id@joeyh.name>  Thu, 23 Jun 2016 08:12:57 -0400
+
+propellor (3.1.0) unstable; urgency=medium
+
+  * Architecture changed from String to an ADT. (API Change)
+    Transition guide: Change "amd64" to X86_64, "i386" to X86_32,
+    "armel" to ARMEL, etc.
+    Thanks, Félix Sipma.
+  * The Debian data type now includes a DebianKernel. (API Change)
+    This won't affect most config.hs, as osDebian defaults to
+    Linux. Added osDebian' can be used to specify a different kernel.
+    Thanks, Félix Sipma.
+  * Improve exception handling. A property that threw a non-IOException
+    used to stop the whole propellor run. Now, all non-async exceptions
+    only make the property that threw them fail. (Implicit API change)
+  * Added StopPropellorException and stopPropellorMessage which can be
+    used in the unusual case where a failure of one property should stop
+    propellor from trying to ensure any other properties.
+  * tryPropellor returns Either SomeException instead of Either IOException
+    (API change)
+  * Switch letsencrypt to certbot package name.
+  * Sbuild: Add keyringInsecurelyGenerated which is useful on throwaway
+    build VMs.
+    Thanks, Sean Whitton
+  * Added Propellor.Property.SiteSpecific.Exoscale.
+    Thanks, Sean Whitton
+  * Property.Reboot: Added toDistroKernel and toKernelNewerThan.
+    Thanks, Sean Whitton
+  * Added ConfFile.hasIniSection.
+    Thanks, Félix Sipma.
+  * Apt.install: When asked to install a package that apt does not know
+    about, it used to incorrectly succeed. Now it will fail.
+  * Property.Firejail: New module.
+    Thanks, Sean Whitton
+  * File: Write privdata files in binary rather than text, which avoids
+    failure when they do not contain valid unicode.
+    Thanks, Andrew Schurman
+  * Generalized fileProperty can now operate on a file as either a series
+    of lines, or a ByteString.
+
+  [ Sean Whitton ]
+  * New info property Schroot.useOverlays to indicate whether you want schroots
+    set up by propellor to use the Linux kernel's OverlayFS.
+  * Schroot.overlaysInTmpfs sets Schroot.useOverlays info property.
+  * If you have indicated that you want schroots to use OverlayFS and the
+    current kernel does not support it, Sbuild.built will attempt to reboot
+    into a kernel that does, or fail if it can't find one.
+  * Sbuild.built will no longer add duplicate `aliases=UNRELEASED,sid...` lines
+    to more than one schroot config. It will not remove any such lines that the
+    previous version of propellor added, though.
+  * Sbuild.keypairGenerated works around Debian bug #792100 by creating the
+    directory /root/.gnupg in advance.
+  * Ccache.hasCache now sets the setgid bit on the cache directory, as 
+    ccache requires.
+
+ -- Joey Hess <id@joeyh.name>  Wed, 22 Jun 2016 15:29:27 -0400
+
+propellor (3.0.5) unstable; urgency=medium
 
   * Modules added for Sbuild and Ccache.
     Thanks, Sean Whitton
@@ -7,7 +78,7 @@ propellor (3.0.5) UNRELEASED; urgency=medium
     killing processes like screen sessions.
   * Systemd: Added logindConfigured property.
 
- -- Joey Hess <id@joeyh.name>  Mon, 23 May 2016 11:19:28 -0400
+ -- Joey Hess <id@joeyh.name>  Mon, 06 Jun 2016 17:13:21 -0400
 
 propellor (3.0.4) unstable; urgency=medium
 
