@@ -34,7 +34,7 @@ hosts = [ scarlet
 
 scarlet :: Host
 scarlet = host "scarlet.fusionapp.com" $ props
-          & standardSystem (Stable "jessie") "amd64"
+          & standardSystem (Stable "jessie") X86_64
           & ipv4 "197.189.229.122"
           & hetznerResolv
           & fusionHost
@@ -53,7 +53,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
 
 onyx :: Host
 onyx = host "onyx.fusionapp.com" $ props
-       & standardSystem (Stable "jessie") "amd64"
+       & standardSystem (Stable "jessie") X86_64
        & ipv4 "41.72.130.249"
        & hetznerResolv
        & fusionHost
@@ -416,7 +416,7 @@ standardContainer suite arch =
 
 apacheSvn :: Systemd.Container
 apacheSvn = Systemd.debContainer "apache-svn" $ props
-  & osDebian (Stable "jessie") "amd64"
+  & osDebian (Stable "jessie") X86_64
   & Systemd.bind "/srv/svn"
   & Systemd.containerCfg "network-veth"
   & Systemd.running Systemd.networkd
@@ -445,7 +445,7 @@ apacheSvn = Systemd.debContainer "apache-svn" $ props
 nginxPrimary :: Systemd.Container
 nginxPrimary =
   Systemd.debContainer "nginx-primary" $ props
-  & standardContainer (Stable "jessie") "amd64"
+  & standardContainer (Stable "jessie") X86_64
   & Systemd.running Systemd.networkd
   & File.dirExists "/etc/systemd/system/nginx.service.d"
   & "/etc/systemd/system/nginx.service.d/limits.conf" `File.hasContent`
@@ -915,7 +915,7 @@ saxumBrokersSite =
 mailRelayContainer :: Systemd.Container
 mailRelayContainer =
   Systemd.debContainer "mail-relay" $ props
-  & standardContainer (Stable "jessie") "amd64"
+  & standardContainer (Stable "jessie") X86_64
   & Systemd.running Systemd.networkd
   & mailRelay
 
