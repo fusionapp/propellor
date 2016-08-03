@@ -856,6 +856,7 @@ quotemasterSite =
   , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "quotemaster.co.za" <> ";"
   , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "quotemaster.co.za" <> ";"
   , "    ssl_ciphers         ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AES:RSA+3DES:!ADH:!AECDH:!MD5;"
+  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
   , "    ssl_prefer_server_ciphers on;"
   , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
   , "    ssl_session_cache   none;"
