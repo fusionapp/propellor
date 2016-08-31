@@ -256,6 +256,7 @@ standardSystem suite arch =
                   , "kexec-tools"
                   , "needrestart"
                   , "runit"
+                  , "intel-microcode"
                   ]
   & "/etc/needrestart/conf.d/10-local-disabled.conf" `File.hasContent`
   [ "$nrconf{override_rc}{q(^docker)} = 0;"
