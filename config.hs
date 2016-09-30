@@ -98,6 +98,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              `requires` Apt.setSourcesListD ["deb https://apt.dockerproject.org/repo debian-jessie main"] "docker"
              `requires` Apt.installed ["apt-transport-https"]
              `requires` Apt.trustsKey dockerKey
+             `requires` dockerOptions
              & propertyList "admin docker access"
              (toProps (flip User.hasGroup (Group "docker") <$> admins))
              & File.dirExists "/srv/duplicity"
@@ -173,6 +174,16 @@ dockerKey =
   , "TvBR8Q=="
   , "=Fm3p"
   , "-----END PGP PUBLIC KEY BLOCK-----"
+  ]
+
+
+dockerOptions :: Property UnixLike
+dockerOptions = propertyList "Docker options" $ props
+  & File.dirExists "/etc/systemd/system/docker.service.d"
+  & File.hasContent "/etc/systemd/system/docker.service.d/options.conf"
+  [ "[Service]"
+  , "ExecStart="
+  , "ExecStart=/usr/bin/docker daemon -H fd:// --registry-mirror https://scarlet.fusionapp.com:5002 --userland-proxy=false"
   ]
 
 
