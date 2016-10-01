@@ -77,6 +77,9 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
+       -- Shouldn't be necessary, but nspawned does not pull this in at the
+       -- right time for some reason.
+       & Systemd.machined
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
        & Systemd.nspawned mailRelayContainer
