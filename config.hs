@@ -79,8 +79,9 @@ onyx = host "onyx.fusionapp.com" $ props
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
        -- Work around Propellor issue, not sure exactly what is wrong here.
        & Apt.installed ["debootstrap"]
+       & Systemd.running Systemd.networkd
        & Systemd.nspawned nginxPrimary
-       & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
+       & Systemd.nspawned apacheSvn
        & Systemd.nspawned mailRelayContainer
        -- & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        -- & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
@@ -421,6 +422,7 @@ standardContainer :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
 standardContainer suite arch =
   propertyList "standard container" $ props
   & osDebian suite arch
+  & Systemd.running Systemd.networkd
   & "/etc/security/limits.d/10-local.conf" `File.hasContent`
   [ "* hard nofile 1000000"
   , "* soft nofile 1000000"
@@ -439,10 +441,8 @@ standardContainer suite arch =
 
 apacheSvn :: Systemd.Container
 apacheSvn = Systemd.debContainer "apache-svn" $ props
-  & osDebian (Stable "jessie") X86_64
+  & standardContainer (Stable "jessie") X86_64
   & Systemd.bind "/srv/svn"
-  & Systemd.containerCfg "network-veth"
-  & Systemd.running Systemd.networkd
   & Systemd.running "apache2" `requires` Apt.installed ["apache2"]
   & Apache.modEnabled "dav_svn" `requires` Apt.installed ["libapache2-svn"]
   & Apache.siteDisabled "000-default"
@@ -469,7 +469,6 @@ nginxPrimary :: Systemd.Container
 nginxPrimary =
   Systemd.debContainer "nginx-primary" $ props
   & standardContainer (Stable "jessie") X86_64
-  & Systemd.running Systemd.networkd
   & File.dirExists "/etc/systemd/system/nginx.service.d"
   & "/etc/systemd/system/nginx.service.d/limits.conf" `File.hasContent`
   [ "[Service]"
@@ -941,14 +940,12 @@ mailRelayContainer :: Systemd.Container
 mailRelayContainer =
   Systemd.debContainer "mail-relay" $ props
   & standardContainer (Stable "jessie") X86_64
-  & Systemd.running Systemd.networkd
   & mailRelay
 
 
 mailRelay :: Property DebianLike
 mailRelay =
   propertyList "fusionapp.com mail relay" $ props
-  & Systemd.running Systemd.networkd
   & Systemd.running "postfix" `requires` Postfix.installed
   & "/etc/aliases" `File.hasContent`
   [ "postmaster: root"
