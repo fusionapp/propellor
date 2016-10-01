@@ -55,7 +55,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
 onyx :: Host
 onyx = host "onyx.fusionapp.com" $ props
        & standardSystem (Stable "jessie") X86_64
-       & ipv4 "129.232.205.98"
+       & ipv4 "41.72.130.253"
        & hetznerResolv
        & fusionHost
        & Ssh.userKeys (User "root") hostContext
@@ -77,9 +77,9 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
-       -- & Systemd.nspawned nginxPrimary
-       -- & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
-       -- & Systemd.nspawned mailRelayContainer
+       & Systemd.nspawned nginxPrimary
+       & Systemd.nspawned apacheSvn `requires` Systemd.running Systemd.networkd
+       & Systemd.nspawned mailRelayContainer
        -- & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        -- & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        -- & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard origin/master && git clean -dfx && fab fusion.deploy"
