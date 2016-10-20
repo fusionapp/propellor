@@ -832,6 +832,7 @@ fusionSites =
   , "    root                /srv/nginx;"
   , "    access_log          /var/log/nginx/${host}_tls.access.log;"
   , "    ssl                 on;"
+  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
   , "    ssl_certificate     /srv/certs/private/fusiontest.net/fullchain.pem;"
   , "    ssl_certificate_key /srv/certs/private/fusiontest.net/privkey.pem;"
   , "    ssl_ciphers         EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH;"
