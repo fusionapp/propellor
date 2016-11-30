@@ -249,10 +249,11 @@ hetznerResolv =
   "/etc/resolv.conf" `File.hasContent`
   [ "search fusionapp.com"
   , "domain fusionapp.com"
-  , "nameserver 41.203.18.183"
-  , "nameserver 196.22.142.222"
-  , "nameserver 41.204.202.244"
-  , "nameserver 197.221.0.5"
+  -- , "nameserver 41.203.18.183"
+  -- , "nameserver 196.22.142.222"
+  -- , "nameserver 41.204.202.244"
+  -- , "nameserver 197.221.0.5"
+  , "nameserver 8.8.8.8"
   ]
 
 
