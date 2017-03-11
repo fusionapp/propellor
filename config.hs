@@ -606,7 +606,7 @@ mcibrokerSite =
   , "}"
   , ""
   , "server {"
-  , "    listen              41.72.131.181:443 default ssl;"
+  , "    listen              41.72.131.181:443 ssl;"
   , "    server_name         mcibrokerquotes.co.za;"
   , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "mcibrokerquotes.co.za" <> ";"
   , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "mcibrokerquotes.co.za" <> ";"
