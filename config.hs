@@ -521,6 +521,7 @@ nginxPrimary =
   & saxumBrokersSite
 
 
+lets :: Domain -> LetsEncrypt.WebRoot -> Property DebianLike
 lets = LetsEncrypt.letsEncrypt
   (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
 
