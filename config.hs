@@ -508,16 +508,21 @@ nginxPrimary =
   & andersonSite
   & entropySite
   & fusionSites
-  & File.dirExists "/srv/www/quotemaster.co.za"
+  & Apt.installedBackport ["certbot"]
   & quotemasterSite
-  & LetsEncrypt.letsEncrypt
-  (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
-  "quotemaster.co.za"
-  "/srv/www/quotemaster.co.za"
-  `requires` Apt.installedBackport ["certbot"]
+  & File.dirExists "/srv/www/quotemaster.co.za"
+  & lets "quotemaster.co.za" "/srv/www/quotemaster.co.za"
+  `onChange` Nginx.reloaded
+  & File.dirExists "/srv/www/mcibrokerquotes.co.za"
+  & mcibrokerSite
+  & lets "mcibrokerquotes.co.za" "/srv/www/mcibrokerquotes.co.za"
   `onChange` Nginx.reloaded
   & saxumSite
   & saxumBrokersSite
+
+
+lets = LetsEncrypt.letsEncrypt
+  (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
 
 
 svnSite :: RevertableProperty DebianLike DebianLike
@@ -578,6 +583,47 @@ andersonSite =
   , "        proxy_set_header X-Forwarded-Proto http;"
   , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
   , "        proxy_pass       http://41.72.129.157/anderson/;"
+  , "    }"
+  , "}"
+  ]
+
+
+mcibrokerSite :: RevertableProperty DebianLike DebianLike
+mcibrokerSite =
+  Nginx.siteEnabled "mcibroker"
+  [ "server {"
+  , "    listen              41.72.131.181:80;"
+  , "    server_name         mcibrokerquotes.co.za www.mcibrokerquotes.co.za;"
+  , "    access_log          /var/log/nginx/mcibrokerquotes.co.za.access.log;"
+  , "    location / {"
+  , "        rewrite ^(.*)$ https://mcibrokerquotes.co.za$1 permanent;"
+  , "    }"
+  , "    location '/.well-known/acme-challenge' {"
+  , "        default_type 'text/plain';"
+  , "        root /srv/www/mcibrokerquotes.co.za;"
+  , "    }"
+  , "}"
+  , ""
+  , "server {"
+  , "    listen              41.72.131.181:443 default ssl;"
+  , "    server_name         mcibrokerquotes.co.za;"
+  , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "mcibrokerquotes.co.za" <> ";"
+  , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "mcibrokerquotes.co.za" <> ";"
+  , "    ssl_ciphers         ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AES:RSA+3DES:!ADH:!AECDH:!MD5;"
+  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
+  , "    ssl_prefer_server_ciphers on;"
+  , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
+  , "    ssl_session_cache   none;"
+  , "    ssl_session_tickets off;"
+  , "    access_log          /var/log/nginx/mcibrokerquotes.co.za_tls.access.log;"
+  , "    location / {"
+  , "        add_header X-Frame-Options SAMEORIGIN;"
+  , "        proxy_read_timeout 10m;"
+  , "        proxy_set_header Host quotemaster.co.za;"
+  , "        proxy_set_header X-Real-IP $remote_addr;"
+  , "        proxy_set_header X-Forwarded-Proto https;"
+  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+  , "        proxy_pass       http://41.72.129.157/mci/;"
   , "    }"
   , "}"
   ]
