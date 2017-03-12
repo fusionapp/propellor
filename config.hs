@@ -1046,7 +1046,7 @@ caddyfile :: Property UnixLike
 caddyfile = propertyList "Configuration for Caddy" $ props
   & File.dirExists "/srv/caddy"
   & File.hasContent "/srv/caddy/Caddyfile"
-  [ ":443"
+  [ ":443, :4433"
   , "gzip"
   , "log stdout"
   , "proxy / rancher-server:8080 {"
