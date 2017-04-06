@@ -507,7 +507,10 @@ nginxPrimary =
   & svnSite
   & andersonSite
   & entropySite
+  & File.dirExists "/srv/www/fusiontest.net"
   & fusionSites
+  & lets "fusiontest.net" "/srv/www/fusiontest.net"
+  `onChange` Nginx.reloaded
   & Apt.installedBackport ["certbot"]
   & File.dirExists "/srv/www/quotemaster.co.za"
   & quotemasterSite
@@ -822,6 +825,11 @@ fusionSites =
   , "    error_page  502     /fusion-error/502.html;"
   , "    error_page  504     /fusion-error/504.html;"
   , ""
+  , "    location '/.well-known/acme-challenge' {"
+  , "        default_type 'text/plain';"
+  , "        root /srv/www/fusiontest.net;"
+  , "    }"
+  , ""
   , "    location /__jsmodule__/ {"
   , "        if ($proxy_encoding != identity) {"
   , "            proxy_pass http://127.0.0.1;"
@@ -880,8 +888,8 @@ fusionSites =
   , "    access_log          /var/log/nginx/${host}_tls.access.log;"
   , "    ssl                 on;"
   , "    ssl_dhparam         /srv/certs/dhparam.pem;"
-  , "    ssl_certificate     /srv/certs/private/fusiontest.net/fullchain.pem;"
-  , "    ssl_certificate_key /srv/certs/private/fusiontest.net/privkey.pem;"
+  , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "fusiontest.net" <> ";"
+  , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "fusiontest.net" <> ";"
   , "    ssl_ciphers         EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH;"
   , "    ssl_ecdh_curve      secp384r1;"
   , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
