@@ -1061,10 +1061,5 @@ caddyfile = propertyList "Configuration for Caddy" $ props
   , " transparent"
   , " websocket"
   , "}"
-  , "timeouts {"
-  , " read 10s"
-  , " header 10s"
-  , " write 10s"
-  , " idle 2m"
-  , "}"
+  , "timeouts 2m"
   ]
