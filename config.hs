@@ -1076,8 +1076,8 @@ prometheusConfig = withPrivData src ctx $
         ctx = Context "Fusion production"
         cfg token =
           [ "scrape_configs:"
-          , "  - job_name: prometheus"
-          , "    static_configs"
+          , "  - job_name: 'prometheus'"
+          , "    static_configs:"
           , "      - targets: ['localhost:9090']"
           , "remote_write:"
           , "  url: https://cloud.weave.works/api/prom/push"
