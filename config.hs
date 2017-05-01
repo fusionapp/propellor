@@ -1,16 +1,19 @@
--- This is the main configuration file for Propellor, and is used to build
--- the propellor program.
+{-# LANGUAGE OverloadedStrings #-}
 
 import           Control.Applicative ((<$>), (<*>))
+import qualified Data.ByteString.Char8 as C8
+import           Data.Yaml ((.=), object, array, encode)
+import qualified Data.Yaml as Yaml
 import           Propellor
+import           Propellor.Base
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Cron as Cron
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Git as Git
 import qualified Propellor.Property.Hostname as Hostname
-import qualified Propellor.Property.Locale as Locale
 import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
+import qualified Propellor.Property.Locale as Locale
 import qualified Propellor.Property.Nginx as Nginx
 import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Ssh as Ssh
@@ -50,6 +53,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & caddyfile
           & File.dirExists "/srv/catcher-in-the-rye"
           & File.hasPrivContent "/srv/catcher-in-the-rye/config.yaml" (Context "fusion aux")
+          & prometheusConfig
 
 
 onyx :: Host
@@ -442,7 +446,7 @@ standardContainer suite arch =
 apacheSvn :: Systemd.Container
 apacheSvn = Systemd.debContainer "apache-svn" $ props
   & standardContainer (Stable "jessie") X86_64
-  & Systemd.bind "/srv/svn"
+  & Systemd.bind ("/srv/svn" :: String)
   & Systemd.running "apache2" `requires` Apt.installed ["apache2"]
   & Apache.modEnabled "dav_svn" `requires` Apt.installed ["libapache2-svn"]
   & Apache.siteDisabled "000-default"
@@ -500,7 +504,7 @@ nginxPrimary =
   , "}"
   ]
   & Systemd.running "nginx" `requires` Nginx.installed
-  & Systemd.bind "/srv/certs"
+  & Systemd.bind ("/srv/certs" :: String)
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
   & File.dirExists "/srv/nginx/cache"
   & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
@@ -1063,3 +1067,31 @@ caddyfile = propertyList "Configuration for Caddy" $ props
   , "}"
   , "timeouts 0"
   ]
+
+
+prometheusConfig :: Property (HasInfo + DebianLike)
+prometheusConfig = withPrivData src ctx $
+  \gettoken -> property' "Prometheus configuration" $
+              \p -> gettoken $ \token -> ensureProperty p $
+                                       "/srv/prometheus/prometheus.yml"
+                                       `File.hasContent`
+                                       (lines . C8.unpack . encode . cfg . privDataVal $ token)
+  where src = Password "weave cloud token"
+        ctx = Context "Fusion production"
+        cfg :: String -> Yaml.Value
+        cfg token =
+          object
+          [ "scrape_configs" .= array
+            [ object
+              [ "job_name" .= Yaml.String "prometheus"
+              , "static_configs" .= array
+                [ object [ "targets" .= array ["localhost:9090"] ]
+                ]
+              ]
+            ]
+          , "remote_write" .= object
+            [ "url" .= Yaml.String "https://cloud.weave.works/api/prom/push"
+            , "basic_auth" .= object
+              [ "password" .= token ]
+            ]
+          ]
