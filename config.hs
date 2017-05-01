@@ -1,9 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 import           Control.Applicative ((<$>), (<*>))
-import qualified Data.ByteString.Char8 as C8
-import           Data.Yaml ((.=), object, array, encode)
-import qualified Data.Yaml as Yaml
 import           Propellor
 import           Propellor.Base
 import qualified Propellor.Property.Apache as Apache
@@ -1075,23 +1070,16 @@ prometheusConfig = withPrivData src ctx $
               \p -> gettoken $ \token -> ensureProperty p $
                                        "/srv/prometheus/prometheus.yml"
                                        `File.hasContent`
-                                       (lines . C8.unpack . encode . cfg . privDataVal $ token)
+                                       cfg (privDataVal token)
   where src = Password "weave cloud token"
         ctx = Context "Fusion production"
-        cfg :: String -> Yaml.Value
         cfg token =
-          object
-          [ "scrape_configs" .= array
-            [ object
-              [ "job_name" .= Yaml.String "prometheus"
-              , "static_configs" .= array
-                [ object [ "targets" .= array ["localhost:9090"] ]
-                ]
-              ]
-            ]
-          , "remote_write" .= object
-            [ "url" .= Yaml.String "https://cloud.weave.works/api/prom/push"
-            , "basic_auth" .= object
-              [ "password" .= token ]
-            ]
+          [ "scrape_configs:"
+          , "  - job_name: prometheus"
+          , "    static_configs"
+          , "      - targets: ['localhost:9090']"
+          , "remote_write:"
+          , "  url: https://cloud.weave.works/api/prom/push"
+          , "  basic_auth:"
+          , "    password:" <> token
           ]
