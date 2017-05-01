@@ -1083,7 +1083,7 @@ prometheusConfig = withPrivData src ctx $
           , "    static_configs:"
           , "      - targets: ['localhost:9090']"
           , "remote_write:"
-          , "  url: https://cloud.weave.works/api/prom/push"
-          , "  basic_auth:"
-          , "    password:" <> token
+          , "  - url: https://cloud.weave.works/api/prom/push"
+          , "    basic_auth:"
+          , "      password:" <> token
           ]
