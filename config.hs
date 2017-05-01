@@ -1075,7 +1075,10 @@ prometheusConfig = withPrivData src ctx $
   where src = Password "weave cloud token"
         ctx = Context "Fusion production"
         cfg token =
-          [ "scrape_configs:"
+          [ "global:"
+          , "  external_labels:"
+          , "    deployment: 'testing'"
+          , "scrape_configs:"
           , "  - job_name: 'prometheus'"
           , "    static_configs:"
           , "      - targets: ['localhost:9090']"
