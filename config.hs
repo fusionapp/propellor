@@ -48,6 +48,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & caddyfile
           & File.dirExists "/srv/catcher-in-the-rye"
           & File.hasPrivContent "/srv/catcher-in-the-rye/config.yaml" (Context "fusion aux")
+          & File.dirExists "/srv/prometheus"
           & prometheusConfig
 
 
