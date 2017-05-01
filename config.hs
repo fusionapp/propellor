@@ -1085,5 +1085,5 @@ prometheusConfig = withPrivData src ctx $
           , "remote_write:"
           , "  - url: https://cloud.weave.works/api/prom/push"
           , "    basic_auth:"
-          , "      password:" <> token
+          , "      password: " <> token
           ]
