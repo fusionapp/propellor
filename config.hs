@@ -851,6 +851,7 @@ fusionSites =
   , "        internal;"
   , "        proxy_pass              http://41.72.135.84;"
   , "        proxy_redirect          http://fusiontest.net/ $scheme://fusiontest.net/;"
+  , "        proxy_redirect          https://fusiontest.net/ $scheme://fusiontest.net/;"
   , "        proxy_buffering         on;"
   , "        proxy_store             on;"
   , "        proxy_store_access      user:rw  group:rw  all:r;"
@@ -862,6 +863,7 @@ fusionSites =
   , "        expires                 max;"
   , "        proxy_pass              http://41.72.135.84;"
   , "        proxy_redirect          http://fusiontest.net/ $scheme://fusiontest.net/;"
+  , "        proxy_redirect          https://fusiontest.net/ $scheme://fusiontest.net/;"
   , "    }"
   , ""
   , "    location = / {"
@@ -871,6 +873,7 @@ fusionSites =
   , "    location / {"
   , "        proxy_pass              http://41.72.135.84;"
   , "        proxy_redirect          http://fusiontest.net/ $scheme://fusiontest.net/;"
+  , "        proxy_redirect          https://fusiontest.net/ $scheme://fusiontest.net/;"
   , "    }"
   , "}"
   ]
