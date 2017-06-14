@@ -311,7 +311,8 @@ standardSystem suite arch =
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
   & darrenKeys (User "darren")
-  & williamKeys (User "william")
+  ! williamKeys (User "root")
+  ! williamKeys (User "william")
   & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
@@ -362,7 +363,7 @@ standardNsSwitch =
 
 
 admins :: [User]
-admins = map User ["tristan", "jj", "darren", "william"]
+admins = map User ["tristan", "jj", "darren"]
 
 
 tristanKeys :: User -> Property UnixLike
