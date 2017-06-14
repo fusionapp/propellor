@@ -311,8 +311,6 @@ standardSystem suite arch =
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
   & darrenKeys (User "darren")
-  ! williamKeys (User "root")
-  ! williamKeys (User "william")
   & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
@@ -393,20 +391,11 @@ darrenKeys user = propertyList "keys for darren"
                   ]
 
 
-williamKeys :: User -> Property UnixLike
-williamKeys user = propertyList "keys for william"
-                   . toProps
-                   . map (setupRevertableProperty . Ssh.authorizedKey user) $
-                   [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCiy5Sx5pADzWP9Aq+ecagisuc2jZJaR/DV4PoVWxNAH4HngybzBBUtTL/9BsLcTn5OKNGqc1Kk916PENBPN3sqNQJj1u+OUyibAT8Em/sEfaDZ5ykh++E0/ycKYFs2chXR7fPhe+68hLAMNS3GlKvf5ErmScz3oyDEwR73b00LfABz3rpy7YuxoNiA/PgPv4+5oaULUxo0ysGx+mcoAvrXwQ5u3KHPOKNNzN9E3gF5AhML+qGF5i7T3dYcZ0OsqkEJ4gSRG8PPVmX2rKMI+Ldvh0LI0Xa9fgaEgtC5X38u+0WalEE5EhBv5LUZKRu+9bzkR71jl9kbI86ld/QLYf9Z js@mvp.gg"
-                   ]
-
-
 adminKeys :: User -> Property UnixLike
 adminKeys user = propertyList "admin keys" . toProps . map ($ user) $
                  [ tristanKeys
                  , jjKeys
                  , darrenKeys
-                 , williamKeys
                  ]
 
 
