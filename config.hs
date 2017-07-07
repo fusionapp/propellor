@@ -988,12 +988,16 @@ caddyfile = propertyList "Configuration for Caddy" $ props
 
 prometheusConfig :: Property (HasInfo + DebianLike)
 prometheusConfig = withPrivData src ctx $
-  \gettoken -> property' "Prometheus configuration" $
-              \p -> gettoken $ \token -> ensureProperty p $
-                                       "/srv/prometheus/prometheus.yml"
-                                       `File.hasContent`
-                                       cfg (privDataVal token)
+  \gettoken -> withPrivData src2 ctx $
+  \gettoken2 -> property' "Prometheus configuration" $
+  \p -> gettoken $
+  \token -> gettoken2 $
+  \token2 -> ensureProperty p $
+            "/srv/prometheus/prometheus.yml"
+            `File.hasContent`
+            cfg (privDataVal token)
   where src = Password "weave cloud token"
+        src2 = Password "Drone scrape token"
         ctx = Context "Fusion production"
         cfg token =
           [ "global:"
@@ -1010,6 +1014,13 @@ prometheusConfig = withPrivData src ctx $
           , "        refresh_interval: 15s"
           , "        type: A"
           , "        port: 9100"
+          , "  - job_name: 'Drone'"
+          , "    dns_sd_configs:"
+          , "      - names:"
+          , "        - drone-server.drone7"
+          , "        refresh_interval: 15s"
+          , "        type: A"
+          , "        port: 8000"
           , "remote_write:"
           , "  - url: https://cloud.weave.works/api/prom/push"
           , "    basic_auth:"
