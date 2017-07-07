@@ -995,11 +995,11 @@ prometheusConfig = withPrivData src ctx $
   \token2 -> ensureProperty p $
             "/srv/prometheus/prometheus.yml"
             `File.hasContent`
-            cfg (privDataVal token)
+            cfg (privDataVal token) (privDataVal token2)
   where src = Password "weave cloud token"
         src2 = Password "Drone scrape token"
         ctx = Context "Fusion production"
-        cfg token =
+        cfg token token2 =
           [ "global:"
           , "  external_labels:"
           , "    deployment: 'testing'"
@@ -1015,6 +1015,7 @@ prometheusConfig = withPrivData src ctx $
           , "        type: A"
           , "        port: 9100"
           , "  - job_name: 'Drone'"
+          , "    bearer_token: " <> token2
           , "    dns_sd_configs:"
           , "      - names:"
           , "        - drone-server.drone7"
