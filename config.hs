@@ -189,8 +189,6 @@ dockerOptions = propertyList "Docker options" $ props
   , "ExecStart="
   , unwords
     [ "ExecStart=/usr/bin/docker daemon -H fd://"
-    , "--registry-mirror https://scarlet.fusionapp.com:5002"
-    , "--userland-proxy=false"
     , "--log-driver=json-file"
     , "--log-opt max-size=10m"
     , "--log-opt max-file=5"
