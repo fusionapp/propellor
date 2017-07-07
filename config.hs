@@ -188,7 +188,7 @@ dockerOptions = propertyList "Docker options" $ props
   [ "[Service]"
   , "ExecStart="
   , unwords
-    [ "ExecStart=/usr/bin/docker daemon -H fd://"
+    [ "ExecStart=/usr/bin/dockerd -H fd://"
     , "--log-driver=json-file"
     , "--log-opt max-size=10m"
     , "--log-opt max-file=5"
