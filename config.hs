@@ -98,7 +98,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & "/etc/timezone" `File.hasContent` ["Africa/Johannesburg"]
              & Apt.installed ["mercurial", "git"]
              -- Upgraded Docker
-             & Apt.installed ["docker-engine"]
+             & Apt.installed ["docker-ce"]
              `requires` Apt.setSourcesListD ["deb [arch=amd64] https://download.docker.com/linux/debian jessie stable"] "docker"
              `requires` Apt.installed ["apt-transport-https"]
              `requires` Apt.trustsKey dockerKey
