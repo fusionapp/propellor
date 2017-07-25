@@ -84,7 +84,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & Systemd.running Systemd.networkd
        & Systemd.nspawned nginxPrimary
        & Systemd.nspawned apacheSvn
-       & Systemd.nspawned mailRelayContainer
+       ! Systemd.nspawned mailRelayContainer
        & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard origin/master && git clean -dfx && fab fusion.deploy"
@@ -366,12 +366,9 @@ standardSystem suite arch =
                   , "iftop"
                   ]
   where simpleRelay =
-          "/etc/ssmtp/ssmtp.conf" `File.hasContent`
-          [ "Root=dev@fusionapp.com"
-          , "Mailhub=smtp.fusionapp.com:587"
-          , "RewriteDomain=fusionapp.com"
-          , "FromLineOverride=yes"
-          ] `requires` Apt.installed ["ssmtp"]
+          "/etc/ssmtp/ssmtp.conf"
+          `File.hasPrivContent` anyContext
+          `requires` Apt.installed ["ssmtp"]
 
 
 standardNsSwitch :: Property UnixLike
