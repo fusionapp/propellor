@@ -3,6 +3,7 @@ import           Propellor
 import           Propellor.Base
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Apt as Apt
+import           Propellor.Property.Bootstrap
 import qualified Propellor.Property.Cron as Cron
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Git as Git
@@ -291,8 +292,8 @@ hetznerResolv =
 standardSystem :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
 standardSystem suite arch =
   propertyList "standard system" $ props
-  & bootstrapWith (Robustly Stack)
   & osDebian suite arch
+  & bootstrapWith (Robustly Stack)
   -- Can't turn this on because 127.0.1.1 in /etc/hosts is a problem
   -- & Hostname.sane
   & Hostname.searchDomain
