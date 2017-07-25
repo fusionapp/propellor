@@ -489,7 +489,7 @@ apacheSvn = Systemd.debContainer "apache-svn" $ props
 nginxPrimary :: Systemd.Container
 nginxPrimary =
   Systemd.debContainer "nginx-primary" $ props
-  & standardContainer (Stable "jessie") X86_64
+  & standardContainer (Stable "stretch") X86_64
   & File.dirExists "/etc/systemd/system/nginx.service.d"
   & "/etc/systemd/system/nginx.service.d/limits.conf" `File.hasContent`
   [ "[Service]"
