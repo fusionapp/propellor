@@ -83,7 +83,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & Apt.installed ["debootstrap"]
        & Systemd.running Systemd.networkd
        & Systemd.nspawned nginxPrimary
-       & Systemd.nspawned apacheSvn
+       ! Systemd.nspawned apacheSvn
        ! Systemd.nspawned mailRelayContainer
        & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
