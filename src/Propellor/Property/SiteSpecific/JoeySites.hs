@@ -22,10 +22,10 @@ import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
 import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
 import Utility.FileMode
+import Utility.Split
 
 import Data.List
 import System.Posix.Files
-import Data.String.Utils
 
 scrollBox :: Property (HasInfo + DebianLike)
 scrollBox = propertyList "scroll server" $ props
@@ -78,7 +78,8 @@ scrollBox = propertyList "scroll server" $ props
 		`onChange` Ssh.restarted
 	& User.shellSetTo (User "scroll") s
 	& User.hasPassword (User "scroll")
-	& Apt.serviceInstalledRunning "telnetd"
+	-- telnetd attracted password crackers, so disabled
+	& Apt.removed ["telnetd"]
 	& Apt.installed ["shellinabox"]
 	& File.hasContent "/etc/default/shellinabox"
 		[ "# Deployed by propellor"
@@ -227,23 +228,29 @@ gitServer hosts = propertyList "git.kitenet.net setup" $ props
 		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
 		`requires` Ssh.authorizedKeys (User "family") (Context "git.kitenet.net")
 		`requires` User.accountFor (User "family")
-	& Apt.installed ["git", "rsync", "gitweb"]
+	& Apt.installed ["git", "rsync", "cgit"]
 	& Apt.installed ["git-annex"]
 	& Apt.installed ["kgb-client"]
 	& File.hasPrivContentExposed "/etc/kgb-bot/kgb-client.conf" anyContext
 		`requires` File.dirExists "/etc/kgb-bot/"
 	& Git.daemonRunning "/srv/git"
-	& "/etc/gitweb.conf" `File.containsLines`
-		[ "$projectroot = '/srv/git';"
-		, "@git_base_url_list = ('git://git.kitenet.net', 'http://git.kitenet.net/git', 'https://git.kitenet.net/git', 'ssh://git.kitenet.net/srv/git');"
-		, "# disable snapshot download; overloads server"
-		, "$feature{'snapshot'}{'default'} = [];"
+	& "/etc/cgitrc" `File.hasContent`
+		[ "clone-url=https://git.joeyh.name/git/$CGIT_REPO_URL git://git.joeyh.name/$CGIT_REPO_URL"
+		, "css=/cgit-css/cgit.css"
+		, "logo=/cgit-css/cgit.png"
+		, "enable-http-clone=1"
+		, "root-title=Joey's git repositories"
+		, "root-desc="
+		, "enable-index-owner=0"
+		, "snapshots=tar.gz"
+		, "enable-git-config=1"
+		, "scan-path=/srv/git"
 		]
-		`describe` "gitweb configured"
-	-- Repos push on to github.
-	& Ssh.knownHost hosts "github.com" (User "joey")
-	-- I keep the website used for gitweb checked into git..
-	& Git.cloned (User "root") "/srv/git/joey/git.kitenet.net.git" "/srv/web/git.kitenet.net" Nothing
+		`describe` "cgit configured"
+	-- I keep the website used for git.kitenet.net/git.joeyh.name checked into git..
+	& Git.cloned (User "joey") "/srv/git/joey/git.kitenet.net.git" "/srv/web/git.kitenet.net" Nothing
+	-- Don't need global apache configuration for cgit.
+	! Apache.confEnabled "cgit"
 	& website "git.kitenet.net"
 	& website "git.joeyh.name"
 	& Apache.modEnabled "cgi"
@@ -313,9 +320,9 @@ apacheSite hn middle = Apache.siteEnabled hn $ apachecfg hn middle
 
 apachecfg :: HostName -> Apache.ConfigFile -> Apache.ConfigFile
 apachecfg hn middle =
-	[ "<VirtualHost *:"++show port++">"
+	[ "<VirtualHost *:" ++ val port ++ ">"
 	, "  ServerAdmin grue@joeyh.name"
-	, "  ServerName "++hn++":"++show port
+	, "  ServerName "++hn++":" ++ val port
 	]
 	++ middle ++
 	[ ""
@@ -328,7 +335,7 @@ apachecfg hn middle =
 	, "</VirtualHost>"
 	]
 	  where
-		port = 80 :: Int
+		port = Port 80
 
 gitAnnexDistributor :: Property (HasInfo + DebianLike)
 gitAnnexDistributor = combineProperties "git-annex distributor, including rsync server and signer" $ props
@@ -369,7 +376,7 @@ tmp = propertyList "tmp.joeyh.name" $ props
 -- (Obsolete; need to revert this.)
 pumpRss :: Property DebianLike
 pumpRss = Cron.job "pump rss" (Cron.Times "15 * * * *") (User "joey") "/srv/web/tmp.joeyh.name/"
-	"wget https://rss.io.jpope.org/feed/joeyh@identi.ca.atom -O pump.atom.new --no-check-certificate 2>/dev/null; sed 's/ & / /g' pump.atom.new > pump.atom"
+	"wget https://pump2rss.com/feed/joeyh@identi.ca.atom -O pump.atom.new --no-check-certificate 2>/dev/null; sed 's/ & / /g' pump.atom.new > pump.atom"
 
 ircBouncer :: Property (HasInfo + DebianLike)
 ircBouncer = propertyList "IRC bouncer" $ props
@@ -404,8 +411,6 @@ githubBackup = propertyList "github-backup box" $ props
 	& githubKeys
 	& Cron.niceJob "github-backup run" (Cron.Times "30 4 * * *") (User "joey")
 		"/home/joey/lib/backup" backupcmd
-	& Cron.niceJob "gitriddance" (Cron.Times "30 4 * * *") (User "joey")
-		"/home/joey/lib/backup" gitriddancecmd
   where
 	backupcmd = intercalate "&&" $
 		[ "mkdir -p github"
@@ -413,11 +418,6 @@ githubBackup = propertyList "github-backup box" $ props
 		, ". $HOME/.github-keys"
 		, "github-backup joeyh"
 		]
-	gitriddancecmd = intercalate "&&" $
-		[ "cd github"
-		, ". $HOME/.github-keys"
-		] ++ map gitriddance githubMirrors
-	gitriddance (r, msg) = "(cd " ++ r ++ " && gitriddance " ++ shellEscape msg ++ ")"
 
 githubKeys :: Property (HasInfo + UnixLike)
 githubKeys =
@@ -425,19 +425,6 @@ githubKeys =
 	in File.hasPrivContent f anyContext
 		`onChange` File.ownerGroup f (User "joey") (Group "joey")
 
-
--- these repos are only mirrored on github, I don't want
--- all the proprietary features
-githubMirrors :: [(String, String)]
-githubMirrors =
-	[ ("ikiwiki", plzuseurl "http://ikiwiki.info/todo/")
-	, ("git-annex", plzuseurl "http://git-annex.branchable.com/todo/")
-	, ("myrepos", plzuseurl "http://myrepos.branchable.com/todo/")
-	, ("propellor", plzuseurl "http://propellor.branchable.com/todo/")
-	, ("etckeeper", plzuseurl "http://etckeeper.branchable.com/todo/")
-	]
-  where
-	plzuseurl u = "Please submit changes to " ++ u ++ " instead of using github pull requests, which are not part of my workflow. Just open a todo item there and link to a git repository containing your changes. Did you know, git is a distributed system? The git repository doesn't even need to be on github! Please send any complaints to Github; they don't allow turning off pull requests or redirecting them elsewhere.  -- A robot acting on behalf of Joey Hess"
 
 rsyncNetBackup :: [Host] -> Property DebianLike
 rsyncNetBackup hosts = Cron.niceJob "rsync.net copied in daily" (Cron.Times "30 5 * * *")
@@ -513,6 +500,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 	& Fail2Ban.jailEnabled "postfix-sasl"
 	& "/etc/default/saslauthd" `File.containsLine` "MECHANISMS=sasldb"
 	& Postfix.saslPasswdSet "kitenet.net" (User "errol")
+	& Postfix.saslPasswdSet "kitenet.net" (User "joey")
 
 	& Apt.installed ["maildrop"]
 	& "/etc/maildroprc" `File.hasContent`
@@ -531,7 +519,6 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 
 	& "/etc/aliases" `File.hasPrivContentExposed` ctx
 		`onChange` Postfix.newaliases
-	& hasJoeyCAChain
 	& hasPostfixCert ctx
 
 	& "/etc/postfix/mydomain" `File.containsLines`
@@ -578,7 +565,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "# Filter out client relay lines from headers."
 		, "header_checks = pcre:$config_directory/obscure_client_relay.pcre"
 
-		, "# Password auth for relaying (used by errol)"
+		, "# Password auth for relaying"
 		, "smtpd_sasl_auth_enable = yes"
 		, "smtpd_sasl_security_options = noanonymous"
 		, "smtpd_sasl_local_domain = kitenet.net"
@@ -586,8 +573,8 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "# Enable postgrey."
 		, "smtpd_recipient_restrictions = permit_tls_clientcerts,permit_sasl_authenticated,,permit_mynetworks,reject_unauth_destination,check_policy_service inet:127.0.0.1:10023"
 
-		, "# Enable spamass-milter, amavis-milter, opendkim"
-		, "smtpd_milters = unix:/spamass/spamass.sock unix:amavis/amavis.sock inet:localhost:8891"
+		, "# Enable spamass-milter, amavis-milter (opendkim is not enabled because it causes mails forwarded from eg gmail to be rejected)"
+		, "smtpd_milters = unix:/spamass/spamass.sock unix:amavis/amavis.sock"
 		, "# opendkim is used for outgoing mail"
 		, "non_smtpd_milters = inet:localhost:8891"
 		, "milter_connect_macros = j {daemon_name} v {if_name} _"
@@ -670,24 +657,6 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		(Postfix.InetService Nothing "ssmtp")
 		"smtpd" Postfix.defServiceOpts
 
--- Configures postfix to relay outgoing mail to kitenet.net, with
--- verification via tls cert.
-postfixClientRelay :: Context -> Property (HasInfo + DebianLike)
-postfixClientRelay ctx = Postfix.mainCfFile `File.containsLines`
-	-- Using smtps not smtp because more networks firewall smtp
-	[ "relayhost = kitenet.net:smtps"
-	, "smtp_tls_CAfile = /etc/ssl/certs/joeyca.pem"
-	, "smtp_tls_cert_file = /etc/ssl/certs/postfix.pem"
-	, "smtp_tls_key_file = /etc/ssl/private/postfix.pem"
-	, "smtp_tls_loglevel = 0"
-	, "smtp_use_tls = yes"
-	]
-	`describe` "postfix client relay"
-	`onChange` Postfix.dedupMainCf
-	`onChange` Postfix.reloaded
-	`requires` hasJoeyCAChain
-	`requires` hasPostfixCert ctx
-
 -- Configures postfix to have the dkim milter, and no other milters.
 dkimMilter :: Property (HasInfo + DebianLike)
 dkimMilter = Postfix.mainCfFile `File.containsLines`
@@ -712,6 +681,10 @@ dkimInstalled = go `onChange` Service.restarted "opendkim"
 		& File.ownerGroup "/etc/mail/dkim.key" (User "opendkim") (Group "opendkim")
 		& "/etc/default/opendkim" `File.containsLine`
 			"SOCKET=\"inet:8891@localhost\""
+			`onChange` 
+				(cmdProperty "/lib/opendkim/opendkim.service.generate" []
+				`assume` MadeChange)
+			`onChange` Service.restarted "opendkim"
 		& "/etc/opendkim.conf" `File.containsLines`
 			[ "KeyFile /etc/mail/dkim.key"
 			, "SubDomains yes"
@@ -725,9 +698,22 @@ dkimInstalled = go `onChange` Service.restarted "opendkim"
 domainKey :: (BindDomain, Record)
 domainKey = (RelDomain "mail._domainkey", TXT "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCc+/rfzNdt5DseBBmfB3C6sVM7FgVvf4h1FeCfyfwPpVcmPdW6M2I+NtJsbRkNbEICxiP6QY2UM0uoo9TmPqLgiCCG2vtuiG6XMsS0Y/gGwqKM7ntg/7vT1Go9vcquOFFuLa5PnzpVf8hB9+PMFdS4NPTvWL2c5xxshl/RJzICnQIDAQAB")
 
-hasJoeyCAChain :: Property (HasInfo + UnixLike)
-hasJoeyCAChain = "/etc/ssl/certs/joeyca.pem" `File.hasPrivContentExposed`
-	Context "joeyca.pem"
+postfixSaslPasswordClient :: Property (HasInfo + DebianLike)
+postfixSaslPasswordClient = combineProperties "postfix uses SASL password to authenticate with smarthost" $ props
+	& Postfix.satellite
+	& Postfix.mappedFile "/etc/postfix/sasl_passwd" 
+		(`File.hasPrivContent` (Context "kitenet.net"))
+	& Postfix.mainCfFile `File.containsLines`
+		[ "# TLS setup for SASL auth to kite"
+		, "smtp_sasl_auth_enable = yes"
+		, "smtp_tls_security_level = encrypt"
+		, "smtp_sasl_tls_security_options = noanonymous"
+		, "relayhost = [kitenet.net]"
+		, "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
+		, "# kite's fingerprint"
+		, "smtp_tls_fingerprint_cert_match = 13:B0:0C:F3:11:83:A5:EB:A9:37:C6:C5:ED:16:60:86"
+		]
+		`onChange` Postfix.reloaded
 
 hasPostfixCert :: Context -> Property (HasInfo + UnixLike)
 hasPostfixCert ctx = combineProperties "postfix tls cert installed" $ props
@@ -743,7 +729,73 @@ legacyWebSites = propertyList "legacy web sites" $ props
 	& Apache.modEnabled "cgi"
 	& Apache.modEnabled "speling"
 	& userDirHtml
-	& Apache.httpsVirtualHost' "kitenet.net" "/var/www" letos
+	& Apache.httpsVirtualHost' "kitenet.net" "/var/www" letos kitenetcfg
+	& alias "anna.kitenet.net"
+	& apacheSite "anna.kitenet.net"
+		[ "DocumentRoot /home/anna/html"
+		, "<Directory /home/anna/html/>"
+		, "  Options Indexes ExecCGI"
+		, "  AllowOverride None"
+		, Apache.allowAll
+		, "</Directory>"
+		]
+	& alias "sows-ear.kitenet.net"
+	& alias "www.sows-ear.kitenet.net"
+	& apacheSite "sows-ear.kitenet.net"
+		[ "ServerAlias www.sows-ear.kitenet.net"
+		, "DocumentRoot /srv/web/sows-ear.kitenet.net"
+		, "<Directory /srv/web/sows-ear.kitenet.net>"
+		, "  Options FollowSymLinks"
+		, "  AllowOverride None"
+		, Apache.allowAll
+		, "</Directory>"
+		, "RewriteEngine On"
+		, "RewriteRule .* http://www.sowsearpoetry.org/ [L]"
+		]
+	& alias "wortroot.kitenet.net"
+	& alias "www.wortroot.kitenet.net"
+	& apacheSite "wortroot.kitenet.net"
+		[ "ServerAlias www.wortroot.kitenet.net"
+		, "DocumentRoot /srv/web/wortroot.kitenet.net"
+		, "<Directory /srv/web/wortroot.kitenet.net>"
+		, "  Options FollowSymLinks"
+		, "  AllowOverride None"
+		, Apache.allowAll
+		, "</Directory>"
+		]
+	& alias "creeksidepress.com"
+	& apacheSite "creeksidepress.com"
+		[ "ServerAlias www.creeksidepress.com"
+		, "DocumentRoot /srv/web/www.creeksidepress.com"
+		, "<Directory /srv/web/www.creeksidepress.com>"
+		, "  Options FollowSymLinks"
+		, "  AllowOverride None"
+		, Apache.allowAll
+		, "</Directory>"
+		]
+	& alias "joey.kitenet.net"
+	& apacheSite "joey.kitenet.net"
+		[ "DocumentRoot /var/www"
+		, "<Directory /var/www/>"
+		, "  Options Indexes ExecCGI"
+		, "  AllowOverride None"
+		, Apache.allowAll
+		, "</Directory>"
+
+		, "RewriteEngine On"
+
+		, "# Old ikiwiki filenames for joey's wiki."
+		, "rewritecond $1 !.*/index$"
+		, "rewriterule (.+).html$ http://joeyh.name/$1/ [l]"
+
+		, "rewritecond $1 !.*/index$"
+		, "rewriterule (.+).rss$ http://joeyh.name/$1/index.rss [l]"
+
+		, "# Redirect all to joeyh.name."
+		, "rewriterule (.*) http://joeyh.name$1 [r]"
+		]
+  where
+	kitenetcfg =
 		-- /var/www is empty
 		[ "DocumentRoot /var/www"
 		, "<Directory /var/www>"
@@ -830,70 +882,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "rewriterule /~kyle/family/wiki/(.*).rss http://macleawiki.branchable.com/$1/index.rss [L]"
 		, "rewriterule /~kyle/family/wiki(.*) http://macleawiki.branchable.com$1 [L]"
 		]
-	& alias "anna.kitenet.net"
-	& apacheSite "anna.kitenet.net"
-		[ "DocumentRoot /home/anna/html"
-		, "<Directory /home/anna/html/>"
-		, "  Options Indexes ExecCGI"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		]
-	& alias "sows-ear.kitenet.net"
-	& alias "www.sows-ear.kitenet.net"
-	& apacheSite "sows-ear.kitenet.net"
-		[ "ServerAlias www.sows-ear.kitenet.net"
-		, "DocumentRoot /srv/web/sows-ear.kitenet.net"
-		, "<Directory /srv/web/sows-ear.kitenet.net>"
-		, "  Options FollowSymLinks"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		, "RewriteEngine On"
-		, "RewriteRule .* http://www.sowsearpoetry.org/ [L]"
-		]
-	& alias "wortroot.kitenet.net"
-	& alias "www.wortroot.kitenet.net"
-	& apacheSite "wortroot.kitenet.net"
-		[ "ServerAlias www.wortroot.kitenet.net"
-		, "DocumentRoot /srv/web/wortroot.kitenet.net"
-		, "<Directory /srv/web/wortroot.kitenet.net>"
-		, "  Options FollowSymLinks"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		]
-	& alias "creeksidepress.com"
-	& apacheSite "creeksidepress.com"
-		[ "ServerAlias www.creeksidepress.com"
-		, "DocumentRoot /srv/web/www.creeksidepress.com"
-		, "<Directory /srv/web/www.creeksidepress.com>"
-		, "  Options FollowSymLinks"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		]
-	& alias "joey.kitenet.net"
-	& apacheSite "joey.kitenet.net"
-		[ "DocumentRoot /var/www"
-		, "<Directory /var/www/>"
-		, "  Options Indexes ExecCGI"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-
-		, "RewriteEngine On"
-
-		, "# Old ikiwiki filenames for joey's wiki."
-		, "rewritecond $1 !.*/index$"
-		, "rewriterule (.+).html$ http://joeyh.name/$1/ [l]"
-
-		, "rewritecond $1 !.*/index$"
-		, "rewriterule (.+).rss$ http://joeyh.name/$1/index.rss [l]"
-
-		, "# Redirect all to joeyh.name."
-		, "rewriterule (.*) http://joeyh.name$1 [r]"
-		]
 
 userDirHtml :: Property DebianLike
 userDirHtml = File.fileProperty "apache userdir is html" (map munge) conf
@@ -907,7 +895,7 @@ userDirHtml = File.fileProperty "apache userdir is html" (map munge) conf
 -- <http://joeyh.name/blog/entry/a_programmable_alarm_clock_using_systemd/>
 --
 -- oncalendar example value: "*-*-* 7:30"
-alarmClock :: String -> User -> String -> Property DebianLike
+alarmClock :: String -> User -> String -> Property Linux
 alarmClock oncalendar (User user) command = combineProperties "goodmorning timer installed" $ props
 	& "/etc/systemd/system/goodmorning.timer" `File.hasContent`
 		[ "[Unit]"

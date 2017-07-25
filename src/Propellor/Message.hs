@@ -14,7 +14,6 @@ module Propellor.Message (
 	infoMessage,
 	errorMessage,
 	stopPropellorMessage,
-	processChainOutput,
 	messagesDone,
 	createProcessConcurrent,
 	withConcurrentOutput,
@@ -31,7 +30,6 @@ import Prelude
 
 import Propellor.Types
 import Propellor.Types.Exception
-import Utility.PartialPrelude
 import Utility.Monad
 import Utility.Exception
 
@@ -73,7 +71,7 @@ actionMessage = actionMessage' Nothing
 actionMessageOn :: (MonadIO m, MonadMask m, ActionResult r) => HostName -> Desc -> m r -> m r
 actionMessageOn = actionMessage' . Just
 
-actionMessage' :: (MonadIO m, MonadMask m, ActionResult r) => Maybe HostName -> Desc -> m r -> m r
+actionMessage' :: (MonadIO m, ActionResult r) => Maybe HostName -> Desc -> m r -> m r
 actionMessage' mhn desc a = do
 	liftIO $ outputConcurrent
 		=<< whenConsole (setTitleCode $ "propellor: " ++ desc)
@@ -102,7 +100,7 @@ actionMessage' mhn desc a = do
 
 warningMessage :: MonadIO m => String -> m ()
 warningMessage s = liftIO $
-	outputConcurrent =<< colorLine Vivid Magenta ("** warning: " ++ s)
+	errorConcurrent =<< colorLine Vivid Magenta ("** warning: " ++ s)
 
 infoMessage :: MonadIO m => [String] -> m ()
 infoMessage ls = liftIO $ outputConcurrent $ concatMap (++ "\n") ls
@@ -113,7 +111,7 @@ infoMessage ls = liftIO $ outputConcurrent $ concatMap (++ "\n") ls
 -- property fail. Propellor will continue to the next property.
 errorMessage :: MonadIO m => String -> m a
 errorMessage s = liftIO $ do
-	outputConcurrent =<< colorLine Vivid Red ("** error: " ++ s)
+	errorConcurrent =<< colorLine Vivid Red ("** error: " ++ s)
 	-- Normally this exception gets caught and is not displayed,
 	-- and propellor continues. So it's only displayed if not
 	-- caught, and so we say, cannot continue.
@@ -141,27 +139,6 @@ colorLine intensity color msg = concat <$> sequence
 	-- the color set and reset happen in the same line.
 	, pure "\n"
 	]
-
--- | Reads and displays each line from the Handle, except for the last line
--- which is a Result.
-processChainOutput :: Handle -> IO Result
-processChainOutput h = go Nothing
-  where
-	go lastline = do
-		v <- catchMaybeIO (hGetLine h)
-		case v of
-			Nothing -> case lastline of
-				Nothing -> do
-					return FailedChange
-				Just l -> case readish l of
-					Just r -> pure r
-					Nothing -> do
-						outputConcurrent (l ++ "\n")
-						return FailedChange
-			Just s -> do
-				outputConcurrent $
-					maybe "" (\l -> if null l then "" else l ++ "\n") lastline
-				go (Just s)
 
 -- | Called when all messages about properties have been printed.
 messagesDone :: IO ()

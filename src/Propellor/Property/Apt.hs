@@ -1,9 +1,11 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Propellor.Property.Apt where
 
 import Data.Maybe
 import Data.List
+import Data.Typeable
 import System.IO
 import Control.Monad
 import Control.Applicative
@@ -13,6 +15,37 @@ import Propellor.Base
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Service as Service
 import Propellor.Property.File (Line)
+import Propellor.Types.Info
+
+data HostMirror = HostMirror Url
+	deriving (Eq, Show, Typeable)
+
+-- | Indicate host's preferred apt mirror (e.g. an apt cacher on the host's LAN)
+mirror :: Url -> Property (HasInfo + UnixLike)
+mirror u = pureInfoProperty (u ++ " apt mirror selected")
+	     (InfoVal (HostMirror u))
+
+getMirror :: Propellor Url
+getMirror = do
+	mirrorInfo <- getMirrorInfo
+	osInfo <- getOS
+	return $ case (osInfo, mirrorInfo) of
+		(_, Just (HostMirror u)) -> u
+		(Just (System (Debian _ _) _), _) ->
+			"http://deb.debian.org/debian"
+		(Just (System (Buntish _) _), _) ->
+			"mirror://mirrors.ubuntu.com/"
+		(Just (System dist _), _) ->
+			error ("no Apt mirror defined for " ++ show dist)
+		_ -> error "no Apt mirror defined for this host or OS"
+  where
+	getMirrorInfo :: Propellor (Maybe HostMirror)
+	getMirrorInfo = fromInfoVal <$> askInfo
+
+withMirror :: Desc -> (Url -> Property DebianLike) -> Property DebianLike
+withMirror desc mkp = property' desc $ \w -> do
+	u <- getMirror
+	ensureProperty w (mkp u)
 
 sourcesList :: FilePath
 sourcesList = "/etc/apt/sources.list"
@@ -37,8 +70,8 @@ stableUpdatesSuite (Stable s) = Just (s ++ "-updates")
 stableUpdatesSuite _ = Nothing
 
 debLine :: String -> Url -> [Section] -> Line
-debLine suite mirror sections = unwords $
-	["deb", mirror, suite] ++ sections
+debLine suite url sections = unwords $
+	["deb", url, suite] ++ sections
 
 srcLine :: Line -> Line
 srcLine l = case words l of
@@ -61,11 +94,8 @@ binandsrc url suite = catMaybes
 		bs <- backportSuite suite
 		return $ debLine bs url stdSections
 
-debCdn :: SourcesGenerator
-debCdn = binandsrc "http://httpredir.debian.org/debian"
-
-kernelOrg :: SourcesGenerator
-kernelOrg = binandsrc "http://mirrors.kernel.org/debian"
+stdArchiveLines :: Propellor SourcesGenerator
+stdArchiveLines = return . binandsrc =<< getMirror
 
 -- | Only available for Stable and Testing
 securityUpdates :: SourcesGenerator
@@ -75,11 +105,9 @@ securityUpdates suite
 		in [l, srcLine l]
 	| otherwise = []
 
--- | Makes sources.list have a standard content using the Debian mirror CDN,
--- with the Debian suite configured by the os.
---
--- Since the CDN is sometimes unreliable, also adds backup lines using
--- kernel.org.
+-- | Makes sources.list have a standard content using the Debian mirror CDN
+-- (or other host specified using the `mirror` property), with the
+-- Debian suite configured by the os.
 stdSourcesList :: Property Debian
 stdSourcesList = withOS "standard sources.list" $ \w o -> case o of
 	(Just (System (Debian _ suite) _)) ->
@@ -94,11 +122,62 @@ stdSourcesListFor suite = stdSourcesList' suite []
 -- Note that if a Property needs to enable an apt source, it's better
 -- to do so via a separate file in </etc/apt/sources.list.d/>
 stdSourcesList' :: DebianSuite -> [SourcesGenerator] -> Property Debian
-stdSourcesList' suite more = tightenTargets $ setSourcesList
-	(concatMap (\gen -> gen suite) generators)
-	`describe` ("standard sources.list for " ++ show suite)
+stdSourcesList' suite more = tightenTargets $
+	withMirror desc $ \u -> setSourcesList
+		(concatMap (\gen -> gen suite) (generators u))
   where
-	generators = [debCdn, kernelOrg, securityUpdates] ++ more
+	generators u = [binandsrc u, securityUpdates] ++ more
+	desc = ("standard sources.list for " ++ show suite)
+
+type PinPriority = Int
+
+-- | Adds an apt source for a suite, and pins that suite to a given pin value
+-- (see apt_preferences(5)).  Revert to drop the source and unpin the suite.
+--
+-- If the requested suite is the host's OS suite, the suite is pinned, but no
+-- source is added.  That apt source should already be available, or you can use
+-- a property like 'Apt.stdSourcesList'.
+suiteAvailablePinned
+	:: DebianSuite
+	-> PinPriority
+	-> RevertableProperty Debian Debian
+suiteAvailablePinned s pin = available <!> unavailable
+  where
+	available :: Property Debian
+	available = tightenTargets $ combineProperties (desc True) $ props
+		& File.hasContent prefFile (suitePinBlock "*" s pin)
+		& setSourcesFile
+
+	unavailable :: Property Debian
+	unavailable = tightenTargets $ combineProperties (desc False) $ props
+		& File.notPresent sourcesFile
+			`onChange` update
+		& File.notPresent prefFile
+
+	setSourcesFile :: Property Debian
+	setSourcesFile = tightenTargets $ withMirror (desc True) $ \u ->
+		withOS (desc True) $ \w o -> case o of
+			(Just (System (Debian _ hostSuite) _))
+				| s /= hostSuite -> ensureProperty w $
+					File.hasContent sourcesFile (sources u)
+					`onChange` update
+			_ -> noChange
+
+	-- Unless we are pinning a backports suite, filter out any backports
+	-- sources that were added by our generators.  The user probably doesn't
+	-- want those to be pinned to the same value
+	sources u = dropBackports $ concatMap (\gen -> gen s) (generators u)
+	  where
+		dropBackports
+			| "-backports" `isSuffixOf` (showSuite s) = id
+			| otherwise = filter (not . isInfixOf "-backports")
+
+	generators u = [binandsrc u, securityUpdates]
+	prefFile = "/etc/apt/preferences.d/20" ++ showSuite s ++ ".pref"
+	sourcesFile = "/etc/apt/sources.list.d/" ++ showSuite s ++ ".list"
+
+	desc True = "Debian " ++ showSuite s ++ " pinned, priority " ++ show pin
+	desc False = "Debian " ++ showSuite s ++ " not pinned"
 
 setSourcesList :: [Line] -> Property DebianLike
 setSourcesList ls = sourcesList `File.hasContent` ls `onChange` update
@@ -195,6 +274,50 @@ buildDepIn dir = cmdPropertyEnv "sh" ["-c", cmd] noninteractiveEnv
 	`requires` installedMin ["devscripts", "equivs"]
   where
 	cmd = "cd '" ++ dir ++ "' && mk-build-deps debian/control --install --tool 'apt-get -y --no-install-recommends' --remove"
+
+-- | The name of a package, a glob to match the names of packages, or a regexp
+-- surrounded by slashes to match the names of packages.  See
+-- apt_preferences(5), "Regular expressions and glob(7) syntax"
+type AptPackagePref = String
+
+-- | Pins a list of packages, package wildcards and/or regular expressions to a
+-- list of suites and corresponding pin priorities (see apt_preferences(5)).
+-- Revert to unpin.
+--
+-- Each package, package wildcard or regular expression will be pinned to all of
+-- the specified suites.
+--
+-- Note that this will have no effect unless there is an apt source for each of
+-- the suites.  One way to add an apt source is 'Apt.suiteAvailablePinned'.
+--
+-- For example, to obtain Emacs Lisp addon packages not present in your release
+-- of Debian from testing, falling back to sid if they're not available in
+-- testing, you could use
+--
+--  > & Apt.suiteAvailablePinned Testing (-10)
+--  > & Apt.suiteAvailablePinned Unstable (-10)
+--  > & ["elpa-*"] `Apt.pinnedTo` [(Testing, 100), (Unstable, 50)]
+pinnedTo
+	:: [AptPackagePref]
+	-> [(DebianSuite, PinPriority)]
+	-> RevertableProperty Debian Debian
+pinnedTo ps pins = mconcat (map (\p -> pinnedTo' p pins) ps)
+	`describe` unwords (("pinned to " ++ showSuites):ps)
+  where
+	showSuites = intercalate "," $ showSuite . fst <$> pins
+
+pinnedTo'
+	:: AptPackagePref
+	-> [(DebianSuite, PinPriority)]
+	-> RevertableProperty Debian Debian
+pinnedTo' p pins =
+	(tightenTargets $ prefFile `File.hasContent` prefs)
+	<!> (tightenTargets $ File.notPresent prefFile)
+  where
+	prefs = foldr step [] pins
+	step (suite, pin) ls = ls ++ suitePinBlock p suite pin ++ [""]
+	prefFile = "/etc/apt/preferences.d/10propellor_"
+		++ File.configFileName p <.> "pref"
 
 -- | Package installation may fail becuse the archive has changed.
 -- Run an update in that case and retry.
@@ -348,6 +471,25 @@ hasForeignArch arch = check notAdded (add `before` update)
 	notAdded = (notElem arch . lines) <$> readProcess "dpkg" ["--print-foreign-architectures"]
 	add = cmdProperty "dpkg" ["--add-architecture", arch]
 		`assume` MadeChange
+
+-- | Disable the use of PDiffs for machines with high-bandwidth connections.
+noPDiffs :: Property DebianLike
+noPDiffs = tightenTargets $ "/etc/apt/apt.conf.d/20pdiffs" `File.hasContent`
+	[ "Acquire::PDiffs \"false\";" ]
+
+suitePin :: DebianSuite -> String
+suitePin s = prefix s ++ showSuite s
+  where
+	prefix (Stable _) = "n="
+	prefix _ = "a="
+
+suitePinBlock :: AptPackagePref -> DebianSuite -> PinPriority -> [Line]
+suitePinBlock p suite pin =
+	[ "Explanation: This file added by propellor"
+	, "Package: " ++ p
+	, "Pin: release " ++ suitePin suite
+	, "Pin-Priority: " ++ val pin
+	]
 
 dpkgStatus :: FilePath
 dpkgStatus = "/var/lib/dpkg/status"

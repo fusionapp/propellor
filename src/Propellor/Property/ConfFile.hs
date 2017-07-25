@@ -9,8 +9,10 @@ module Propellor.Property.ConfFile (
 	IniSection,
 	IniKey,
 	containsIniSetting,
+	lacksIniSetting,
 	hasIniSection,
 	lacksIniSection,
+	iniFileContains,
 ) where
 
 import Propellor.Base
@@ -92,6 +94,19 @@ containsIniSetting f (header, key, value) = adjustIniSection
 	go (l:ls)  = if isKeyVal l then confline : ls else l : go ls
 	isKeyVal x = (filter (/= ' ') . takeWhile (/= '=')) x `elem` [key, '#':key]
 
+-- | Removes a key=value setting from a section of an .ini file.
+-- Note that the section heading is left in the file, so this is not a
+-- perfect reversion of containsIniSetting.
+lacksIniSetting :: FilePath -> (IniSection, IniKey, String) -> Property UnixLike
+lacksIniSetting f (header, key, value) = adjustIniSection
+	(f ++ " section [" ++ header ++ "] lacks " ++ key ++ "=" ++ value)
+	header
+	(filter (/= confline))
+	id
+	f
+  where
+	confline = key ++ "=" ++ value
+
 -- | Ensures that a .ini file exists and contains a section
 -- with a given key=value list of settings.
 hasIniSection :: FilePath -> IniSection -> [(IniKey, String)] -> Property UnixLike
@@ -114,3 +129,13 @@ lacksIniSection f header = adjustIniSection
 	(const []) -- remove all lines of section
 	id -- add no lines if section is missing
 	f
+
+-- | Specifies the whole content of a .ini file.
+--
+-- Revertijg this causes the file not to exist.
+iniFileContains :: FilePath -> [(IniSection, [(IniKey, String)])] -> RevertableProperty UnixLike UnixLike
+iniFileContains f l = f `hasContent` content <!> notPresent f
+  where
+	content = concatMap sectioncontent l
+	sectioncontent (section, keyvalues) = iniHeader section :
+		map (\(key, value) -> key ++ "=" ++ value) keyvalues

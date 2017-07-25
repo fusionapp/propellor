@@ -10,7 +10,12 @@ installed :: Property DebianLike
 installed = Apt.installed ["lightdm"]
 
 -- | Configures LightDM to skip the login screen and autologin as a user.
-autoLogin :: User -> Property UnixLike
-autoLogin (User u) = "/etc/lightdm/lightdm.conf" `ConfFile.containsIniSetting`
-	("SeatDefaults", "autologin-user", u)
-	`describe` "lightdm autologin"
+autoLogin :: User -> RevertableProperty DebianLike DebianLike
+autoLogin (User u) = (setup <!> cleanup)
+	`describe` ("lightdm autologin for " ++ u)
+  where
+	cf = "/etc/lightdm/lightdm.conf"
+	setting = ("Seat:*", "autologin-user", u)
+	setup = cf `ConfFile.containsIniSetting` setting
+		`requires` installed
+	cleanup = tightenTargets $ cf `ConfFile.lacksIniSetting` setting

@@ -1,6 +1,6 @@
 {- GHC File system encoding handling.
  -
- - Copyright 2012-2014 Joey Hess <id@joeyh.name>
+ - Copyright 2012-2016 Joey Hess <id@joeyh.name>
  -
  - License: BSD-2-clause
  -}
@@ -9,9 +9,9 @@
 {-# OPTIONS_GHC -fno-warn-tabs #-}
 
 module Utility.FileSystemEncoding (
+	useFileSystemEncoding,
 	fileEncoding,
 	withFilePath,
-	md5FilePath,
 	decodeBS,
 	encodeBS,
 	decodeW8,
@@ -19,7 +19,10 @@ module Utility.FileSystemEncoding (
 	encodeW8NUL,
 	decodeW8NUL,
 	truncateFilePath,
-	setConsoleEncoding,
+	s2w8,
+	w82s,
+	c2w8,
+	w82c,
 ) where
 
 import qualified GHC.Foreign as GHC
@@ -27,29 +30,45 @@ import qualified GHC.IO.Encoding as Encoding
 import Foreign.C
 import System.IO
 import System.IO.Unsafe
-import qualified Data.Hash.MD5 as MD5
 import Data.Word
-import Data.Bits.Utils
 import Data.List
-import Data.List.Utils
 import qualified Data.ByteString.Lazy as L
 #ifdef mingw32_HOST_OS
 import qualified Data.ByteString.Lazy.UTF8 as L8
 #endif
 
 import Utility.Exception
+import Utility.Split
 
-{- Sets a Handle to use the filesystem encoding. This causes data
- - written or read from it to be encoded/decoded the same
- - as ghc 7.4 does to filenames etc. This special encoding
- - allows "arbitrary undecodable bytes to be round-tripped through it".
+{- Makes all subsequent Handles that are opened, as well as stdio Handles,
+ - use the filesystem encoding, instead of the encoding of the current
+ - locale.
+ -
+ - The filesystem encoding allows "arbitrary undecodable bytes to be
+ - round-tripped through it". This avoids encoded failures when data is not
+ - encoded matching the current locale.
+ -
+ - Note that code can still use hSetEncoding to change the encoding of a
+ - Handle. This only affects the default encoding.
  -}
+useFileSystemEncoding :: IO ()
+useFileSystemEncoding = do
+#ifndef mingw32_HOST_OS
+	e <- Encoding.getFileSystemEncoding
+#else
+	{- The file system encoding does not work well on Windows,
+	 - and Windows only has utf FilePaths anyway. -}
+	let e = Encoding.utf8
+#endif
+	hSetEncoding stdin e
+	hSetEncoding stdout e
+	hSetEncoding stderr e
+	Encoding.setLocaleEncoding e	
+
 fileEncoding :: Handle -> IO ()
 #ifndef mingw32_HOST_OS
 fileEncoding h = hSetEncoding h =<< Encoding.getFileSystemEncoding
 #else
-{- The file system encoding does not work well on Windows,
- - and Windows only has utf FilePaths anyway. -}
 fileEncoding h = hSetEncoding h Encoding.utf8
 #endif
 
@@ -82,10 +101,6 @@ _encodeFilePath fp = unsafePerformIO $ do
 	enc <- Encoding.getFileSystemEncoding
 	GHC.withCString enc fp (GHC.peekCString Encoding.char8)
 		`catchNonAsync` (\_ -> return fp)
-
-{- Encodes a FilePath into a Md5.Str, applying the filesystem encoding. -}
-md5FilePath :: FilePath -> MD5.Str
-md5FilePath = MD5.Str . _encodeFilePath
 
 {- Decodes a ByteString into a FilePath, applying the filesystem encoding. -}
 decodeBS :: L.ByteString -> FilePath
@@ -127,14 +142,26 @@ decodeW8 = s2w8 . _encodeFilePath
 
 {- Like encodeW8 and decodeW8, but NULs are passed through unchanged. -}
 encodeW8NUL :: [Word8] -> FilePath
-encodeW8NUL = intercalate nul . map encodeW8 . split (s2w8 nul)
+encodeW8NUL = intercalate [nul] . map encodeW8 . splitc (c2w8 nul)
   where
-	nul = ['\NUL']
+	nul = '\NUL'
 
 decodeW8NUL :: FilePath -> [Word8]
-decodeW8NUL = intercalate (s2w8 nul) . map decodeW8 . split nul
+decodeW8NUL = intercalate [c2w8 nul] . map decodeW8 . splitc nul
   where
-	nul = ['\NUL']
+	nul = '\NUL'
+
+c2w8 :: Char -> Word8
+c2w8 = fromIntegral . fromEnum
+
+w82c :: Word8 -> Char
+w82c = toEnum . fromIntegral
+
+s2w8 :: String -> [Word8]
+s2w8 = map c2w8
+
+w82s :: [Word8] -> String
+w82s = map w82c
 
 {- Truncates a FilePath to the given number of bytes (or less),
  - as represented on disk.
@@ -165,10 +192,3 @@ truncateFilePath n = reverse . go [] n . L8.fromString
 					else go (c:coll) (cnt - x') (L8.drop 1 bs)
 			_ -> coll
 #endif
-
-{- This avoids ghc's output layer crashing on invalid encoded characters in
- - filenames when printing them out. -}
-setConsoleEncoding :: IO ()
-setConsoleEncoding = do
-	fileEncoding stdout
-	fileEncoding stderr

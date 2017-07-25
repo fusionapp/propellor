@@ -1,6 +1,6 @@
 Name: propellor
-Version: 3.2.0
-Cabal-Version: >= 1.8
+Version: 4.5.0
+Cabal-Version: >= 1.20
 License: BSD2
 Maintainer: Joey Hess <id@joeyh.name>
 Author: Joey Hess
@@ -36,40 +36,49 @@ Description:
  It is configured using haskell.
 
 Executable propellor
+  Default-Language: Haskell98
   Main-Is: wrapper.hs
   GHC-Options: -threaded -Wall -fno-warn-tabs -O0
-  Extensions: TypeOperators
+  if impl(ghc >= 8.0)
+    GHC-Options: -fno-warn-redundant-constraints
+  Default-Extensions: TypeOperators
   Hs-Source-Dirs: src
   Build-Depends:
     -- propellor needs to support the ghc shipped in Debian stable,
     -- and also only depends on packages in Debian stable.
     base >= 4.5, base < 5,
-    MissingH, directory, filepath, IfElse, process, bytestring, hslogger,
+    directory, filepath, IfElse, process, bytestring, hslogger, split,
     unix, unix-compat, ansi-terminal, containers (>= 0.5), network, async,
-    time, mtl, transformers, exceptions (>= 0.6), stm, text
+    time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable
   Other-Modules:
     Propellor.DotDir
 
 Executable propellor-config
-  Main-Is: config.hs
+  Default-Language: Haskell98
+  Main-Is: propellor-config.hs
   GHC-Options: -threaded -Wall -fno-warn-tabs -O0
-  Extensions: TypeOperators
+  if impl(ghc >= 8.0)
+    GHC-Options: -fno-warn-redundant-constraints
+  Default-Extensions: TypeOperators
   Hs-Source-Dirs: src
   Build-Depends:
     base >= 4.5, base < 5,
-    MissingH, directory, filepath, IfElse, process, bytestring, hslogger,
+    directory, filepath, IfElse, process, bytestring, hslogger, split,
     unix, unix-compat, ansi-terminal, containers (>= 0.5), network, async,
-    time, mtl, transformers, exceptions (>= 0.6), stm, text
+    time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable
 
 Library
+  Default-Language: Haskell98
   GHC-Options: -Wall -fno-warn-tabs -O0
-  Extensions: TypeOperators
+  if impl(ghc >= 8.0)
+    GHC-Options: -fno-warn-redundant-constraints
+  Default-Extensions: TypeOperators
   Hs-Source-Dirs: src
   Build-Depends:
     base >= 4.5, base < 5,
-    MissingH, directory, filepath, IfElse, process, bytestring, hslogger,
+    directory, filepath, IfElse, process, bytestring, hslogger, split,
     unix, unix-compat, ansi-terminal, containers (>= 0.5), network, async,
-    time, mtl, transformers, exceptions (>= 0.6), stm, text
+    time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable
 
   Exposed-Modules:
     Propellor
@@ -81,6 +90,7 @@ Library
     Propellor.Property.Apt
     Propellor.Property.Apt.PPA
     Propellor.Property.Attic
+    Propellor.Property.Bootstrap
     Propellor.Property.Borg
     Propellor.Property.Ccache
     Propellor.Property.Cmd
@@ -104,6 +114,7 @@ Library
     Propellor.Property.FreeBSD
     Propellor.Property.FreeBSD.Pkg
     Propellor.Property.FreeBSD.Poudriere
+    Propellor.Property.FreeDesktop
     Propellor.Property.Fstab
     Propellor.Property.Git
     Propellor.Property.Gpg
@@ -122,12 +133,15 @@ Library
     Propellor.Property.Obnam
     Propellor.Property.OpenId
     Propellor.Property.OS
+    Propellor.Property.Pacman
     Propellor.Property.Parted
+    Propellor.Property.Parted.Types
     Propellor.Property.Partition
     Propellor.Property.Postfix
     Propellor.Property.PropellorRepo
     Propellor.Property.Prosody
     Propellor.Property.Reboot
+    Propellor.Property.Restic
     Propellor.Property.Rsync
     Propellor.Property.Sbuild
     Propellor.Property.Scheduled
@@ -137,10 +151,13 @@ Library
     Propellor.Property.Sudo
     Propellor.Property.Systemd
     Propellor.Property.Systemd.Core
+    Propellor.Property.Timezone
     Propellor.Property.Tor
     Propellor.Property.Unbound
     Propellor.Property.User
     Propellor.Property.Uwsgi
+    Propellor.Property.Versioned
+    Propellor.Property.XFCE
     Propellor.Property.ZFS
     Propellor.Property.ZFS.Process
     Propellor.Property.ZFS.Properties
@@ -152,7 +169,6 @@ Library
     Propellor.Property.SiteSpecific.JoeySites
     Propellor.Property.SiteSpecific.GitAnnexBuilder
     Propellor.Property.SiteSpecific.Branchable
-    Propellor.Property.SiteSpecific.IABak
     Propellor.PropAccum
     Propellor.Utilities
     Propellor.CmdLine
@@ -165,6 +181,8 @@ Library
     Propellor.EnsureProperty
     Propellor.Exception
     Propellor.Types
+    Propellor.Types.Bootloader
+    Propellor.Types.ConfigurableValue
     Propellor.Types.Core
     Propellor.Types.Chroot
     Propellor.Types.CmdLine
@@ -176,6 +194,7 @@ Library
     Propellor.Types.Info
     Propellor.Types.MetaTypes
     Propellor.Types.OS
+    Propellor.Types.PartSpec
     Propellor.Types.PrivData
     Propellor.Types.Result
     Propellor.Types.ResultCheck
@@ -213,10 +232,13 @@ Library
     Utility.Process.NonConcurrent
     Utility.SafeCommand
     Utility.Scheduled
+    Utility.Scheduled
+    Utility.Split
     Utility.SystemDirectory
     Utility.Table
     Utility.ThreadScheduler
     Utility.Tmp
+    Utility.Tuple
     Utility.UserInfo
     System.Console.Concurrent
     System.Console.Concurrent.Internal
@@ -224,4 +246,4 @@ Library
 
 source-repository head
   type: git
-  location: git://git.joeyh.name/propellor.git
+  location: https://git.joeyh.name/git/propellor.git

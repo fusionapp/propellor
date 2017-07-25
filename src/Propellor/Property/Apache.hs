@@ -64,6 +64,24 @@ modEnabled modname = enable <!> disable
 			`onChange` reloaded
 	isenabled = boolSystem "a2query" [Param "-q", Param "-m", Param modname]
 
+-- | Control whether an apache configuration file is enabled. 
+--
+-- The String is the base name of the configuration, eg "charset" or "gitweb".
+confEnabled :: String -> RevertableProperty DebianLike DebianLike
+confEnabled confname = enable <!> disable
+  where
+	enable = check (not <$> isenabled)
+		(cmdProperty "a2enconf" ["--quiet", confname])
+			`describe` ("apache configuration enabled " ++ confname)
+			`requires` installed
+			`onChange` reloaded
+	disable = check isenabled
+		(cmdProperty "a2disconf" ["--quiet", confname])
+			`describe` ("apache configuration disabled " ++ confname)
+			`requires` installed
+			`onChange` reloaded
+	isenabled = boolSystem "a2query" [Param "-q", Param "-c", Param confname]
+
 -- | Make apache listen on the specified ports.
 --
 -- Note that ports are also specified inside a site's config file,
@@ -72,7 +90,7 @@ listenPorts :: [Port] -> Property DebianLike
 listenPorts ps = "/etc/apache2/ports.conf" `File.hasContent` map portline ps
 	`onChange` restarted
   where
-	portline port = "Listen " ++ fromPort port
+	portline port = "Listen " ++ val port
 
 -- This is a list of config files because different versions of apache
 -- use different filenames. Propellor simply writes them all.
@@ -135,8 +153,8 @@ virtualHost domain port docroot = virtualHost' domain port docroot []
 -- | Like `virtualHost` but with additional config lines added.
 virtualHost' :: Domain -> Port -> WebRoot -> [ConfigLine] -> RevertableProperty DebianLike DebianLike
 virtualHost' domain port docroot addedcfg = siteEnabled domain $
-	[ "<VirtualHost *:" ++ fromPort port ++ ">"
-	, "ServerName " ++ domain ++ ":" ++ fromPort port
+	[ "<VirtualHost *:" ++ val port ++ ">"
+	, "ServerName " ++ domain ++ ":" ++ val port
 	, "DocumentRoot " ++ docroot
 	, "ErrorLog /var/log/apache2/error.log"
 	, "LogLevel warn"
@@ -171,7 +189,7 @@ httpsVirtualHost' domain docroot letos addedcfg = setup <!> teardown
 		`requires` modEnabled "ssl"
 		`before` setuphttps
 	teardown = siteDisabled domain
-	setuphttp = siteEnabled' domain $
+	setuphttp = (siteEnabled' domain $
 		-- The sslconffile is only created after letsencrypt gets
 		-- the cert. The "*" is needed to make apache not error
 		-- when the file doesn't exist.
@@ -183,27 +201,27 @@ httpsVirtualHost' domain docroot letos addedcfg = setup <!> teardown
 			, "RewriteRule ^/.well-known/(.*) - [L]"
 			-- Everything else redirects to https
 			, "RewriteRule ^/(.*) https://" ++ domain ++ "/$1 [L,R,NE]"
-			]
+			])
+		`requires` File.dirExists (takeDirectory cf)
 	setuphttps = LetsEncrypt.letsEncrypt letos domain docroot
 		`onChange` postsetuphttps
 	postsetuphttps = combineProperties (domain ++ " ssl cert installed") $ props
-		& File.dirExists (takeDirectory cf)
 		& File.hasContent cf sslvhost
 			`onChange` reloaded
 		-- always reload since the cert has changed
 		& reloaded
 	  where
-		cf = sslconffile "letsencrypt"
 		sslvhost = vhost (Port 443)
 			[ "SSLEngine on"
 			, "SSLCertificateFile " ++ LetsEncrypt.certFile domain
 			, "SSLCertificateKeyFile " ++ LetsEncrypt.privKeyFile domain
 			, "SSLCertificateChainFile " ++ LetsEncrypt.chainFile domain
 			]
+	cf = sslconffile "letsencrypt"
 	sslconffile s = "/etc/apache2/sites-available/ssl/" ++ domain ++ "/" ++ s ++ ".conf"
 	vhost p ls =
-		[ "<VirtualHost *:" ++ fromPort p ++">"
-		, "ServerName " ++ domain ++ ":" ++ fromPort p
+		[ "<VirtualHost *:" ++ val p ++">"
+		, "ServerName " ++ domain ++ ":" ++ val p
 		, "DocumentRoot " ++ docroot
 		, "ErrorLog /var/log/apache2/error.log"
 		, "LogLevel warn"

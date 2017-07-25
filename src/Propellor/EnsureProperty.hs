@@ -37,15 +37,18 @@ import Prelude
 -- with the property to be lost.
 ensureProperty
 	::
+		-- -Wredundant-constraints is turned off because
+		-- this constraint appears redundant, but is actually
+		-- crucial.
 		( Cannot_ensureProperty_WithInfo inner ~ 'True
 		, (Targets inner `NotSuperset` Targets outer) ~ 'CanCombine
 		)
 	=> OuterMetaTypesWitness outer
 	-> Property (MetaTypes inner)
 	-> Propellor Result
-ensureProperty _ = catchPropellor . getSatisfy
+ensureProperty _ = maybe (return NoChange) catchPropellor . getSatisfy
 
--- The name of this was chosen to make type errors a more understandable.
+-- The name of this was chosen to make type errors a bit more understandable.
 type family Cannot_ensureProperty_WithInfo (l :: [a]) :: Bool
 type instance Cannot_ensureProperty_WithInfo '[] = 'True
 type instance Cannot_ensureProperty_WithInfo (t ': ts) =
@@ -59,7 +62,7 @@ property'
 	-> (OuterMetaTypesWitness metatypes -> Propellor Result)
 	-> Property (MetaTypes metatypes)
 property' d a =
-	let p = Property sing d (a (outerMetaTypesWitness p)) mempty mempty
+	let p = Property sing d (Just (a (outerMetaTypesWitness p))) mempty mempty
 	in p
 
 -- | Used to provide the metatypes of a Property to calls to 

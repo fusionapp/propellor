@@ -55,9 +55,9 @@ import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.File as File
 import Propellor.Property.Systemd.Core
 import Utility.FileMode
+import Utility.Split
 
 import Data.List
-import Data.List.Utils
 import qualified Data.Map as M
 
 type ServiceName = String
@@ -259,7 +259,7 @@ debContainer name ps = container name $ \d -> Chroot.debootstrapped mempty d ps
 -- Reverting this property stops the container, removes the systemd unit,
 -- and deletes the chroot and all its contents.
 nspawned :: Container -> RevertableProperty (HasInfo + Linux) Linux
-nspawned c@(Container name (Chroot.Chroot loc builder _) h) =
+nspawned c@(Container name (Chroot.Chroot loc builder _ _) h) =
 	p `describe` ("nspawned " ++ name)
   where
 	p :: RevertableProperty (HasInfo + Linux) Linux
@@ -271,7 +271,7 @@ nspawned c@(Container name (Chroot.Chroot loc builder _) h) =
 	-- Chroot provisioning is run in systemd-only mode,
 	-- which sets up the chroot and ensures systemd and dbus are
 	-- installed, but does not handle the other properties.
-	chrootprovisioned = Chroot.provisioned' (Chroot.propagateChrootInfo chroot) chroot True
+	chrootprovisioned = Chroot.provisioned' chroot True
 
 	-- Use nsenter to enter container and and run propellor to
 	-- finish provisioning.
@@ -281,7 +281,7 @@ nspawned c@(Container name (Chroot.Chroot loc builder _) h) =
 			<!>
 		doNothing
 
-	chroot = Chroot.Chroot loc builder h
+	chroot = Chroot.Chroot loc builder Chroot.propagateChrootInfo h
 
 -- | Sets up the service file for the container, and then starts
 -- it running.
@@ -421,7 +421,7 @@ class Publishable a where
 	toPublish :: a -> String
 
 instance Publishable Port where
-	toPublish port = fromPort port
+	toPublish port = val port
 
 instance Publishable (Bound Port) where
 	toPublish v = toPublish (hostSide v) ++ ":" ++ toPublish (containerSide v)

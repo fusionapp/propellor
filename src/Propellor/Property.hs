@@ -16,7 +16,6 @@ module Propellor.Property (
 	, check
 	, fallback
 	, revert
-	, applyToList
 	-- * Property descriptions
 	, describe
 	, (==>)
@@ -51,10 +50,10 @@ import Data.Monoid
 import Control.Monad.IfElse
 import "mtl" Control.Monad.RWS.Strict
 import System.Posix.Files
-import qualified Data.Hash.MD5 as MD5
+import Data.Maybe
 import Data.List
+import Data.Hashable
 import Control.Applicative
-import Data.Foldable hiding (and, elem)
 import Prelude
 
 import Propellor.Types
@@ -66,8 +65,8 @@ import Propellor.Info
 import Propellor.EnsureProperty
 import Utility.Exception
 import Utility.Monad
-import Utility.Misc
 import Utility.Directory
+import Utility.Misc
 
 -- | Makes a perhaps non-idempotent Property be idempotent by using a flag
 -- file to indicate whether it has run before.
@@ -120,13 +119,15 @@ onChange
         -> CombinedType x y
 onChange = combineWith combiner revertcombiner
   where
-	combiner p hook = do
+	combiner (Just p) (Just hook) = Just $ do
 		r <- p
 		case r of
 			MadeChange -> do
 				r' <- hook
 				return $ r <> r'
 			_ -> return r
+	combiner (Just p) Nothing = Just p
+	combiner Nothing _ = Nothing
 	revertcombiner = (<>)
 
 -- | Same as `onChange` except that if property y fails, a flag file
@@ -144,24 +145,30 @@ onChangeFlagOnFail
         -> CombinedType x y
 onChangeFlagOnFail flagfile = combineWith combiner revertcombiner
   where
-	combiner s1 s2 = do
+	combiner (Just s1) s2 = Just $ do
 		r1 <- s1
 		case r1 of
 			MadeChange -> flagFailed s2
 			_ -> ifM (liftIO $ doesFileExist flagfile)
-				(flagFailed s2
+				( flagFailed s2
 				, return r1
 				)
+	combiner Nothing _ = Nothing
+
 	revertcombiner = (<>)
-	flagFailed s = do
+
+	flagFailed (Just s) = do
 		r <- s
 		liftIO $ case r of
 			FailedChange -> createFlagFile
 			_ -> removeFlagFile
 		return r
+	flagFailed Nothing = return NoChange
+
 	createFlagFile = unlessM (doesFileExist flagfile) $ do
 		createDirectoryIfMissing True (takeDirectory flagfile)
 		writeFile flagfile ""
+	
 	removeFlagFile = whenM (doesFileExist flagfile) $ removeFile flagfile
 
 -- | Changes the description of a property.
@@ -178,11 +185,13 @@ infixl 1 ==>
 fallback :: (Combines p1 p2) => p1 -> p2 -> CombinedType p1 p2
 fallback = combineWith combiner revertcombiner
   where
-	combiner a1 a2 = do
+	combiner (Just a1) (Just a2) = Just $ do
 		r <- a1
 		if r == FailedChange
 			then a2
 			else return r
+	combiner (Just a1) Nothing = Just a1
+	combiner Nothing _ = Nothing
 	revertcombiner = (<>)
 
 -- | Indicates that a Property may change a particular file. When the file
@@ -220,12 +229,12 @@ changesFile p f = checkResult getstat comparestat p
 -- Changes to mtime etc that do not change file content are treated as
 -- NoChange.
 changesFileContent :: Checkable p i => p i -> FilePath -> Property i
-changesFileContent p f = checkResult getmd5 comparemd5 p
+changesFileContent p f = checkResult gethash comparehash p
   where
-	getmd5 = catchMaybeIO $ MD5.md5 . MD5.Str <$> readFileStrictAnyEncoding f
-	comparemd5 oldmd5 = do
-		newmd5 <- getmd5
-		return $ if oldmd5 == newmd5 then NoChange else MadeChange
+	gethash = catchMaybeIO $ hash <$> readFileStrict f
+	comparehash oldhash = do
+		newhash <- gethash
+		return $ if oldhash == newhash then NoChange else MadeChange
 
 -- | Determines if the first file is newer than the second file.
 --
@@ -263,7 +272,7 @@ isNewerThan x y = do
 --
 -- For example:
 --
--- > upgraded :: UnixLike
+-- > upgraded :: Property (DebianLike + FreeBSD)
 -- > upgraded = (Apt.upgraded `pickOS` Pkg.upgraded)
 -- > 	`describe` "OS upgraded"
 --
@@ -292,9 +301,9 @@ pickOS a b = c `addChildren` [toChildProperty a, toChildProperty b]
 	-- are added as children, so their info will propigate.
 	c = withOS (getDesc a) $ \_ o ->
 		if matching o a
-			then getSatisfy a
+			then maybe (pure NoChange) id (getSatisfy a)
 			else if matching o b
-				then getSatisfy b
+				then maybe (pure NoChange) id (getSatisfy b)
 				else unsupportedOS'
 	matching Nothing _ = False
 	matching (Just o) p =
@@ -308,8 +317,8 @@ pickOS a b = c `addChildren` [toChildProperty a, toChildProperty b]
 --
 -- > myproperty :: Property Debian
 -- > myproperty = withOS "foo installed" $ \w o -> case o of
--- > 	(Just (System (Debian (Stable release)) arch)) -> ensureProperty w ...
--- > 	(Just (System (Debian suite) arch)) -> ensureProperty w ...
+-- > 	(Just (System (Debian kernel (Stable release)) arch)) -> ensureProperty w ...
+-- > 	(Just (System (Debian kernel suite) arch)) -> ensureProperty w ...
 -- >	_ -> unsupportedOS'
 --
 -- Note that the operating system specifics may not be declared for all hosts,
@@ -343,22 +352,17 @@ unsupportedOS' = go =<< getOS
 revert :: RevertableProperty setup undo -> RevertableProperty undo setup
 revert (RevertableProperty p1 p2) = RevertableProperty p2 p1
 
--- | Apply a property to each element of a list.
-applyToList
-	:: (Foldable t, Functor t, IsProp p, Combines p p, p ~ CombinedType p p)
-	=> (b -> p)
-	-> t b
-	-> p
-prop `applyToList` xs = Data.Foldable.foldr1 before $ prop <$> xs
-
 makeChange :: IO () -> Propellor Result
 makeChange a = liftIO a >> return MadeChange
 
 noChange :: Propellor Result
 noChange = return NoChange
 
+-- | A no-op property.
+--
+-- This is the same as `mempty` from the `Monoid` instance.
 doNothing :: SingI t => Property (MetaTypes t)
-doNothing = property "noop property" noChange
+doNothing = mempty
 
 -- | Registers an action that should be run at the very end, after
 -- propellor has checks all the properties of a host.

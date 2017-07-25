@@ -57,7 +57,6 @@ import Utility.Misc
 import Utility.FileMode
 import Utility.Env
 import Utility.Table
-import Utility.FileSystemEncoding
 import Utility.Directory
 
 -- | Allows a Property to access the value of a specific PrivDataField,
@@ -171,7 +170,6 @@ getPrivData field context m = do
 setPrivData :: PrivDataField -> Context -> IO ()
 setPrivData field context = do
 	putStrLn "Enter private data on stdin; ctrl-D when done:"
-	fileEncoding stdin
 	setPrivDataTo field context . PrivData =<< hGetContentsStrict stdin
 
 unsetPrivData :: PrivDataField -> Context -> IO ()
@@ -274,7 +272,7 @@ readPrivData :: String -> PrivMap
 readPrivData = fromMaybe M.empty . readish
 
 readPrivDataFile :: FilePath -> IO PrivMap
-readPrivDataFile f = readPrivData <$> readFileStrictAnyEncoding f
+readPrivDataFile f = readPrivData <$> readFileStrict f
 
 makePrivDataDir :: IO ()
 makePrivDataDir = createDirectoryIfMissing False privDataDir
@@ -283,10 +281,10 @@ newtype PrivInfo = PrivInfo
 	{ fromPrivInfo :: S.Set (PrivDataField, Maybe PrivDataSourceDesc, HostContext) }
 	deriving (Eq, Ord, Show, Typeable, Monoid)
 
--- PrivInfo is propagated out of containers, so that propellor can see which
--- hosts need it.
+-- PrivInfo always propagates out of containers, so that propellor
+-- can see which hosts need it.
 instance IsInfo PrivInfo where
-	propagateInfo _ = True
+	propagateInfo _ = PropagatePrivData
 
 -- | Sets the context of any privdata that uses HostContext to the
 -- provided name.

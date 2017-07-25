@@ -51,18 +51,15 @@ built :: FilePath -> System -> DebootstrapConfig -> Property Linux
 built target system config = built' (setupRevertableProperty installed) target system config
 
 built' :: Property Linux -> FilePath -> System -> DebootstrapConfig -> Property Linux
-built' installprop target system@(System _ arch) config =
-	check (unpopulated target <||> ispartial) setupprop
-		`requires` installprop
+built' installprop target system@(System _ arch) config = 
+	go `before` oldpermfix
   where
+	go = check (unpopulated target <||> ispartial) setupprop
+		`requires` installprop
+
 	setupprop :: Property Linux
 	setupprop = property ("debootstrapped " ++ target) $ liftIO $ do
 		createDirectoryIfMissing True target
-		-- Don't allow non-root users to see inside the chroot,
-		-- since doing so can allow them to do various attacks
-		-- including hard link farming suid programs for later
-		-- exploitation.
-		modifyFileMode target (removeModes [otherReadMode, otherExecuteMode, otherWriteMode])
 		suite <- case extractSuite system of
 			Nothing -> errorMessage $ "don't know how to debootstrap " ++ show system
 			Just s -> pure s
@@ -74,9 +71,7 @@ built' installprop target system@(System _ arch) config =
 		cmd <- fromMaybe "debootstrap" <$> programPath
 		de <- standardPathEnv
 		ifM (boolSystemEnv cmd params (Just de))
-			( do
-				fixForeignDev target
-				return MadeChange
+			( return MadeChange
 			, return FailedChange
 			)
 
@@ -88,10 +83,20 @@ built' installprop target system@(System _ arch) config =
 			return True
 		, return False
 		)
+	
+	-- May want to remove this after some appropriate length of time,
+	-- as it's a workaround for chroots set up with too tight
+	-- permissions.
+	oldpermfix :: Property Linux
+	oldpermfix = property ("fixed old chroot file mode") $ do
+		liftIO $ modifyFileMode target $
+			addModes [otherReadMode, otherExecuteMode]
+		return NoChange
 
 extractSuite :: System -> Maybe String
 extractSuite (System (Debian _ s) _) = Just $ Apt.showSuite s
 extractSuite (System (Buntish r) _) = Just r
+extractSuite (System (ArchLinux) _) = Nothing
 extractSuite (System (FreeBSD _) _) = Nothing
 
 -- | Ensures debootstrap is installed.
@@ -102,7 +107,7 @@ extractSuite (System (FreeBSD _) _) = Nothing
 installed :: RevertableProperty Linux Linux
 installed = install <!> remove
   where
-	install = check (isJust <$> programPath) $
+	install = check (isNothing <$> programPath) $
 		(aptinstall `pickOS` sourceInstall)
 			`describe` "debootstrap installed"
 
@@ -144,7 +149,7 @@ sourceInstall' = withTmpDir "debootstrap" $ \tmpd -> do
 		. filter ("debootstrap_" `isInfixOf`)
 		. filter (".tar." `isInfixOf`)
 		. extractUrls baseurl <$>
-		readFileStrictAnyEncoding indexfile
+		readFileStrict indexfile
 	nukeFile indexfile
 
 	tarfile <- case urls of
@@ -165,7 +170,6 @@ sourceInstall' = withTmpDir "debootstrap" $ \tmpd -> do
 		case l of
 			(subdir:[]) -> do
 				changeWorkingDirectory subdir
-				makeDevicesTarball
 				makeWrapperScript (localInstallDir </> subdir)
 				return MadeChange
 			_ -> errorMessage "debootstrap tar file did not contain exactly one directory"
@@ -205,40 +209,6 @@ makeWrapperScript dir = do
 		, dir </> "debootstrap" ++ " \"$@\""
 		]
 	modifyFileMode wrapperScript (addModes $ readModes ++ executeModes)
-
--- Work around for <http://bugs.debian.org/770217>
-makeDevicesTarball :: IO ()
-makeDevicesTarball = do
-	-- TODO append to tarball; avoid writing to /dev
-	writeFile foreignDevFlag "1"
-	ok <- boolSystem "sh" [Param "-c", Param tarcmd]
-	nukeFile foreignDevFlag
-	unless ok $
-		errorMessage "Failed to tar up /dev to generate devices.tar.gz"
-  where
-	tarcmd = "(cd / && tar cf - dev) | gzip > devices.tar.gz"
-
-fixForeignDev :: FilePath -> IO ()
-fixForeignDev target = whenM (doesFileExist (target ++ foreignDevFlag)) $ do
-	de <- standardPathEnv
-	void $ boolSystemEnv "chroot"
-		[ File target
-		, Param "sh"
-		, Param "-c"
-		, Param $ intercalate " && "
-			[ "apt-get update"
-			, "apt-get -y install makedev"
-			, "rm -rf /dev"
-			, "mkdir /dev"
-			, "cd /dev"
-			, "mount -t proc proc /proc"
-			, "/sbin/MAKEDEV std ptmx fd consoleonly"
-			]
-		]
-		(Just de)
-
-foreignDevFlag :: FilePath
-foreignDevFlag = "/dev/.propellor-foreign-dev"
 
 localInstallDir :: FilePath
 localInstallDir = "/usr/local/debootstrap"

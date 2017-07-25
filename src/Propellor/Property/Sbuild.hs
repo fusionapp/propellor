@@ -98,10 +98,10 @@ import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Schroot as Schroot
 import qualified Propellor.Property.Reboot as Reboot
 import qualified Propellor.Property.User as User
-
 import Utility.FileMode
+import Utility.Split
+
 import Data.List
-import Data.List.Utils
 
 type Suite = String
 
@@ -111,8 +111,8 @@ type Suite = String
 -- the same suite and the same architecture, so neither do we
 data SbuildSchroot = SbuildSchroot Suite Architecture
 
-instance Show SbuildSchroot where
-	show (SbuildSchroot suite arch) = suite ++ "-" ++ architectureToDebianArchString arch
+instance ConfigurableValue SbuildSchroot where
+	val (SbuildSchroot suite arch) = suite ++ "-" ++ architectureToDebianArchString arch
 
 -- | Whether an sbuild schroot should use ccache during builds
 --
@@ -128,9 +128,9 @@ data UseCcache = UseCcache | NoCcache
 builtFor :: System -> UseCcache -> RevertableProperty DebianLike UnixLike
 builtFor sys cc = go <!> deleted
   where
-	go = property' ("sbuild schroot for " ++ show sys) $
-		\w -> case (schrootFromSystem sys, stdMirror sys) of
-			(Just s, Just u)  -> ensureProperty w $
+	go = Apt.withMirror goDesc $ \u -> property' goDesc $ \w ->
+		case schrootFromSystem sys of
+			Just s  -> ensureProperty w $
 				setupRevertableProperty $ built s u cc
 			_ -> errorMessage
 				("don't know how to debootstrap " ++ show sys)
@@ -139,6 +139,7 @@ builtFor sys cc = go <!> deleted
 			Just s  -> ensureProperty w $
 				undoRevertableProperty $ built s "dummy" cc
 			Nothing -> noChange
+	goDesc = "sbuild schroot for " ++ show sys
 
 -- | Build and configure a schroot for use with sbuild
 built :: SbuildSchroot -> Apt.Url -> UseCcache -> RevertableProperty DebianLike UnixLike
@@ -151,7 +152,7 @@ built s@(SbuildSchroot suite arch) mirror cc =
   where
 	go :: Property DebianLike
 	go = check (unpopulated (schrootRoot s) <||> ispartial) $
-		property' ("built sbuild schroot for " ++ show s) make
+		property' ("built sbuild schroot for " ++ val s) make
 	make w = do
 		de <- liftIO standardPathEnv
 		let params = Param <$>
@@ -170,18 +171,18 @@ built s@(SbuildSchroot suite arch) mirror cc =
 	-- TODO we should kill any sessions still using the chroot
 	-- before destroying it (as suggested by sbuild-destroychroot)
 	deleted = check (not <$> unpopulated (schrootRoot s)) $
-		property ("no sbuild schroot for " ++ show s) $ do
+		property ("no sbuild schroot for " ++ val s) $ do
 			liftIO $ removeChroot $ schrootRoot s
 			liftIO $ nukeFile
-				("/etc/sbuild/chroot" </> show s ++ "-sbuild")
+				("/etc/sbuild/chroot" </> val s ++ "-sbuild")
 			makeChange $ nukeFile (schrootConf s)
 
 	enhancedConf =
-		combineProperties ("enhanced schroot conf for " ++ show s) $ props
+		combineProperties ("enhanced schroot conf for " ++ val s) $ props
 			& aliasesLine
 			-- enable ccache and eatmydata for speed
 			& ConfFile.containsIniSetting (schrootConf s)
-				( show s ++ "-sbuild"
+				( val s ++ "-sbuild"
 				, "command-prefix"
 				, intercalate "," commandPrefix
 				)
@@ -196,7 +197,7 @@ built s@(SbuildSchroot suite arch) mirror cc =
 			then ensureProperty w $
 				ConfFile.containsIniSetting
 					(schrootConf s)
-					( show s ++ "-sbuild"
+					( val s ++ "-sbuild"
 					, "aliases"
 					, aliases
 					)
@@ -263,7 +264,7 @@ updatedFor system = property' ("updated sbuild schroot for " ++ show system) $
 updated :: SbuildSchroot -> Property DebianLike
 updated s@(SbuildSchroot suite arch) =
 	check (doesDirectoryExist (schrootRoot s)) $ go
-	`describe` ("updated schroot for " ++ show s)
+	`describe` ("updated schroot for " ++ val s)
 	`requires` installed
   where
 	go :: Property DebianLike
@@ -283,13 +284,13 @@ updated s@(SbuildSchroot suite arch) =
 -- given suite and architecture, so we don't need the suffix to be random.
 fixConfFile :: SbuildSchroot -> Property UnixLike
 fixConfFile s@(SbuildSchroot suite arch) =
-	property' ("schroot for " ++ show s ++ " config file fixed") $ \w -> do
+	property' ("schroot for " ++ val s ++ " config file fixed") $ \w -> do
 		confs <- liftIO $ dirContents dir
 		let old = concat $ filter (tempPrefix `isPrefixOf`) confs
 		liftIO $ moveFile old new
 		liftIO $ moveFile
-			("/etc/sbuild/chroot" </> show s ++ "-propellor")
-			("/etc/sbuild/chroot" </> show s ++ "-sbuild")
+			("/etc/sbuild/chroot" </> val s ++ "-propellor")
+			("/etc/sbuild/chroot" </> val s ++ "-sbuild")
 		ensureProperty w $
 			File.fileProperty "replace dummy suffix" (map munge) new
   where
@@ -361,10 +362,10 @@ piupartsConf s@(SbuildSchroot _ arch) =
 
 	orig = "/etc/schroot/sbuild"
 	dir = "/etc/schroot/piuparts"
-	sec = show s ++ "-piuparts"
+	sec = val s ++ "-piuparts"
 	f = schrootPiupartsConf s
 	munge = replace "-sbuild]" "-piuparts]"
-	desc = "piuparts schroot conf for " ++ show s
+	desc = "piuparts schroot conf for " ++ val s
 
 	-- normally the piuparts schroot conf has no aliases, but we have to add
 	-- one, for dgit compatibility, if this is the default sid chroot
@@ -499,11 +500,6 @@ schrootFromSystem :: System -> Maybe SbuildSchroot
 schrootFromSystem system@(System _ arch) =
 	extractSuite system
 	>>= \suite -> return $ SbuildSchroot suite arch
-
-stdMirror :: System -> Maybe Apt.Url
-stdMirror (System (Debian _ _) _) = Just "http://httpredir.debian.org/debian"
-stdMirror (System (Buntish _) _) = Just "mirror://mirrors.ubuntu.com/"
-stdMirror _ = Nothing
 
 schrootRoot :: SbuildSchroot -> FilePath
 schrootRoot (SbuildSchroot s a) = "/srv/chroot" </> s ++ "-" ++ architectureToDebianArchString a

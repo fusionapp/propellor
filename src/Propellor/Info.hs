@@ -3,6 +3,7 @@
 module Propellor.Info (
 	osDebian,
 	osBuntish,
+	osArchLinux,
 	osFreeBSD,
 	setInfoProperty,
 	addInfoProperty,
@@ -38,6 +39,9 @@ import Prelude
 --
 -- The new Property will include HasInfo in its metatypes.
 setInfoProperty
+	-- -Wredundant-constraints is turned off because
+	-- this constraint appears redundant, but is actually
+	-- crucial.
 	:: (MetaTypes metatypes' ~ (+) HasInfo metatypes, SingI metatypes')
 	=> Property metatypes
 	-> Info
@@ -47,6 +51,9 @@ setInfoProperty (Property _ d a oldi c) newi =
 
 -- | Adds more info to a Property that already HasInfo.
 addInfoProperty
+	-- -Wredundant-constraints is turned off because
+	-- this constraint appears redundant, but is actually
+	-- crucial.
 	:: (IncludesInfo metatypes ~ 'True)
 	=> Property metatypes
 	-> Info
@@ -77,13 +84,13 @@ askInfo = asks (fromInfo . hostInfo)
 -- It also lets the type checker know that all the properties of the
 -- host must support Debian.
 --
--- >	& osDebian (Stable "jessie") X86_64
+-- >	& osDebian (Stable "stretch") X86_64
 osDebian :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
 osDebian = osDebian' Linux
 
 -- Use to specify a different `DebianKernel` than the default `Linux`
 --
--- >	& osDebian' KFreeBSD (Stable "jessie") X86_64
+-- >	& osDebian' KFreeBSD (Stable "stretch") X86_64
 osDebian' :: DebianKernel -> DebianSuite -> Architecture -> Property (HasInfo + Debian)
 osDebian' kernel suite arch = tightenTargets $ os (System (Debian kernel suite) arch)
 
@@ -99,6 +106,10 @@ osBuntish release arch = tightenTargets $ os (System (Buntish release) arch)
 -- and further indicates the release and architecture.
 osFreeBSD :: FreeBSDRelease -> Architecture -> Property (HasInfo + FreeBSD)
 osFreeBSD release arch = tightenTargets $ os (System (FreeBSD release) arch)
+
+-- | Specifies that a host's operating system is Arch Linux
+osArchLinux :: Architecture -> Property (HasInfo + ArchLinux)
+osArchLinux arch = tightenTargets $ os (System (ArchLinux) arch)
 
 os :: System -> Property (HasInfo + UnixLike)
 os system = pureInfoProperty ("Operating " ++ show system) (InfoVal system)
