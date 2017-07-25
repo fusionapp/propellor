@@ -334,7 +334,7 @@ standardSystem suite arch =
   (toProps $
    [ User.accountFor
    , User.lockedPassword
-   , Sudo.enabledFor
+   , setupRevertableProperty . Sudo.enabledFor
    , flip User.hasGroup (Group "systemd-journal")
    , flip User.hasGroup (Group "adm")
    ] <*> admins)
