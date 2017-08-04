@@ -525,8 +525,8 @@ nginxPrimary =
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
   & File.dirExists "/srv/nginx/cache"
   & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
-  & svnSite
-  & andersonSite
+  ! svnSite
+  ! andersonSite
   & entropySite
   & File.dirExists "/srv/www/fusiontest.net"
   & fusionSites
@@ -534,15 +534,15 @@ nginxPrimary =
   `onChange` Nginx.reloaded
   & Apt.installedBackport ["certbot"]
   & File.dirExists "/srv/www/quotemaster.co.za"
-  & quotemasterSite
+  ! quotemasterSite
   & lets "quotemaster.co.za" "/srv/www/quotemaster.co.za"
   `onChange` Nginx.reloaded
   & File.dirExists "/srv/www/mcibrokerquotes.co.za"
-  & mcibrokerSite
+  ! mcibrokerSite
   & lets "mcibrokerquotes.co.za" "/srv/www/mcibrokerquotes.co.za"
   `onChange` Nginx.reloaded
-  & saxumSite
-  & saxumBrokersSite
+  ! saxumSite
+  ! saxumBrokersSite
 
 
 lets :: Domain -> LetsEncrypt.WebRoot -> Property DebianLike
