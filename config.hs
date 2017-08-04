@@ -52,6 +52,8 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasPrivContent "/srv/catcher-in-the-rye/config.yaml" (Context "fusion aux")
           & File.dirExists "/srv/prometheus"
           & prometheusConfig
+          & File.dirExists "/srv/drone-scheduler"
+          & droneSchedules
 
 
 onyx :: Host
@@ -1094,3 +1096,10 @@ prometheusConfig = withPrivData src ctx $
           , "    basic_auth:"
           , "      password: " <> token
           ]
+
+
+droneSchedules :: Property UnixLike
+droneSchedules =
+  "/srv/drone-scheduler/schedules.yaml" `File.hasContent`
+  [ "[]"
+  ]
