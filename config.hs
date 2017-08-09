@@ -1,7 +1,6 @@
 import           Control.Applicative ((<$>), (<*>))
 import           Propellor
 import           Propellor.Base
-import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Apt as Apt
 import           Propellor.Property.Bootstrap
 import qualified Propellor.Property.Cron as Cron
@@ -11,7 +10,6 @@ import qualified Propellor.Property.Hostname as Hostname
 import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
 import qualified Propellor.Property.Locale as Locale
 import qualified Propellor.Property.Nginx as Nginx
-import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Ssh as Ssh
 import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.Systemd as Systemd
@@ -77,7 +75,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/mfc-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
-       & File.hasPrivContent "/srv/certs/private/quotemaster.co.za.pem" (Context "fusion production")
+       & File.notPresent "/srv/certs/private/quotemaster.co.za.pem"
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
@@ -85,8 +83,6 @@ onyx = host "onyx.fusionapp.com" $ props
        & Apt.installed ["debootstrap"]
        & Systemd.running Systemd.networkd
        & Systemd.nspawned nginxPrimary
-       ! Systemd.nspawned apacheSvn
-       ! Systemd.nspawned mailRelayContainer
        & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        & Cron.job "fusion-prod nightly deploy" (Cron.Times "7 1 * * *") (User "root") "/srv/fab" "git fetch && git reset --hard origin/master && git clean -dfx && fab fusion.deploy"
@@ -462,32 +458,6 @@ standardContainer suite arch =
   & Apt.cacheCleaned
 
 
-apacheSvn :: Systemd.Container
-apacheSvn = Systemd.debContainer "apache-svn" $ props
-  & standardContainer (Stable "jessie") X86_64
-  & Systemd.bind ("/srv/svn" :: String)
-  & Systemd.running "apache2" `requires` Apt.installed ["apache2"]
-  & Apache.modEnabled "dav_svn" `requires` Apt.installed ["libapache2-svn"]
-  & Apache.siteDisabled "000-default"
-  & Apache.listenPorts [Port 8100]
-  & Apache.siteEnabled "svn.quotemaster.co.za"
-  [ "<VirtualHost *:8100>"
-  , "  ServerName svn.quotemaster.co.za;"
-  , "  <Location /svn>"
-  , "      DAV             svn"
-  , "      SVNParentPath   /srv/svn"
-  , "      AuthName        Subversion"
-  , "      AuthType        Basic"
-  , "      AuthUserFile    /srv/svn/dav_svn.passwd"
-  , "      <LimitExcept GET PROPFIND OPTIONS REPORT>"
-  , "          Require valid-user"
-  , "      </LimitExcept>"
-  , Apache.allowAll
-  , "  </Location>"
-  , "</VirtualHost>"
-  ]
-
-
 nginxPrimary :: Systemd.Container
 nginxPrimary =
   Systemd.debContainer "nginx-primary" $ props
@@ -527,8 +497,6 @@ nginxPrimary =
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
   & File.dirExists "/srv/nginx/cache"
   & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
-  ! svnSite
-  ! andersonSite
   & entropySite
   & File.dirExists "/srv/www/fusiontest.net"
   & fusionSites
@@ -536,124 +504,11 @@ nginxPrimary =
   `onChange` Nginx.reloaded
   & Apt.installedBackport ["certbot"]
   & File.dirExists "/srv/www/quotemaster.co.za"
-  ! quotemasterSite
-  & lets "quotemaster.co.za" "/srv/www/quotemaster.co.za"
-  `onChange` Nginx.reloaded
-  & File.dirExists "/srv/www/mcibrokerquotes.co.za"
-  ! mcibrokerSite
-  & lets "mcibrokerquotes.co.za" "/srv/www/mcibrokerquotes.co.za"
-  `onChange` Nginx.reloaded
-  ! saxumSite
-  ! saxumBrokersSite
 
 
 lets :: Domain -> LetsEncrypt.WebRoot -> Property DebianLike
 lets = LetsEncrypt.letsEncrypt
   (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
-
-
-svnSite :: RevertableProperty DebianLike DebianLike
-svnSite =
-  Nginx.siteEnabled "svn.quotemaster.co.za"
-  [ " server {"
-  , "    listen              41.72.130.249:80;"
-  , "    server_name         svn.quotemaster.co.za;"
-  , "    access_log          /var/log/nginx/svn.quotemaster.co.za_access.log;"
-  , "    client_max_body_size 200m;"
-  , ""
-  , "    location / {"
-  , "        proxy_set_header Host $host;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto http;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://127.0.0.1:8100;"
-  , "    }"
-  , "}"
-  , ""
-  , "server {"
-  , "    listen              41.72.130.249:443 ssl;"
-  , "    server_name         svn.fusionapp.com;"
-  , "    ssl_certificate     /srv/certs/private/star.fusionapp.com.pem;"
-  , "    ssl_certificate_key /srv/certs/private/star.fusionapp.com.pem;"
-  , "    ssl_ciphers         ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AES:RSA+3DES:!ADH:!AECDH:!MD5;"
-  , "    ssl_prefer_server_ciphers on;"
-  , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
-  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
-  , "    ssl_session_cache   none;"
-  , "    ssl_session_tickets off;"
-  , "    access_log          /var/log/nginx/svn.fusionapp.com_tls_access.log;"
-  , "    client_max_body_size 200m;"
-  , ""
-  , "    location / {"
-  , "        proxy_set_header Host $host;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto http;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://127.0.0.1:8100;"
-  , "    }"
-  , "}"
-  ]
-
-
-andersonSite :: RevertableProperty DebianLike DebianLike
-andersonSite =
-  Nginx.siteEnabled "andersonquotes.co.za"
-  [ "server {"
-  , "    listen              41.72.130.253:80;"
-  , "    server_name         andersonquotes.co.za www.andersonquotes.co.za;"
-  , "    access_log          /var/log/nginx/anderson.access.log;"
-  , ""
-  , "    location / {"
-  , "        proxy_read_timeout 5m;"
-  , "        proxy_set_header Host quotemaster.co.za;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto http;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://41.72.129.157/anderson/;"
-  , "    }"
-  , "}"
-  ]
-
-
-mcibrokerSite :: RevertableProperty DebianLike DebianLike
-mcibrokerSite =
-  Nginx.siteEnabled "mcibroker"
-  [ "server {"
-  , "    listen              41.72.131.181:80;"
-  , "    server_name         mcibrokerquotes.co.za www.mcibrokerquotes.co.za;"
-  , "    access_log          /var/log/nginx/mcibrokerquotes.co.za.access.log;"
-  , "    location / {"
-  , "        rewrite ^(.*)$ https://mcibrokerquotes.co.za$1 permanent;"
-  , "    }"
-  , "    location '/.well-known/acme-challenge' {"
-  , "        default_type 'text/plain';"
-  , "        root /srv/www/mcibrokerquotes.co.za;"
-  , "    }"
-  , "}"
-  , ""
-  , "server {"
-  , "    listen              41.72.131.181:443 ssl;"
-  , "    server_name         mcibrokerquotes.co.za;"
-  , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "mcibrokerquotes.co.za" <> ";"
-  , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "mcibrokerquotes.co.za" <> ";"
-  , "    ssl_ciphers         ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AES:RSA+3DES:!ADH:!AECDH:!MD5;"
-  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
-  , "    ssl_prefer_server_ciphers on;"
-  , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
-  , "    ssl_session_cache   none;"
-  , "    ssl_session_tickets off;"
-  , "    access_log          /var/log/nginx/mcibrokerquotes.co.za_tls.access.log;"
-  , "    location / {"
-  , "        add_header X-Frame-Options SAMEORIGIN;"
-  , "        proxy_read_timeout 10m;"
-  , "        proxy_set_header Host quotemaster.co.za;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto https;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://41.72.129.157/mci/;"
-  , "    }"
-  , "}"
-  ]
 
 
 entropySite :: RevertableProperty DebianLike DebianLike
@@ -696,8 +551,6 @@ entropySite =
 fusionSites :: Property DebianLike
 fusionSites =
   propertyList "Fusion sites" $ props
-  ! Nginx.siteEnabled "fusion-prod" []
-  ! Nginx.siteEnabled "fusion-prod-tls" []
   & Nginx.siteEnabled "fusion-prod-bz"
   [ "server {"
   , "    listen              41.72.130.253:80;"
@@ -796,7 +649,6 @@ fusionSites =
   , "    }"
   , "}"
   ]
-  ! Nginx.siteEnabled "fusion-prod-bz-tls" []
   & Nginx.siteEnabled "fusion-uat"
   [ "server {"
   , "    listen              41.72.130.253:80;"
@@ -901,116 +753,6 @@ fusionSites =
   , "    }"
   , "}"
   ]
-  ! Nginx.siteEnabled "fusion-uat-tls" []
-
-
-quotemasterSite :: RevertableProperty DebianLike DebianLike
-quotemasterSite =
-  Nginx.siteEnabled "quotemaster"
-  [ "server {"
-  , "    listen              41.72.131.181:80;"
-  , "    server_name         quotemaster.co.za www.quotemaster.co.za;"
-  , "    access_log          /var/log/nginx/quotemaster.co.za.access.log;"
-  , "    location / {"
-  , "        rewrite ^(.*)$ https://quotemaster.co.za$1 permanent;"
-  , "    }"
-  , "    location '/.well-known/acme-challenge' {"
-  , "        default_type 'text/plain';"
-  , "        root /srv/www/quotemaster.co.za;"
-  , "    }"
-  , "}"
-  , ""
-  , "server {"
-  , "    listen              41.72.131.181:443 default ssl;"
-  , "    server_name         quotemaster.co.za;"
-  , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "quotemaster.co.za" <> ";"
-  , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "quotemaster.co.za" <> ";"
-  , "    ssl_ciphers         ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AES:RSA+3DES:!ADH:!AECDH:!MD5;"
-  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
-  , "    ssl_prefer_server_ciphers on;"
-  , "    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;"
-  , "    ssl_session_cache   none;"
-  , "    ssl_session_tickets off;"
-  , "    access_log          /var/log/nginx/quotemaster.co.za_tls.access.log;"
-  , "    location / {"
-  , "        add_header Strict-Transport-Security \"max-age=63072000; includeSubdomains; preload\";"
-  , "        add_header X-Frame-Options SAMEORIGIN;"
-  , "        proxy_read_timeout 10m;"
-  , "        proxy_set_header Host $host;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto https;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://41.72.129.157;"
-  , "    }"
-  , "}"
-  ]
-
-
-saxumSite :: RevertableProperty DebianLike DebianLike
-saxumSite =
-  Nginx.siteEnabled "saxumretail.com"
-  [ "server {"
-  , "    listen              41.72.131.181:80;"
-  , "    server_name         www.saxumretail.com;"
-  , "    access_log          /var/log/nginx/saxumretail.access.log;"
-  , "    location / {"
-  , "        proxy_read_timeout 5m;"
-  , "        proxy_set_header Host quotemaster.co.za;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto http;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://41.72.129.157/quickquote/;"
-  , "    }"
-  , "}"
-  ]
-
-
-saxumBrokersSite :: RevertableProperty DebianLike DebianLike
-saxumBrokersSite =
-  Nginx.siteEnabled "saxumbrokers.co.za"
-  [ "server {"
-  , "    listen              41.72.131.181:80;"
-  , "    server_name         www.saxumbrokers.co.za saxumbrokers.co.za;"
-  , "    access_log          /var/log/nginx/saxumbrokers.access.log;"
-  , "    location / {"
-  , "        proxy_read_timeout 5m;"
-  , "        proxy_set_header Host quotemaster.co.za;"
-  , "        proxy_set_header X-Real-IP $remote_addr;"
-  , "        proxy_set_header X-Forwarded-Proto http;"
-  , "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-  , "        proxy_pass       http://41.72.129.157/saxumbroker/;"
-  , "    }"
-  , "}"
-  ]
-
-
-mailRelayContainer :: Systemd.Container
-mailRelayContainer =
-  Systemd.debContainer "mail-relay" $ props
-  & standardContainer (Stable "jessie") X86_64
-  & mailRelay
-
-
-mailRelay :: Property DebianLike
-mailRelay =
-  propertyList "fusionapp.com mail relay" $ props
-  & Systemd.running "postfix" `requires` Postfix.installed
-  & "/etc/aliases" `File.hasContent`
-  [ "postmaster: root"
-  , "root: dev@fusionapp.com"
-  ] `onChange` Postfix.newaliases
-  & Postfix.mainCfFile `File.containsLines`
-  [ "mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 41.72.130.248/29 41.72.129.157/32 129.232.129.136/29 197.189.229.120/29 41.72.135.80/29 172.17.0.0/16"
-  ]
-  `onChange` Postfix.dedupMainCf
-  `onChange` Postfix.reloaded
-  `describe` "postfix configured"
-  & Postfix.mappedFile "/etc/postfix/master.cf"
-  (`File.containsLines`
-   [ "submission inet n - - - - smtpd"
-   ])
-  `describe` "postfix master.cf configured"
-  `onChange` Postfix.reloaded
 
 
 dhparam2048 :: [String]
