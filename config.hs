@@ -841,5 +841,9 @@ prometheusConfig = withPrivData src ctx $
 droneSchedules :: Property UnixLike
 droneSchedules =
   "/srv/drone-scheduler/schedules.yaml" `File.hasContent`
-  [ "[]"
+  [ "- user: fusionapp"
+  , "  repo: fusion"
+  , "  branch: prod"
+  , "  environment: production"
+  , "  schedule: '0 0 * * *'"
   ]
