@@ -845,5 +845,5 @@ droneSchedules =
   , "  repo: fusion"
   , "  branch: prod"
   , "  environment: production"
-  , "  schedule: '0 0 * * *'"
+  , "  schedule: '50 21 * * *'"
   ]
