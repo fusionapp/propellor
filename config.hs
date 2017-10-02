@@ -41,7 +41,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-uat.pem" hostContext
-          & File.hasPrivContent "/srv/certs/private/ariva.pem" hostContext
+          & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
           & File.hasPrivContent "/srv/certs/private/absa-datapower-uat.pem" hostContext
           & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
           & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/scarlet.fusionapp.com.pem"
@@ -77,6 +77,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/mfc-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
        & File.notPresent "/srv/certs/private/quotemaster.co.za.pem"
        & File.dirExists "/etc/docker/certs.d/scarlet.fusionapp.com:5000"
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.cert" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
