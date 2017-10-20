@@ -76,6 +76,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/mfc-fusion-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
        & File.notPresent "/srv/certs/private/quotemaster.co.za.pem"
