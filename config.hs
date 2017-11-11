@@ -31,7 +31,7 @@ hosts = [ scarlet
 
 scarlet :: Host
 scarlet = host "scarlet.fusionapp.com" $ props
-          & standardSystem (Stable "jessie") X86_64
+          & standardSystem (Stable "stretch") X86_64
           & ipv4 "197.189.229.122"
           & hetznerResolv
           & fusionHost
