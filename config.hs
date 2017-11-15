@@ -798,22 +798,29 @@ caddyfile = propertyList "Configuration for Caddy" $ props
 
 
 prometheusConfig :: Property (HasInfo + DebianLike)
-prometheusConfig = withPrivData src ctx $
-  \gettoken -> withPrivData src2 ctx $
-  \gettoken2 -> property' "Prometheus configuration" $
-  \p -> gettoken $
-  \token -> gettoken2 $
-  \token2 -> ensureProperty p $
-            "/srv/prometheus/prometheus.yml"
-            `File.hasContent`
-            cfg (privDataVal token) (privDataVal token2)
-  where src = Password "weave cloud token"
+prometheusConfig =
+  propertyList "Configuration for Prometheus" $ props
+  & "/srv/prometheus/recording.rules.yml" `File.hasContent` rulesCfg
+  & mainCfg
+  where mainCfg :: Property (HasInfo + DebianLike)
+        mainCfg = withPrivData src ctx $
+          \gettoken -> withPrivData src2 ctx $
+          \gettoken2 -> property' "Prometheus configuration" $
+          \p -> gettoken $
+          \token -> gettoken2 $
+          \token2 -> ensureProperty p $
+                    "/srv/prometheus/prometheus.yml"
+                    `File.hasContent`
+                    cfg (privDataVal token) (privDataVal token2)
+        src = Password "weave cloud token"
         src2 = Password "Drone scrape token"
         ctx = Context "Fusion production"
         cfg token token2 =
           [ "global:"
           , "  external_labels:"
           , "    deployment: 'testing'"
+          , "rule_files:"
+          , "  - /prometheus-data/recording.rules.yml"
           , "scrape_configs:"
           , "  - job_name: 'prometheus'"
           , "    static_configs:"
@@ -833,10 +840,37 @@ prometheusConfig = withPrivData src ctx $
           , "        refresh_interval: 15s"
           , "        type: A"
           , "        port: 8000"
+          , "  - job_name: 'clj-documint-uat'"
+          , "    dns_sd_configs:"
+          , "      - names:"
+          , "        - clj-documint.fusion"
+          , "        refresh_interval: 15s"
+          , "        type: A"
           , "remote_write:"
           , "  - url: https://cloud.weave.works/api/prom/push"
           , "    basic_auth:"
           , "      password: " <> token
+          ]
+        rulesCfg =
+          [ "groups:"
+          , "  - name: clj-documint"
+          , "    rules:"
+          , "      - record: job_statusclass:http_requests_total:irate"
+          , "        expr: sum(irate(http_requests_total[15m])) BY (job, statusClass)"
+          , "      - record: job:http_request_latency_seconds:50p"
+          , "        expr: histogram_quantile(0.5, sum(irate(http_request_latency_seconds[15m])) BY (job, le))"
+          , "      - record: job:http_request_latency_seconds:90p"
+          , "        expr: histogram_quantile(0.9, sum(irate(http_request_latency_seconds[15m])) BY (job, le))"
+          , "      - record: job:http_request_latency_seconds:99p"
+          , "        expr: histogram_quantile(0.99, sum(irate(http_request_latency_seconds[15m])) BY (job, le))"
+          , "      - record: job_action:documint_actions_seconds:50p"
+          , "        expr: histogram_quantile(0.5, sum(irate(documint_actions_seconds[15m])) BY (job, action, le))"
+          , "      - record: job_action:documint_actions_seconds:90p"
+          , "        expr: histogram_quantile(0.9, sum(irate(documint_actions_seconds[15m])) BY (job, action, le))"
+          , "      - record: job_action:documint_actions_seconds:99p"
+          , "        expr: histogram_quantile(0.99, sum(irate(documint_actions_seconds[15m])) BY (job, action, le))"
+          , "      - record: job_action:documint_actions_total:irate"
+          , "        expr: sum(irate(documint_actions_total[15m])) BY (job, action)"
           ]
 
 
