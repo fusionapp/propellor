@@ -846,6 +846,7 @@ prometheusConfig =
           , "        - clj-documint.fusion"
           , "        refresh_interval: 15s"
           , "        type: A"
+          , "        port: 80"
           , "remote_write:"
           , "  - url: https://cloud.weave.works/api/prom/push"
           , "    basic_auth:"
