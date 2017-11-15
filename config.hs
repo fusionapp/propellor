@@ -50,7 +50,6 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & caddyfile
           & File.dirExists "/srv/catcher-in-the-rye"
           & File.hasPrivContent "/srv/catcher-in-the-rye/config.yaml" (Context "fusion aux")
-          & File.dirExists "/srv/prometheus"
           & prometheusConfig
           & File.dirExists "/srv/drone-scheduler"
           & droneSchedules
@@ -91,6 +90,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        & Cron.job "weekly btrfs balance" (Cron.Times "18 3 * * Sun") (User "root") "/tmp" "/bin/btrfs balance start -v -dusage=50 -musage=50 /"
        & fusionDumpsCleaned
+       & prometheusProdConfig
        where pubKeyEd25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdsS9oJKqICEvhJFHP4LQTjwso9QHSLTtjcBZR2r6kL root@onyx.fusionapp.com"
              pubKeyEcdsa = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBN3UsIwUsSCgItsJv6gdisBYfuxIwP5/jhfe+g1JD6NXqzgj7mUGjMO+tiatgNYauqaFB3JPoS2NsPo6t0jKbzs= root@onyx.fusionapp.com"
 
@@ -800,7 +800,10 @@ caddyfile = propertyList "Configuration for Caddy" $ props
 prometheusConfig :: Property (HasInfo + DebianLike)
 prometheusConfig =
   propertyList "Configuration for Prometheus" $ props
-  & "/srv/prometheus/recording.rules.yml" `File.hasContent` rulesCfg
+  & File.dirExists "/srv/prometheus"
+  & File.dirExists "/srv/prometheus/storage"
+  & File.ownerGroup "/srv/prometheus/storage" (User "nobody") (Group "nogroup")
+  & prometheusRulesCfg
   & mainCfg
   where mainCfg :: Property (HasInfo + DebianLike)
         mainCfg = withPrivData src ctx $
@@ -847,39 +850,63 @@ prometheusConfig =
           , "        refresh_interval: 15s"
           , "        type: A"
           , "        port: 80"
-          , "  - job_name: 'clj-documint-prod'"
-          , "    dns_sd_configs:"
-          , "      - names:"
-          , "        - clj-documint.fusion.production.rancher.internal"
-          , "        refresh_interval: 15s"
-          , "        type: A"
-          , "        port: 80"
           , "remote_write:"
           , "  - url: https://cloud.weave.works/api/prom/push"
           , "    basic_auth:"
           , "      password: " <> token
           ]
-        rulesCfg =
-          [ "groups:"
-          , "  - name: clj-documint"
-          , "    rules:"
-          , "      - record: job_statusclass:http_requests_total:irate"
-          , "        expr: sum(irate(http_requests_total[15m])) BY (job, statusClass)"
-          , "      - record: job:http_request_latency_seconds:50p"
-          , "        expr: histogram_quantile(0.5, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
-          , "      - record: job:http_request_latency_seconds:90p"
-          , "        expr: histogram_quantile(0.9, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
-          , "      - record: job:http_request_latency_seconds:99p"
-          , "        expr: histogram_quantile(0.99, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
-          , "      - record: job_action:documint_actions_seconds:50p"
-          , "        expr: histogram_quantile(0.5, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
-          , "      - record: job_action:documint_actions_seconds:90p"
-          , "        expr: histogram_quantile(0.9, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
-          , "      - record: job_action:documint_actions_seconds:99p"
-          , "        expr: histogram_quantile(0.99, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
-          , "      - record: job_action:documint_actions_total:irate"
-          , "        expr: sum(irate(documint_actions_total[15m])) BY (job, action)"
-          ]
+
+
+prometheusRulesCfg :: Property UnixLike
+prometheusRulesCfg = "/srv/prometheus/recording.rules.yml" `File.hasContent`
+  [ "groups:"
+  , "  - name: clj-documint"
+  , "    rules:"
+  , "      - record: job_statusclass:http_requests_total:irate"
+  , "        expr: sum(irate(http_requests_total[15m])) BY (job, statusClass)"
+  , "      - record: job:http_request_latency_seconds:50p"
+  , "        expr: histogram_quantile(0.5, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
+  , "      - record: job:http_request_latency_seconds:90p"
+  , "        expr: histogram_quantile(0.9, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
+  , "      - record: job:http_request_latency_seconds:99p"
+  , "        expr: histogram_quantile(0.99, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
+  , "      - record: job_action:documint_actions_seconds:50p"
+  , "        expr: histogram_quantile(0.5, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
+  , "      - record: job_action:documint_actions_seconds:90p"
+  , "        expr: histogram_quantile(0.9, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
+  , "      - record: job_action:documint_actions_seconds:99p"
+  , "        expr: histogram_quantile(0.99, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
+  , "      - record: job_action:documint_actions_total:irate"
+  , "        expr: sum(irate(documint_actions_total[15m])) BY (job, action)"
+  ]
+
+
+prometheusProdConfig :: Property UnixLike
+prometheusProdConfig =
+  propertyList "Configuration for Prometheus (production)" $ props
+  & File.dirExists "/srv/prometheus"
+  & File.dirExists "/srv/prometheus/storage"
+  & File.ownerGroup "/srv/prometheus/storage" (User "nobody") (Group "nogroup")
+  & prometheusRulesCfg
+  & "/srv/prometheus/prometheus.yml" `File.hasContent`
+  [ "global:"
+  , "  scrape_interval: 15s"
+  , "  external_labels:"
+  , "    deployment: 'production'"
+  , "rule_files:"
+  , "  - /prometheus-data/recording.rules.yml"
+  , "scrape_configs:"
+  , "  - job_name: 'prometheus'"
+  , "    static_configs:"
+  , "      - targets: ['localhost:9090']"
+  , "  - job_name: 'clj-documint-prod'"
+  , "    dns_sd_configs:"
+  , "      - names:"
+  , "        - clj-documint.fusion"
+  , "        refresh_interval: 15s"
+  , "        type: A"
+  , "        port: 80"
+  ]
 
 
 droneSchedules :: Property UnixLike
