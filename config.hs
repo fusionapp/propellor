@@ -57,7 +57,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
 
 onyx :: Host
 onyx = host "onyx.fusionapp.com" $ props
-       & standardSystem (Stable "jessie") X86_64
+       & standardSystem (Stable "stretch") X86_64
        & ipv4 "41.72.130.253"
        & hetznerResolv
        & fusionHost
@@ -101,7 +101,7 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & Apt.installed ["mercurial", "git"]
              -- Upgraded Docker
              & Apt.installed ["docker-ce"]
-             `requires` Apt.setSourcesListD ["deb [arch=amd64] https://download.docker.com/linux/debian jessie stable"] "docker"
+             `requires` Apt.setSourcesListD ["deb [arch=amd64] https://download.docker.com/linux/debian stretch stable"] "docker"
              `requires` Apt.installed ["apt-transport-https"]
              `requires` Apt.trustsKey dockerKey
              `requires` dockerOptions
