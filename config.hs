@@ -84,6 +84,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & "/etc/docker/certs.d/scarlet.fusionapp.com:5000/client.key" `File.isSymlinkedTo` File.LinkTarget "/srv/certs/private/onyx.fusionapp.com.pem"
        -- Work around Propellor issue, not sure exactly what is wrong here.
        & Apt.installed ["debootstrap"]
+       & Apt.installed ["systemd-container"]
        & Systemd.running Systemd.networkd
        & Systemd.nspawned nginxPrimary
        & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
