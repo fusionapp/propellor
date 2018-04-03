@@ -685,7 +685,7 @@ fusionSites =
   , "    add_header x-frame-options SAMEORIGIN;"
   , "    add_header X-Xss-Protection \"1; mode=block; report=https://fusionapp.report-uri.com/r/d/xss/enforce\";"
   , "    add_header Referrer-Policy strict-origin-when-cross-origin;"
-  , "    add_header Content-Security-Policy-Report-Only \"default-src 'none'; form-action 'none'; frame-ancestors 'none'; report-uri https://fusionapp.report-uri.com/r/d/csp/wizard\";"
+  , "    add_header Content-Security-Policy-Report-Only \"img-src 'self'; style-src 'self'; connect-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; report-uri https://fusionapp.report-uri.com/r/d/csp/wizard\";"
   , ""
   , "    location /fusion-error {"
   , "        root            /srv/nginx;"
