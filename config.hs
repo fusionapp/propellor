@@ -814,18 +814,15 @@ prometheusConfig =
   & mainCfg
   where mainCfg :: Property (HasInfo + DebianLike)
         mainCfg = withPrivData src ctx $
-          \gettoken -> withPrivData src2 ctx $
-          \gettoken2 -> property' "Prometheus configuration" $
+          \gettoken -> property' "Prometheus configuration" $
           \p -> gettoken $
-          \token -> gettoken2 $
-          \token2 -> ensureProperty p $
+          \token -> ensureProperty p $
                     "/srv/prometheus/prometheus.yml"
                     `File.hasContent`
-                    cfg (privDataVal token) (privDataVal token2)
-        src = Password "weave cloud token"
-        src2 = Password "Drone scrape token"
+                    cfg (privDataVal token)
+        src = Password "Drone scrape token"
         ctx = Context "Fusion production"
-        cfg token token2 =
+        cfg token =
           [ "global:"
           , "  external_labels:"
           , "    deployment: 'testing'"
@@ -843,7 +840,7 @@ prometheusConfig =
           , "        type: A"
           , "        port: 9100"
           , "  - job_name: 'Drone'"
-          , "    bearer_token: " <> token2
+          , "    bearer_token: " <> token
           , "    dns_sd_configs:"
           , "      - names:"
           , "        - drone-server.drone7"
@@ -857,10 +854,6 @@ prometheusConfig =
           , "        refresh_interval: 15s"
           , "        type: A"
           , "        port: 80"
-          , "remote_write:"
-          , "  - url: https://cloud.weave.works/api/prom/push"
-          , "    basic_auth:"
-          , "      password: " <> token
           ]
 
 
@@ -923,5 +916,5 @@ droneSchedules =
   , "  repo: fusion"
   , "  branch: prod"
   , "  environment: production"
-  , "  schedule: '50 21 * * *'"
+  , "  schedule: '10 22 * * *'"
   ]
