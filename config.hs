@@ -799,9 +799,8 @@ caddyfile = propertyList "Configuration for Caddy" $ props
   , "proxy / rancher-server:8080 {"
   , " transparent"
   , " websocket"
-  , " keepalive 2"
-  , " max_conns 500"
   , "}"
+  , "timeouts 5m"
   ]
 
 
