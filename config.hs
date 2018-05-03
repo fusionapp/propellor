@@ -800,7 +800,7 @@ caddyfile = propertyList "Configuration for Caddy" $ props
   , " transparent"
   , " websocket"
   , "}"
-  , "timeouts 0"
+  , "timeouts 5m"
   ]
 
 
