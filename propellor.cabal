@@ -183,6 +183,7 @@ Library
     Propellor.Types.Singletons
     Propellor.Types.ZFS
     Propellor.Wrapper
+    Utility.FileMode
   Other-Modules:
     Propellor.Bootstrap
     Propellor.Git
@@ -201,7 +202,6 @@ Library
     Utility.Directory
     Utility.Env
     Utility.Exception
-    Utility.FileMode
     Utility.FileSystemEncoding
     Utility.HumanNumber
     Utility.LinuxMkLibs
@@ -234,7 +234,7 @@ Executable propellor-config
   Main-Is: propellor-config.hs
   GHC-Options: -threaded -Wall -fno-warn-tabs
   Default-Extensions: TypeOperators
-  Build-Depends: propellor, base
+  Build-Depends: propellor, base, unix
 
 Executable propellor
   Default-Language: Haskell98
