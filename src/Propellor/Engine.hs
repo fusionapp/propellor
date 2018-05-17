@@ -97,11 +97,12 @@ onlyProcess lockfile a = bracket lock unlock (const a)
 	lock = do
 		createDirectoryIfMissing True (takeDirectory lockfile)
 		l <- createFile lockfile stdFileMode
+		setFdOption l CloseOnExec True
 		setLock l (WriteLock, AbsoluteSeek, 0, 0)
 			`catchIO` const alreadyrunning
 		return l
 	unlock = closeFd
-	alreadyrunning = error "Propellor is already running on this host!"
+	alreadyrunning = giveup "Propellor is already running on this host!"
 
 -- | Chains to a propellor sub-Process, forwarding its output on to the
 -- display, except for the last line which is a Result.

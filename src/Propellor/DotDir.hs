@@ -271,7 +271,7 @@ minimalConfig = do
 		, "  Main-Is: config.hs"
 		, "  GHC-Options: -threaded -Wall -fno-warn-tabs -O0"
 		, "  Extensions: TypeOperators"
-		, "  Build-Depends: propellor >= 3.0, base >= 3"
+		, "  Build-Depends: propellor >= 3.0, base >= 4.9"
 		]
 	configcontent =
 		[ "-- This is the main configuration file for Propellor, and is used to build"
@@ -316,7 +316,7 @@ minimalConfig = do
 		]
 
 stackResolver :: String
-stackResolver = "lts-8.22"
+stackResolver = "lts-9.21"
 
 fullClone :: IO Result
 fullClone = do
@@ -358,7 +358,7 @@ checkRepoUpToDate = whenM (gitbundleavail <&&> dotpropellorpopulated) $ do
 		withQuietOutput createProcessSuccess $
 			proc "git" ["log", headrev]
 	if (headknown == Nothing)
-		then setupUpstreamMaster headrev
+		then updateUpstreamMaster headrev
 		else do
 			theirhead <- getCurrentGitSha1 =<< getCurrentBranchRef
 			when (theirhead /= headrev) $ do
@@ -372,26 +372,29 @@ checkRepoUpToDate = whenM (gitbundleavail <&&> dotpropellorpopulated) $ do
 		d <- dotPropellor
 		doesFileExist (d </> "propellor.cabal")
 
--- Makes upstream/master in dotPropellor be a usefully mergeable branch.
+-- Updates upstream/master in dotPropellor so merging from it will update
+-- to the latest distrepo.
 --
--- We cannot just use origin/master, because in the case of a distrepo,
--- it only contains 1 commit. So, trying to merge with it will result
--- in lots of merge conflicts, since git cannot find a common parent
--- commit.
+-- We cannot just fetch the distrepo because the distrepo contains only 
+-- 1 commit. So, trying to merge with it will result in lots of merge
+-- conflicts, since git cannot find a common parent commit.
 --
--- Instead, the upstream/master branch is created by taking the
--- upstream/master branch (which must be an old version of propellor,
+-- Instead, the new upstream/master branch is updated by taking the
+-- current upstream/master branch (which must be an old version of propellor,
 -- as distributed), and diffing from it to the current origin/master,
 -- and committing the result. This is done in a temporary clone of the
 -- repository, giving it a new master branch. That new branch is fetched
 -- into the user's repository, as if fetching from a upstream remote,
 -- yielding a new upstream/master branch.
-setupUpstreamMaster :: String -> IO ()
-setupUpstreamMaster newref = do
+--
+-- If there's no upstream/master, or the repo is not using the distrepo,
+-- do nothing.
+updateUpstreamMaster :: String -> IO ()
+updateUpstreamMaster newref = do
 	changeWorkingDirectory =<< dotPropellor
-	go =<< catchMaybeIO getoldrev
+	go =<< getoldref
   where
-	go Nothing = warnoutofdate False
+	go Nothing = return ()
 	go (Just oldref) = do
 		let tmprepo = ".git/propellordisttmp"
 		let cleantmprepo = void $ catchMaybeIO $ removeDirectoryRecursive tmprepo
@@ -417,19 +420,39 @@ setupUpstreamMaster newref = do
 		cleantmprepo
 		warnoutofdate True
 
-	getoldrev = takeWhile (/= '\n')
-		<$> readProcess "git" ["show-ref", upstreambranch, "--hash"]
-
 	git = run "git"
 	run cmd ps = unlessM (boolSystem cmd (map Param ps)) $
 		error $ "Failed to run " ++ cmd ++ " " ++ show ps
 
+	-- Get ref that the upstreambranch points to, only when
+	-- the distrepo is being used.
+	getoldref = do
+		mref <- catchMaybeIO $ takeWhile (/= '\n')
+			<$> readProcess "git" ["show-ref", upstreambranch, "--hash"]
+		case mref of
+			Just _ -> do
+				-- Normally there will be no upstream
+				-- remote when the distrepo is used.
+				-- Older versions of propellor set up
+				-- an upstream remote pointing at the 
+				-- distrepo.
+				ifM (hasRemote "upstream")
+					( do
+						v <- remoteUrl "upstream"
+						return $ case v of
+							Just rurl | rurl == distrepo -> mref
+							_ -> Nothing
+					, return mref
+					)
+			Nothing -> return mref
+
 warnoutofdate :: Bool -> IO ()
-warnoutofdate havebranch = do
-	warningMessage ("** Your ~/.propellor/ is out of date..")
-	let also s = hPutStrLn stderr ("   " ++ s)
-	also ("A newer upstream version is available in " ++ distrepo)
-	if havebranch
-		then also ("To merge it, run: git merge " ++ upstreambranch)
-		else also ("To merge it, find the most recent commit in your repository's history that corresponds to an upstream release of propellor, and set refs/remotes/" ++ upstreambranch ++ " to it. Then run propellor again.")
-	also ""
+warnoutofdate havebranch = warningMessage $ unlines
+	[ "** Your ~/.propellor/ is out of date.."
+	, indent "A newer upstream version is available in " ++ distrepo
+	, indent $ if havebranch
+		then "To merge it, run: git merge " ++ upstreambranch
+		else "To merge it, find the most recent commit in your repository's history that corresponds to an upstream release of propellor, and set refs/remotes/" ++ upstreambranch ++ " to it. Then run propellor again."
+	]
+  where
+	indent s = "   " ++ s

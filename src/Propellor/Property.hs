@@ -32,6 +32,7 @@ module Propellor.Property (
 	, makeChange
 	, noChange
 	, doNothing
+	, impossible
 	, endAction
 	-- * Property result checking
 	, UncheckedProperty
@@ -54,6 +55,7 @@ import Data.Maybe
 import Data.List
 import Data.Hashable
 import Control.Applicative
+import GHC.Stack
 import Prelude
 
 import Propellor.Types
@@ -62,6 +64,7 @@ import Propellor.Types.ResultCheck
 import Propellor.Types.MetaTypes
 import Propellor.Types.Singletons
 import Propellor.Info
+import Propellor.Message
 import Propellor.EnsureProperty
 import Utility.Exception
 import Utility.Monad
@@ -281,6 +284,7 @@ isNewerThan x y = do
 -- fail that way.
 pickOS
 	::
+		HasCallStack =>
 		( SingKind ('KProxy :: KProxy ka)
 		, SingKind ('KProxy :: KProxy kb)
 		, DemoteRep ('KProxy :: KProxy ka) ~ [MetaType]
@@ -342,7 +346,7 @@ unsupportedOS = property "unsupportedOS" unsupportedOS'
 
 -- | Throws an error, for use in `withOS` when a property is lacking
 -- support for an OS.
-unsupportedOS' :: Propellor Result
+unsupportedOS' :: HasCallStack => Propellor Result
 unsupportedOS' = go =<< getOS
 	  where
 		go Nothing = error "Unknown host OS is not supported by this property."
@@ -363,6 +367,12 @@ noChange = return NoChange
 -- This is the same as `mempty` from the `Monoid` instance.
 doNothing :: SingI t => Property (MetaTypes t)
 doNothing = mempty
+
+-- | In situations where it's not possible to provide a property that
+-- works, this can be used to make a property that always fails with an
+-- error message you provide.
+impossible :: SingI t => String -> Property (MetaTypes t)
+impossible msg = property "impossible" $ errorMessage msg
 
 -- | Registers an action that should be run at the very end, after
 -- propellor has checks all the properties of a host.

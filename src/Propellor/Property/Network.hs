@@ -7,6 +7,9 @@ import Data.Char
 
 type Interface = String
 
+-- | Options to put in a stanza of an ifupdown interfaces file.
+type InterfaceOptions = [(String, String)]
+
 ifUp :: Interface -> Property DebianLike
 ifUp iface = tightenTargets $ cmdProperty "ifup" [iface]
 	`assume` MadeChange
@@ -19,27 +22,57 @@ ifUp iface = tightenTargets $ cmdProperty "ifup" [iface]
 --
 -- No interfaces are brought up or down by this property.
 cleanInterfacesFile :: Property DebianLike
-cleanInterfacesFile = tightenTargets $ hasContent interfacesFile
-	[ "# Deployed by propellor, do not edit."
-	, ""
-	, "source-directory interfaces.d"
+cleanInterfacesFile = interfaceFileContains interfacesFile
+	[ "source-directory interfaces.d"
 	, ""
 	, "# The loopback network interface"
 	, "auto lo"
 	, "iface lo inet loopback"
 	]
+	[]
 	`describe` ("clean " ++ interfacesFile)
 
 -- | Configures an interface to get its address via dhcp.
 dhcp :: Interface -> Property DebianLike
-dhcp iface = tightenTargets $ hasContent (interfaceDFile iface)
+dhcp iface = dhcp' iface mempty
+
+dhcp' :: Interface -> InterfaceOptions -> Property DebianLike
+dhcp' iface options = interfaceFileContains (interfaceDFile iface)
 	[ "auto " ++ iface
 	, "iface " ++ iface ++ " inet dhcp"
-	]
+	] options
 	`describe` ("dhcp " ++ iface)
 	`requires` interfacesDEnabled
 
--- | Writes a static interface file for the specified interface.
+newtype Gateway = Gateway IPAddr
+
+-- | Configures an interface with a static address and gateway.
+static :: Interface -> IPAddr -> Maybe Gateway -> Property DebianLike
+static iface addr gateway = static' iface addr gateway mempty
+
+static' :: Interface -> IPAddr -> Maybe Gateway -> InterfaceOptions -> Property DebianLike
+static' iface addr gateway options =
+	interfaceFileContains (interfaceDFile iface) headerlines options'
+	`describe` ("static IP address for " ++ iface)
+	`requires` interfacesDEnabled
+  where
+	headerlines =
+		[ "auto " ++ iface
+		, "iface " ++ iface ++ " " ++ inet ++ " static"
+		]
+	options' = catMaybes
+		[ Just $ ("address", val addr)
+		, case gateway of
+			Just (Gateway gaddr) -> 
+				Just ("gateway", val gaddr)
+			Nothing -> Nothing
+		] ++ options
+	inet = case addr of
+		IPv4 _ -> "inet"
+		IPv6 _ -> "inet6"
+
+-- | Writes a static interface file for the specified interface
+-- to preserve its current configuration.
 --
 -- The interface has to be up already. It could have been brought up by
 -- DHCP, or by other means. The current ipv4 addresses
@@ -50,8 +83,8 @@ dhcp iface = tightenTargets $ hasContent (interfaceDFile iface)
 --
 -- (ipv6 addresses are not included because it's assumed they come up
 -- automatically in most situations.)
-static :: Interface -> Property DebianLike
-static iface = tightenTargets $ 
+preserveStatic :: Interface -> Property DebianLike
+preserveStatic iface = tightenTargets $ 
 	check (not <$> doesFileExist f) setup
 		`describe` desc
 		`requires` interfacesDEnabled
@@ -84,13 +117,13 @@ static iface = tightenTargets $
 
 -- | 6to4 ipv6 connection, should work anywhere
 ipv6to4 :: Property DebianLike
-ipv6to4 = tightenTargets $ hasContent (interfaceDFile "sit0")
-	[ "# Deployed by propellor, do not edit."
+ipv6to4 = tightenTargets $ interfaceFileContains (interfaceDFile "sit0")
+	[ "auto sit0"
 	, "iface sit0 inet6 static"
-	, "\taddress 2002:5044:5531::1"
-	, "\tnetmask 64"
-	, "\tgateway ::192.88.99.1"
-	, "auto sit0"
+	]
+	[ ("address", "2002:5044:5531::1")
+	, ("netmask", "64")
+	, ("gateway", "::192.88.99.1")
 	]
 	`describe` "ipv6to4"
 	`requires` interfacesDEnabled
@@ -114,3 +147,10 @@ interfacesDEnabled :: Property DebianLike
 interfacesDEnabled = tightenTargets $
 	containsLine interfacesFile "source-directory interfaces.d"
 		`describe` "interfaces.d directory enabled"
+
+interfaceFileContains :: FilePath -> [String] -> InterfaceOptions -> Property DebianLike
+interfaceFileContains f headerlines options = tightenTargets $ hasContent f $
+	warning : headerlines ++ map fmt options
+  where
+	fmt (k, v) = "\t" ++ k ++ " " ++ v
+	warning = "# Deployed by propellor, do not edit."

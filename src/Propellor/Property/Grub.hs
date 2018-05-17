@@ -1,11 +1,29 @@
-module Propellor.Property.Grub where
+module Propellor.Property.Grub (
+	GrubDevice,
+	OSDevice,
+	GrubTarget(..),
+	installed,
+	mkConfig,
+	installed',
+	configured,
+	cmdline_Linux_default,
+	boots,
+	bootsMounted,
+	TimeoutSecs,
+	chainPVGrub
+) where
 
 import Propellor.Base
 import qualified Propellor.Property.File as File
+import qualified Propellor.Property.ConfFile as ConfFile
 import qualified Propellor.Property.Apt as Apt
+import Propellor.Property.Mount
 import Propellor.Property.Chroot (inChroot)
 import Propellor.Types.Info
 import Propellor.Types.Bootloader
+import Utility.SafeCommand
+
+import Data.List
 
 -- | Eg, \"hd0,0\" or \"xen/xvda1\"
 type GrubDevice = String
@@ -13,40 +31,95 @@ type GrubDevice = String
 -- | Eg, \"\/dev/sda\"
 type OSDevice = String
 
-type TimeoutSecs = Int
-
--- | Types of machines that grub can boot.
-data BIOS = PC | EFI64 | EFI32 | Coreboot | Xen
-
 -- | Installs the grub package. This does not make grub be used as the
 -- bootloader.
 --
 -- This includes running update-grub, unless it's run in a chroot.
-installed :: BIOS -> Property (HasInfo + DebianLike)
-installed bios = installed' bios 
+installed :: GrubTarget -> Property (HasInfo + DebianLike)
+installed grubtarget = installed' grubtarget 
 	`onChange` (check (not <$> inChroot) mkConfig)
 
--- Run update-grub, to generate the grub boot menu. It will be
+-- | Run update-grub, to generate the grub boot menu. It will be
 -- automatically updated when kernel packages are installed.
 mkConfig :: Property DebianLike
 mkConfig = tightenTargets $ cmdProperty "update-grub" []
 	`assume` MadeChange
 
 -- | Installs grub; does not run update-grub.
-installed' :: BIOS -> Property (HasInfo + DebianLike)
-installed' bios = setInfoProperty aptinstall
-	(toInfo [GrubInstalled])
+installed' :: GrubTarget -> Property (HasInfo + DebianLike)
+installed' grubtarget = setInfoProperty aptinstall
+	(toInfo [GrubInstalled grubtarget])
 	`describe` "grub package installed"
   where
 	aptinstall = Apt.installed [debpkg]
-	debpkg = case bios of
+	debpkg = case grubtarget of
 		PC -> "grub-pc"
 		EFI64 -> "grub-efi-amd64"
 		EFI32 -> "grub-efi-ia32"
 		Coreboot -> "grub-coreboot"
 		Xen -> "grub-xen"
 
--- | Installs grub onto a device, so the system can boot from that device.
+-- | Sets a simple confguration value, using grub-mkconfig to update
+-- the grub boot menu accordingly. On Debian, these are written to
+-- </etc/default/grub>
+--
+-- Example:
+--
+-- >	& Grub.configured "GRUB_TIMEOUT" "10"
+-- >	& Grub.configured "GRUB_TERMINAL_INPUT" "console serial"
+configured :: String -> String -> Property DebianLike
+configured k v = ConfFile.adjustSection 
+	("grub configured with " ++ k ++ "=" ++ v)
+	isline
+	(not . isline)
+	(const [l])
+	(const [l])
+	simpleConfigFile
+	`onChange` mkConfig
+  where
+	isline s = (k ++ "=") `isPrefixOf` s
+	l = k ++ "=" ++ shellEscape v
+
+simpleConfigFile :: FilePath
+simpleConfigFile = "/etc/default/grub"
+
+-- | Adds a word to the default linux command line.
+-- Any other words in the command line will be left unchanged.
+--
+-- Example:
+--
+-- > 	& Grub.cmdline_Linux_default "i915.enable_psr=1"
+-- > 	! Grub.cmdline_Linux_default "quiet"
+cmdline_Linux_default :: String -> RevertableProperty DebianLike DebianLike
+cmdline_Linux_default w = setup <!> undo
+  where
+	setup = ConfFile.adjustSection
+		("linux command line includes " ++ w)
+		isline
+		(not . isline)
+		(map (mkline . addw . getws))
+		(++ [mkline [w]])
+		simpleConfigFile
+		`onChange` mkConfig
+	undo = ConfFile.adjustSection
+		("linux command line does not include " ++ w)
+		isline
+		(not . isline)
+		(map (mkline . rmw . getws))
+		(++ [mkline [""]])
+		simpleConfigFile
+		`onChange` mkConfig
+	k = "GRUB_CMDLINE_LINUX_DEFAULT"
+	isline s = (k ++ "=") `isPrefixOf` s
+	mkline ws = k ++ "=" ++ shellEscape (unwords ws)
+	getws = concatMap words . shellUnEscape . drop 1 . dropWhile (/= '=')
+	addw ws
+		| w `elem` ws = ws
+		| otherwise = ws ++ [w]
+	rmw = filter (/= w)
+
+-- | Installs grub onto a device's boot loader, 
+-- so the system can boot from that device.
 --
 -- You may want to install grub to multiple devices; eg for a system
 -- that uses software RAID.
@@ -56,9 +129,24 @@ installed' bios = setInfoProperty aptinstall
 -- to arrange for this property to only run once, by eg making it be run
 -- onChange after OS.cleanInstallOnce.
 boots :: OSDevice -> Property Linux
-boots dev = tightenTargets $ cmdProperty "grub-install" [dev]
-	`assume` MadeChange
-	`describe` ("grub boots " ++ dev)
+boots dev = property' ("grub boots " ++ dev) $ \w -> do
+	grubtarget <- askInfo
+	let ps = case grubtarget of
+		[GrubInstalled t] -> [targetParam t]
+		_ -> []
+	ensureProperty w $
+		cmdProperty "grub-install" (ps ++ [dev])
+			`assume` MadeChange
+
+targetParam :: GrubTarget -> String
+targetParam t = "--target=" ++ case t of
+	PC -> "i386-pc"
+	EFI32 -> "i386-efi"
+	EFI64 -> "x86_64-efi"
+	Coreboot -> "i386-coreboot"
+	Xen -> "x86_64-xen"
+
+type TimeoutSecs = Int
 
 -- | Use PV-grub chaining to boot
 --
@@ -89,3 +177,54 @@ chainPVGrub rootdev bootdev timeout = combineProperties desc $ props
 	xenshim = scriptProperty ["grub-mkimage --prefix '(" ++ bootdev ++ ")/boot/grub' -c /boot/load.cf -O x86_64-xen /usr/lib/grub/x86_64-xen/*.mod > /boot/xen-shim"]
 		`assume` MadeChange
 		`describe` "/boot-xen-shim"
+
+-- | This is a version of `boots` that makes grub boot the system mounted
+-- at a particular directory. The OSDevice should be the underlying disk
+-- device that grub will be installed to (generally a whole disk, 
+-- not a partition).
+bootsMounted :: FilePath -> OSDevice -> GrubTarget -> Property Linux
+bootsMounted mnt wholediskdev grubtarget = combineProperties desc $ props
+	-- remove mounts that are done below to make sure the right thing
+	-- gets mounted
+	& cleanupmounts
+	-- bind mount host /dev so grub can access the loop devices
+	& bindMount "/dev" (inmnt "/dev")
+	& mounted "proc" "proc" (inmnt "/proc") mempty
+	& mounted "sysfs" "sys" (inmnt "/sys") mempty
+	-- update the initramfs so it gets the uuid of the root partition
+	& inchroot "update-initramfs" ["-u"]
+		`assume` MadeChange
+	-- work around for http://bugs.debian.org/802717
+	& check haveosprober (inchroot "chmod" ["-x", osprober])
+	& inchroot "update-grub" []
+		`assume` MadeChange
+	& check haveosprober (inchroot "chmod" ["+x", osprober])
+	& inchroot "grub-install" [targetParam grubtarget, wholediskdev]
+		`assume` MadeChange
+	& cleanupmounts
+	-- sync all buffered changes out to the disk in case it's
+	-- used right away
+	& cmdProperty "sync" []
+		`assume` NoChange
+  where
+	desc = "grub boots " ++ wholediskdev
+
+  	-- cannot use </> since the filepath is absolute
+	inmnt f = mnt ++ f
+
+	inchroot cmd ps = cmdProperty "chroot" ([mnt, cmd] ++ ps)
+
+	haveosprober = doesFileExist (inmnt osprober)
+	osprober = "/etc/grub.d/30_os-prober"
+
+	cleanupmounts :: Property Linux
+	cleanupmounts = property desc $ liftIO $ do
+		cleanup "/sys"
+		cleanup "/proc"
+		cleanup "/dev"
+		return NoChange
+	  where
+		cleanup m = 
+			let mp = inmnt m
+			in whenM (isMounted mp) $
+				umountLazy mp

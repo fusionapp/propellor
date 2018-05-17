@@ -2,7 +2,6 @@ module Propellor.Property.Chroot.Util where
 
 import Propellor.Property.Mount
 
-import Utility.Exception
 import Utility.Env
 import Utility.Directory
 
@@ -27,7 +26,3 @@ removeChroot :: FilePath -> IO ()
 removeChroot c = do
 	unmountBelow c
 	removeDirectoryRecursive c
-
--- | Returns true if a chroot directory is empty.
-unpopulated :: FilePath -> IO Bool
-unpopulated d = null <$> catchDefaultIO [] (dirContents d)

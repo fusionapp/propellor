@@ -1,3 +1,358 @@
+propellor (5.3.6) unstable; urgency=medium
+
+  * Fix build with ghc 8.4, which broke due to the Semigroup Monoid change.
+  * Dropped support for building propellor with ghc 7 (as in debian
+    oldstable), to avoid needing to depend on the semigroups transitional
+    package, but also because it's just too old to be worth supporting.
+  * stack.yaml: Updated to lts-9.21.
+  * Make Schroot.overlaysInTmpfs revertable
+    Thanks, Sean Whitton
+  * Update shim each time propellor is run in a container, to deal with
+    library version changes.
+  * Unbound: Added support for various DNS record types.
+    Thanks, Félix Sipma.
+
+ -- Joey Hess <id@joeyh.name>  Wed, 09 May 2018 16:24:37 -0400
+
+propellor (5.3.5) unstable; urgency=medium
+
+  * Apt.stdSourcesList now adds stable-updates suite
+    Thanks, Sean Whitton
+  * Significantly increased propellor build speed when your config.hs
+    is in a fork of the propellor repository, by avoiding redundant builds
+    of propellor library.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 22 Apr 2018 12:27:45 -0400
+
+propellor (5.3.4) unstable; urgency=medium
+
+  * Apt.trustsKey: Use apt-key to add key rather than manually driving gpg,
+    which seems to not work anymore.
+    Thanks, Russell Sim.
+  * Firewall: Reorder iptables parameters that are order
+    dependant to make --to-dest and --to-source work.
+    Thanks, Russell Sim
+
+ -- Joey Hess <id@joeyh.name>  Wed, 21 Mar 2018 14:59:15 -0400
+
+propellor (5.3.3) unstable; urgency=medium
+
+  * Warn again about new upstream version when ~/.propellor was cloned from the
+    Debian git bundle using an older version of propellor that set up an
+    upstream remote.
+  * Avoid crashing if initial fetch from origin fails when spinning a host.
+  * Added Propllor.Property.Openssl module contributed by Félix Sipma.
+
+ -- Joey Hess <id@joeyh.name>  Mon, 26 Feb 2018 14:34:37 -0400
+
+propellor (5.3.2) unstable; urgency=medium
+
+  * Added Propellor.Property.Atomic, which can make a non-atomic property
+    that operates on a directory into an atomic property.
+    (Inspired by Vaibhav Sagar's talk on Functional Devops in a
+    Dysfunctional World at LCA 2018.)
+  * Added Git.pulled.
+  * Systemd.machined: Install systemd-container on Debian
+    stretch.
+    Thanks, Sean Whitton
+
+ -- Joey Hess <id@joeyh.name>  Sun, 18 Feb 2018 14:31:39 -0400
+
+propellor (5.3.1) unstable; urgency=medium
+
+  * Last release mistakenly contained my personal branch not master.
+  * contrib/post-merge-hook documentation updated to recommend also using
+    it as a post-checkout hook, to avoid such problems.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 04 Feb 2018 12:00:03 -0400
+
+propellor (5.3.0) unstable; urgency=medium
+
+  * Avoid bogus warning about new upstream version when /usr/bin/propellor
+    is run on a Debian system, but ~/.propellor was not cloned from the
+    Debian git bundle.
+  * Parted: Allow partitions to have no filesystem, for eg, GPT BIOS boot
+    partitions. (API change)
+  * Added rawPartition to PartSpec, for specifying partitions with no
+    filesystem.
+  * Added BiosGrubFlag to PartFlag.
+  * Add HasCallStack constraint to pickOS and unsupportedOS, so the
+    call stack includes the caller.
+  * Run su with --login, to avoid inheriting some problematic environment
+    variables, such as TMP, from the caller.
+  * Grub: Added properties to configure /etc/default/grub.
+  * Laptop: New module, starting with powertopAutoTuneOnBoot.
+
+ -- Joey Hess <id@joeyh.name>  Thu, 01 Feb 2018 12:27:01 -0400
+
+propellor (5.2.0) unstable; urgency=medium
+
+  [ Joey Hess ]
+  * bootstrappedFrom: Set up local privdata file.
+  * Parted: Fix names used for FAT and VFAT partitions.
+  * Parted: Add an Alignment parameter. (API change)
+    A good default to use is safeAlignment, which is 4MiB,
+    well suited for inexpensive flash drives, and fine for other disks too.
+    Previously, a very non-optimial 1MB (not 1MiB) alignment had been used.
+  * DiskImage: Use safeAlignment. It didn't seem worth making the
+    alignment configurable here.
+  * Fixed rounding bug in Parted.calcPartTable.
+  * DiskImage: Fix rsync crash when a mount point does not exist in the
+    chroot.
+  * Fix bug in unmountBelow that caused unmounting of nested mounts to
+    fail.
+  * Grub.boots, Grub.bootsMounted: Pass --target to grub-install.
+  * Added Propellor.Property.Installer modules, which can be used to create
+    bootable installer disk images, which then run propellor to install
+    a system. This code was extracted from the demo I gave in my
+    talk at DebConf 2017.
+
+  [ Sean Whitton ]
+  * Sbuild: add notes about Debian jessie hosts and backports of sbuild and
+    autopkgtest.
+
+ -- Joey Hess <id@joeyh.name>  Sat, 30 Dec 2017 13:34:29 -0400
+
+propellor (5.1.0) unstable; urgency=medium
+
+  [ Sean Whitton ]
+  * File.isSymlinkedTo now revertable. (minor API change)
+  * Sbuild module changes:
+    - Type of Sbuild.built changed to accept additional properties to be
+      ensured inside schroots. (API change)
+      See the suggested usage in module's documentation for new syntax.
+    - Drop Sbuild.installed, Sbuild.builtFor, Sbuild.updated,
+      Sbuild.updatedFor. (API change)
+      Use Sbuild.built instead.  See suggested usage in module's documentation.
+    - Propellor no longer sets up apt proxies in sbuild chroots automatically.
+      Instead, pass the new Sbuild.useHostProxy to Sbuild.built to have
+      Propellor propagate the host's Apt proxy configuration into the chroot.
+      See suggested usage in module's documentation.
+    - Internally, Propellor no longer invokes sbuild-createchroot(1) to build
+      schroots.
+    - Update documentation.
+
+ -- Joey Hess <id@joeyh.name>  Thu, 23 Nov 2017 10:38:16 -0400
+
+propellor (5.0.0) unstable; urgency=medium
+
+  * Debootstrap.built now supports bootstrapping chroots for foreign
+    OS's, using qemu-user-static.
+  * Machine: New module collecting machine-specific properties for 
+    building bootable images for ARM boards.
+    Tested working boards: Olimex Lime, CubieTruck, Banana Pi, SheevaPlug.
+  * Diskimage.imageBuiltFor: New property to build a disk image for a Host,
+    using partition table information configured via the new properties
+    hasPartitionTableType, hasPartition and adjustPartition.
+  * Chroot.noServices moved to Service.noServices and its type changed.
+    (API change)
+  * Service: Avoid starting services when noServices is used.
+  * Add Typeable instance to OriginUrl, fixing build with old versions
+    of ghc.
+  * Added Propellor.Property.impossible
+  * Fail2Ban: Added several additional properties.
+    Thanks, Félix Sipma.
+  * Fail2Ban: Renamed jail.d conf file to use .local.
+    Thanks, Félix Sipma.
+
+ -- Joey Hess <id@joeyh.name>  Sun, 19 Nov 2017 15:42:44 -0400
+
+propellor (4.9.0) unstable; urgency=medium
+
+  * When the ipv4 and ipv6 properties are used with a container, avoid
+    propagating the address out to the host.
+  * DnsInfo has been replaced with DnsInfoPropagated and
+    DnsInfoUnpropagated. (API change)
+  * Code that used fromDnsInfo . fromInfo changes to use getDnsInfo.
+  * addDNS takes an additional Bool parameter to control whether
+    the DNS info should propagate out of containers. (API change)
+  * Made the PropellorRepo.hasOriginUrl property override the repository
+    url that --spin passes to a host.
+  * PropellorRepo.hasOriginUrl type changed to include HasInfo. (API change)
+  * Fstab.mounted: Create mount point if necessary, and mount it
+    if it's not already mounted.
+    Thanks, Nicolas Schodet
+  * Properties that check for an empty directory now treat a directory
+    containing only "lost+found" as effectively empty, to support
+    situations where the directory is a mount point of an EXT* filesystem.
+    Thanks, Nicolas Schodet
+  * Make addInfo accumulate Info in order properties appear, not
+    reverse order.
+    This fixes a bug involving reverting Systemd.resolvConfed or
+    Systemd.linkJournal.
+
+ -- Joey Hess <id@joeyh.name>  Wed, 25 Oct 2017 13:02:14 -0400
+
+propellor (4.8.1) unstable; urgency=medium
+
+  * Borg: Fix propigation of exit status of borg backup.
+  * Borg: Fix handling of UseSshKey.
+
+ -- Joey Hess <id@joeyh.name>  Mon, 25 Sep 2017 17:19:49 -0400
+
+propellor (4.8.0) unstable; urgency=medium
+
+  * DiskImage: Made a DiskImage type class, so that different disk image
+    formats can be implemented. The properties in this module can generate
+    any type that is a member of DiskImage. (API change)
+    (To convert existing configs, convert the filename of the disk image
+    to RawDiskImage filename.)
+  * Removed DiskImage.vmdkBuiltFor property. (API change)
+    Instead, use VirtualBoxPointer in the property that creates the disk
+    image.
+  * Apt.isInstalled: Fix handling of packages that are not known at all
+    to apt.
+  * Borg: Converted BorgRepo from a String alias to a data type.
+    (API change)
+  * Borg: Allow specifying ssh private key to use when accessing a borg
+    repo by using the BorgRepoUsing constructor with UseSshKey.
+  * Borg: Fix broken shell escaping in borg cron job.
+  * Attic: Fix broken shell escaping in attic cron job.
+  * Make lock file descriptors close-on-exec.
+  * Lvm: New module for setting up LVM volumes.
+    Thanks, Nicolas Schodet
+
+ -- Joey Hess <id@joeyh.name>  Mon, 25 Sep 2017 14:37:52 -0400
+
+propellor (4.7.7) unstable; urgency=medium
+
+  * Locale: Display an error message when /etc/locale.gen does not contain
+    the requested locale.
+  * Attic module is deprecated and will warn when used.
+    Attic is no longer available in Debian and appears to have been
+    mostly supersceded by Borg.
+  * Obnam module is deprecated and will warn when used.
+    Obnam has been retired by its author.
+  * Add Typeable instance to Bootstrapper, fixing build with old versions
+    of ghc. (Previous attempt was incomplete.)
+
+ -- Joey Hess <id@joeyh.name>  Wed, 23 Aug 2017 12:15:31 -0400
+
+propellor (4.7.6) unstable; urgency=medium
+
+  * Sbuild: Add Sbuild.userConfig property.
+    Thanks, Sean Whitton
+  * Locale: Make sure that the locales package is installed when enabling
+    locales.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 01 Aug 2017 17:59:07 -0400
+
+propellor (4.7.5) unstable; urgency=medium
+
+  * Avoid crashing when getTerminalName fails due to eg, being in a chroot.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 01 Aug 2017 15:28:58 -0400
+
+propellor (4.7.4) unstable; urgency=medium
+
+  * Set GPG_TTY when run at a terminal, so that gpg can do password
+    prompting despite being connected by pipes to propellor (or git).
+  * Rsync: Make rsync display less verbose.
+  * Improve PROPELLOR_TRACE output so serialized trace values always
+    come on their own line, not mixed with title setting.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 01 Aug 2017 13:30:54 -0400
+
+propellor (4.7.3) unstable; urgency=medium
+
+  * Expand the Trace data type.
+
+ -- Joey Hess <id@joeyh.name>  Sat, 29 Jul 2017 17:26:32 -0400
+
+propellor (4.7.2) unstable; urgency=medium
+
+  * Added PROPELLOR_TRACE environment variable, which can be set to 1 to
+    make propellor output serialized Propellor.Message.Trace values,
+    for consumption by another program.
+  * Rsync: Make rsync display its progress, in a minimal format to avoid
+    scrolling each file down the screen.
+
+ -- Joey Hess <id@joeyh.name>  Sat, 29 Jul 2017 15:49:00 -0400
+
+propellor (4.7.1) unstable; urgency=medium
+
+  * Added Mount.isMounted.
+  * Grub.bootsMounted: Bugfix.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 28 Jul 2017 22:22:40 -0400
+
+propellor (4.7.0) unstable; urgency=medium
+
+  * Add Apt.proxy property to set a host's apt proxy.
+    Thanks, Sean Whitton.
+  * Add Apt.useLocalCacher property to set up apt-cacher-ng.
+    Thanks, Sean Whitton.
+  * Rework Sbuild properties to use apt proxies/cachers instead of
+    bind-mounting the host's apt cache. This makes it possible to run more
+    than one build at a time, and lets sbuild run even if apt's cache is
+    locked by the host's apt.
+    Thanks, Sean Whitton.
+  * Sbuild: When Apt.proxy is set, it is assumed that the proxy does some
+    sort of caching, and sbuild chroots are set up to use the same proxy.
+  * Sbuild: When Apt.proxy is not set, install apt-cacher-ng, and point
+    sbuild chroots at the local apt cacher.
+  * Sbuild: Droped Sbuild.piupartsConfFor, Sbuild.piupartsConf,
+    Sbuild.shareAptCache
+    (API change)
+    No longer needed now that we are using apt proxies/cachers.
+  * Sbuild: Updated sample config in haddock for Propellor.Property.Sbuild.
+    If you use this module, please compare both your config.hs and
+    your ~/.sbuildrc with the haddock documentation.
+  * Grub.bootsMounted: Avoid failing when proc sys etc are already mounted
+    within the chroot.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 28 Jul 2017 20:42:35 -0400
+
+propellor (4.6.2) unstable; urgency=medium
+
+  * Systemd.nspawned: Recent systemd versions such as 234 ignore
+    non-symlinks in /etc/systemd/system/multi-user.target.wants,
+    which was used to configure systemd-nspawn parameters. Instead,
+    use a service.d/local.conf file to configure that.
+  * Grub: Added bootsMounted property, a generalization of
+    DiskImage.grubBooted
+
+ -- Joey Hess <id@joeyh.name>  Fri, 28 Jul 2017 15:48:32 -0400
+
+propellor (4.6.1) unstable; urgency=medium
+
+  * Added Network.dhcp' and Network.static', which allow specifying
+    additional options for interfaces files.
+  * Fix build failure on ghc-8.2.1
+    Thanks, Sergei Trofimovich.
+  * DiskImage: Fix strictness bug in .parttable read/write sequence.
+
+ -- Joey Hess <id@joeyh.name>  Thu, 27 Jul 2017 09:17:32 -0400
+
+propellor (4.6.0) unstable; urgency=medium
+
+  * Add Typeable instance to Bootstrapper, fixing build with old versions
+    of ghc.
+  * Network.static changed to take address and gateway parameters.
+    If you used the old Network.static property, it has been renamed to
+    Network.preserveStatic.
+    (Minor API change)
+
+ -- Joey Hess <id@joeyh.name>  Wed, 26 Jul 2017 20:02:50 -0400
+
+propellor (4.5.2) unstable; urgency=medium
+
+  * Added Rsync.installed property.
+  * Added DiskImage.vmdkBuiltFor property which is useful for booting
+    a disk image in VirtualBox.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 25 Jul 2017 17:58:46 -0400
+
+propellor (4.5.1) unstable; urgency=medium
+
+  * Reboot.toKernelNewerThan: If running kernel is new enough, avoid
+    looking at what kernels are installed.
+    Thanks, Sean Whitton.
+  * DiskImage: Avoid re-partitioning disk image unncessarily, for a large
+    speedup.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 25 Jul 2017 15:51:33 -0400
+
 propellor (4.5.0) unstable; urgency=medium
 
   * Generalized the PartSpec DSL, so it can be used for both

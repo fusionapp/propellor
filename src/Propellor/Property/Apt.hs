@@ -20,7 +20,10 @@ import Propellor.Types.Info
 data HostMirror = HostMirror Url
 	deriving (Eq, Show, Typeable)
 
--- | Indicate host's preferred apt mirror (e.g. an apt cacher on the host's LAN)
+data HostAptProxy = HostAptProxy Url
+	deriving (Eq, Show, Typeable)
+
+-- | Indicate host's preferred apt mirror
 mirror :: Url -> Property (HasInfo + UnixLike)
 mirror u = pureInfoProperty (u ++ " apt mirror selected")
 	     (InfoVal (HostMirror u))
@@ -85,6 +88,8 @@ binandsrc :: String -> SourcesGenerator
 binandsrc url suite = catMaybes
 	[ Just l
 	, Just $ srcLine l
+	, sul
+	, srcLine <$> sul
 	, bl
 	, srcLine <$> bl
 	]
@@ -93,6 +98,10 @@ binandsrc url suite = catMaybes
 	bl = do
 		bs <- backportSuite suite
 		return $ debLine bs url stdSections
+	-- formerly known as 'volatile'
+	sul = do
+		sus <- stableUpdatesSuite suite
+		return $ debLine sus url stdSections
 
 stdArchiveLines :: Propellor SourcesGenerator
 stdArchiveLines = return . binandsrc =<< getMirror
@@ -328,7 +337,9 @@ isInstalled :: Package -> IO Bool
 isInstalled p = isInstalled' [p]
 
 isInstalled' :: [Package] -> IO Bool
-isInstalled' ps = all (== IsInstalled) <$> getInstallStatus ps
+isInstalled' ps = do
+	is <- getInstallStatus ps
+	return $ all (== IsInstalled) is && length is == length ps
 
 data InstallStatus = IsInstalled | NotInstalled
 	deriving (Show, Eq)
@@ -442,7 +453,7 @@ trustsKey k = trustsKey' k <!> untrustKey k
 trustsKey' :: AptKey -> Property DebianLike
 trustsKey' k = check (not <$> doesFileExist f) $ property desc $ makeChange $ do
 	withHandle StdinHandle createProcessSuccess
-		(proc "gpg" ["--no-default-keyring", "--keyring", f, "--import", "-"]) $ \h -> do
+		(proc "apt-key" ["--keyring", f, "add", "-"]) $ \h -> do
 			hPutStr h (pubkey k)
 			hClose h
 	nukeFile $ f ++ "~" -- gpg dropping
@@ -493,3 +504,23 @@ suitePinBlock p suite pin =
 
 dpkgStatus :: FilePath
 dpkgStatus = "/var/lib/dpkg/status"
+
+-- | Set apt's proxy
+proxy :: Url -> Property (HasInfo + DebianLike)
+proxy u = setInfoProperty (proxy' u) (proxyInfo u)
+  where
+	proxyInfo = toInfo . InfoVal . HostAptProxy
+
+proxy' :: Url -> Property DebianLike
+proxy' u = tightenTargets $
+	"/etc/apt/apt.conf.d/20proxy" `File.hasContent`
+		[ "Acquire::HTTP::Proxy \"" ++ u ++ "\";" ]
+		`describe` desc
+  where
+	desc = (u ++ " apt proxy selected")
+
+-- | Cause apt to proxy downloads via an apt cacher on localhost
+useLocalCacher :: Property (HasInfo + DebianLike)
+useLocalCacher = proxy "http://localhost:3142"
+	`requires` serviceInstalledRunning "apt-cacher-ng"
+	`describe` "apt uses local apt cacher"

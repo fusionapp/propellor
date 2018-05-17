@@ -1,5 +1,5 @@
 # When updating the resolver here, also update stackResolver in Propellor.DotDir
-resolver: lts-8.22
+resolver: lts-9.21
 packages:
 - '.'
 ghc-options:

@@ -4,6 +4,10 @@ module Main where
 
 import Propellor
 import Propellor.Property.Scheduled
+import Propellor.Property.DiskImage
+import Propellor.Property.Chroot
+import Propellor.Property.Machine
+import Propellor.Property.Bootstrap
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Network as Network
@@ -21,14 +25,14 @@ import qualified Propellor.Property.Git as Git
 import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
+import qualified Propellor.Property.Locale as Locale
 import qualified Propellor.Property.Grub as Grub
-import qualified Propellor.Property.Obnam as Obnam
+import qualified Propellor.Property.Borg as Borg
 import qualified Propellor.Property.Gpg as Gpg
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Journald as Journald
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
-import qualified Propellor.Property.Aiccu as Aiccu
-import qualified Propellor.Property.OS as OS
+import qualified Propellor.Property.Laptop as Laptop
 import qualified Propellor.Property.HostingProvider.CloudAtCost as CloudAtCost
 import qualified Propellor.Property.HostingProvider.Linode as Linode
 import qualified Propellor.Property.HostingProvider.DigitalOcean as DigitalOcean
@@ -44,7 +48,6 @@ main = defaultMain hosts --  /   \___-=O`/|O`/__|                      (____.'
 hosts :: [Host]          --   *             \ | |           '--------'
 hosts =                 --                  (o)  `
 	[ darkstar
-	, gnu
 	, dragon
 	, clam
 	, orca
@@ -54,48 +57,37 @@ hosts =                 --                  (o)  `
 	, elephant
 	, beaver
 	, mouse
+	, peregrine
 	, pell
 	, keysafe
 	] ++ monsters
-
-testvm :: Host
-testvm = host "testvm.kitenet.net" $ props
-	& osDebian Unstable X86_64
-	& OS.cleanInstallOnce (OS.Confirmed "testvm.kitenet.net")
-	 	`onChange` postinstall
-	& Hostname.sane
-	& Hostname.searchDomain
-	& Apt.installed ["linux-image-amd64"]
-	& Apt.installed ["ssh"]
-	& User.hasPassword (User "root")
-  where
-	postinstall :: Property (HasInfo + DebianLike)
-	postinstall = propertyList "fixing up after clean install" $ props
-		& OS.preserveRootSshAuthorized
-		& OS.preserveResolvConf
-		& Apt.update
-		& Grub.boots "/dev/sda"
-			`requires` Grub.installed Grub.PC
 
 darkstar :: Host
 darkstar = host "darkstar.kitenet.net" $ props
 	& osDebian Unstable X86_64
 	& ipv6 "2001:4830:1600:187::2"
-	& Aiccu.hasConfig "T18376" "JHZ2-SIXXS"
-
-	& User.nuked (User "nosuchuser") User.YesReallyDeleteHome
+	& Hostname.sane
+	& Apt.serviceInstalledRunning "swapspace"
+	& Laptop.powertopAutoTuneOnBoot
+	& Laptop.trimSSD
+	& Grub.cmdline_Linux_default "i915.enable_psr=1"
+	! Grub.cmdline_Linux_default "quiet"
 
 	& JoeySites.dkimMilter
 	& JoeySites.postfixSaslPasswordClient
 	-- & JoeySites.alarmClock "*-*-* 7:30" (User "joey")
 	--	"/usr/bin/timeout 45m /home/joey/bin/goodmorning"
+	& JoeySites.laptopSoftware
+	& JoeySites.userDirHtml
 	& Ssh.userKeys (User "joey") hostContext
 		[ (SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC1YoyHxZwG5Eg0yiMTJLSWJ/+dMM6zZkZiR4JJ0iUfP+tT2bm/lxYompbSqBeiCq+PYcSC67mALxp1vfmdOV//LWlbXfotpxtyxbdTcQbHhdz4num9rJQz1tjsOsxTEheX5jKirFNC5OiKhqwIuNydKWDS9qHGqsKcZQ8p+n1g9Lr3nJVGY7eRRXzw/HopTpwmGmAmb9IXY6DC2k91KReRZAlOrk0287LaK3eCe1z0bu7LYzqqS+w99iXZ/Qs0m9OqAPnHZjWQQ0fN4xn5JQpZSJ7sqO38TBAimM+IHPmy2FTNVVn9zGM+vN1O2xr3l796QmaUG1+XLL0shfR/OZbb joey@darkstar")
 		]
-
-gnu :: Host
-gnu = host "gnu.kitenet.net" $ props
-	& Postfix.satellite
+	-- & imageBuiltFor honeybee
+	--	(RawDiskImage "/srv/honeybee.img")
+	--	(Debootstrapped mempty)
+	& imageBuiltFor banana
+		(RawDiskImage "/srv/banana.img")
+		(Debootstrapped mempty)
 
 dragon :: Host
 dragon = host "dragon.kitenet.net" $ props
@@ -107,9 +99,10 @@ clam :: Host
 clam = host "clam.kitenet.net" $ props
 	& standardSystem Unstable X86_64
 		["Unreliable server. Anything here may be lost at any time!" ]
-	& ipv4 "64.137.182.29"
+	& ipv4 "64.137.164.186"
 
 	& CloudAtCost.decruft
+	& User.hasPassword (User "root")
 	& Ssh.hostKeys hostContext
 		[ (SshDsa, "ssh-dss AAAAB3NzaC1kc3MAAACBAI3WUq0RaigLlcUivgNG4sXpso2ORZkMvfqKz6zkc60L6dpxvWDNmZVEH8hEjxRSYG07NehcuOgQqeyFnS++xw1hdeGjf37JqCUH49i02lra3Zxv8oPpRxyeqe5MmuzUJhlWvBdlc3O/nqZ4bTUfnxMzSYWyy6++s/BpSHttZplNAAAAFQC1DE0vzgVeNAv9smHLObQWZFe2VQAAAIBECtpJry3GC8NVTFsTHDGWksluoFPIbKiZUFFztZGdM0AO2VwAbiJ6Au6M3VddGFANgTlni6d2/9yS919zO90TaFoIjywZeXhxE2CSuRfU7sx2hqDBk73jlycem/ER0sanFhzpHVpwmLfWneTXImWyq37vhAxatJANOtbj81vQ3AAAAIBV3lcyTT9xWg1Q4vERJbvyF8mCliwZmnIPa7ohveKkxlcgUk5d6dnaqFfjVaiXBPN3Qd08WXoQ/a9k3chBPT9nW2vWgzzM8l36j2MbHLmaxGwevAc9+vx4MXqvnGHzd2ex950mC33ct3j0fzMZlO6vqEsgD4CYmiASxhfefj+JCQ==")
 		, (SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJybAjUPUWIhvVMmer8K5ZgdfI54DM6vc8Mzw+5KmVKL0TwkvzbR1HAB4heyMGtN1F8YzkWhsI3/Txh+MQUJ+i4u8SvSYc6D1q3j3ZyCi06wZ3DJS25tZrOM/thOOA1DFA4Hhb0uI/1Kg8PguNNNSMXn8F7q3F6cFQizYgszs6z6ktiST/BTC+IXWovhcnn2vQXXU8FTcTsqBFqA5dEjZbp1WDzqp3km84ZyXGmoVlpqzXeMvlkWTIshYiQjXIwPOkALzlGYjp1lw1OaxPVI1IGFcgCbIWQQWoCReb+genX2VaR+odAYXjaOdRx0lQj7UCPTBCpqMyzBMLtT5Yiaqh")
@@ -118,6 +111,7 @@ clam = host "clam.kitenet.net" $ props
 	& Apt.unattendedUpgrades
 	& Systemd.persistentJournal
 	& Journald.systemMaxUse "50MiB"
+	& Apt.serviceInstalledRunning "swapspace"
 
 	& Tor.isRelay
 	& Tor.named "kite1"
@@ -167,44 +161,58 @@ orca = host "orca.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.androidAutoBuilderContainer
 		(Cron.Times "1 1 * * *") "3h")
 
+banana :: Host
+banana = host "banana.kitenet.net" $ props
+	& lemaker_Banana_Pi
+	& hasPartition
+		( partition EXT4
+			`mountedAt` "/"
+			`setSize` MegaBytes 950
+		)
+	& osDebian Testing ARMHF
+	& User.hasInsecurePassword (User "root") "root"
+
 honeybee :: Host
 honeybee = host "honeybee.kitenet.net" $ props
-	& standardSystem Testing ARMHF [ "Arm git-annex build box." ]
-
-	-- I have to travel to get console access, so no automatic
-	-- upgrades, and try to be robust.
+	& standardSystem Testing ARMHF
+		[ "Home router and arm git-annex build box." ]
+	& Apt.removed ["rsyslog"]
+	
+	& cubietech_Cubietruck
+	& hasPartition
+		( partition EXT4
+			`mountedAt` "/"
+			`setSize` MegaBytes 8000
+		)
+	& JoeySites.cubieTruckOneWire
+	
+	& Apt.installed ["firmware-brcm80211"]
+		-- Workaround for https://bugs.debian.org/844056
+		`requires` File.hasPrivContent "/lib/firmware/brcm/brcmfmac43362-sdio.txt" anyContext
+		`requires` File.dirExists "/lib/firmware/brcm"
 	& "/etc/default/rcS" `File.containsLine` "FSCKFIX=yes"
+	& Apt.serviceInstalledRunning "ntp" -- no hardware clock
+	& bootstrappedFrom GitRepoOutsideChroot
+	& Ssh.hostKeys hostContext
+		[ (SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIS/hDYq1MAxfOBf49htym3BOYlx4Gk9SDpiHjv7u6IC")
+		]
 
-	& Apt.installed ["flash-kernel"]
-	& "/etc/flash-kernel/machine" `File.hasContent` ["Cubietech Cubietruck"]
-	& Apt.installed ["linux-image-armmp"]
-	& Network.dhcp "eth0" `requires` Network.cleanInterfacesFile
+	& JoeySites.homePower
+		(User "joey")
+		hosts
+		(Context "homepower.joeyh.name")
+		(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMAmVYddg/RgCbIj+cLcEiddeFXaYFnbEJ3uGj9G/EyV joey@honeybee")
+	& JoeySites.homeRouter
+	& Apt.installed ["mtr-tiny", "iftop", "screen"]
 	& Postfix.satellite
 
-	-- ipv6 used for remote access thru firewalls
-	& Apt.serviceInstalledRunning "aiccu"
-	& ipv6 "2001:4830:1600:187::2"
-	-- restart to deal with failure to connect, tunnel issues, etc
-	& Cron.job "aiccu restart daily" Cron.Daily (User "root") "/"
-		"service aiccu stop; service aiccu start"
-
+	& check (not <$> inChroot) (setupRevertableProperty autobuilder)
 	-- In case compiler needs more than available ram
 	& Apt.serviceInstalledRunning "swapspace"
-
-	-- No hardware clock.
-	& Apt.serviceInstalledRunning "ntp"
-
-	-- Runs only on weekdays.
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.armAutoBuilder
-		Unstable ARMEL Nothing weekends "23h")
-	-- Runs only on weekends.
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") ARMEL (Just "ancient") weekdays "23h")
   where
-	weekdays = Cron.Times "15 6 * * 2-5"
-	weekends = Cron.Times "15 6 * * 6-7"
+	autobuilder = Systemd.nspawned $ GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.armAutoBuilder
+		Unstable ARMEL Nothing (Cron.Times "15 10 * * *") "10h"
 
 -- This is not a complete description of kite, since it's a
 -- multiuser system with eg, user passwords that are not deployed
@@ -215,7 +223,6 @@ kite = host "kite.kitenet.net" $ props
 	& ipv4 "66.228.36.95"
 	& ipv6 "2600:3c03::f03c:91ff:fe73:b0d2"
 	& alias "kitenet.net"
-	& alias "wren.kitenet.net" -- temporary
 	& Ssh.hostKeys (Context "kitenet.net")
 		[ (SshDsa, "ssh-dss AAAAB3NzaC1kc3MAAACBAO9tnPUT4p+9z7K6/OYuiBNHaij4Nzv5YVBih1vMl+ALz0gYAj8RWJzXmqp5buFAyfgOoLw+H9s1bBS01Sy3i07Dm6cx1fWG4RXL/E/3w1tavX99GD2bBxDBu890ebA5Tp+eFRJkS9+JwSvFiF6CP7NbVjifCagoUO56Ig048RwDAAAAFQDPY2xM3q6KwsVQliel23nrd0rV2QAAAIEAga3hj1hL00rYPNnAUzT8GAaSP62S4W68lusErH+KPbsMwFBFY/Ib1FVf8k6Zn6dZLh/HH/RtJi0JwdzPI1IFW+lwVbKfwBvhQ1lw9cH2rs1UIVgi7Wxdgfy8gEWxf+QIqn62wG+Ulf/HkWGvTrRpoJqlYRNS/gnOWj9Z/4s99koAAACBAM/uJIo2I0nK15wXiTYs/NYUZA7wcErugFn70TRbSgduIFH6U/CQa3rgHJw9DCPCQJLq7pwCnFH7too/qaK+czDk04PsgqV0+Jc7957gU5miPg50d60eJMctHV4eQ1FpwmGGfXxRBR9k2ZvikWYatYir3L6/x1ir7M0bA9IzNU45")
 		, (SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAIEA2QAJEuvbTmaN9ex9i9bjPhMGj+PHUYq2keIiaIImJ+8mo+yKSaGUxebG4tpuDPx6KZjdycyJt74IXfn1voGUrfzwaEY9NkqOP3v6OWTC3QeUGqDCeJ2ipslbEd9Ep9XBp+/ldDQm60D0XsIZdmDeN6MrHSbKF4fXv1bqpUoUILk=")
@@ -223,8 +230,9 @@ kite = host "kite.kitenet.net" $ props
 		, (SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFZftKMnH/zH29BHMKbcBO4QsgTrstYFVhbrzrlRzBO3")
 		]
 
-	& Network.static "eth0" `requires` Network.cleanInterfacesFile
+	& Network.preserveStatic "eth0" `requires` Network.cleanInterfacesFile
 	& Apt.installed ["linux-image-amd64"]
+	& Apt.serviceInstalledRunning "swapspace"
 	& Linode.serialGrub
 	& Linode.mlocateEnabled
 	& Apt.unattendedUpgrades
@@ -237,30 +245,28 @@ kite = host "kite.kitenet.net" $ props
 	& Ssh.setSshdConfig "GatewayPorts" "clientspecified"
 	& Apt.serviceInstalledRunning "ntp"
 	& "/etc/timezone" `File.hasContent` ["US/Eastern"]
-
-	& Obnam.backupEncrypted "/" (Cron.Times "33 1 * * *")
-		[ "--repository=sftp://2318@usw-s002.rsync.net/~/kite-root.obnam"
-		, "--client-name=kitenet.net"
-		, "--exclude=/home"
-		, "--exclude=/var/cache"
-		, "--exclude=/var/tmp"
+	
+	& Borg.backup "/" (Borg.BorgRepo "joey@eubackup.kitenet.net:/home/joey/lib/backup/kite/kite.borg") Cron.Daily
+		[ "--exclude=/proc/*"
+		, "--exclude=/sys/*"
+		, "--exclude=/run/*"
+		, "--exclude=/tmp/*"
+		, "--exclude=/var/tmp/*"
+		, "--exclude=/var/cache/*"
+		, "--exclude=/home/joey/lib"
+		-- These directories are backed up and restored separately.
 		, "--exclude=/srv/git"
 		, "--exclude=/var/spool/oldusenet"
-		, "--exclude=.*/tmp/"
-		, "--one-file-system"
-		, Obnam.keepParam [Obnam.KeepDays 7, Obnam.KeepWeeks 4, Obnam.KeepMonths 6]
-		] Obnam.OnlyClient (Gpg.GpgKeyId "98147487")
-		`requires` rootsshkey
-		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
-	& Obnam.backupEncrypted "/home" (Cron.Times "33 3 * * *")
-		[ "--repository=sftp://2318@usw-s002.rsync.net/~/kite-home.obnam"
-		, "--client-name=kitenet.net"
-		, "--exclude=/home/joey/lib"
-		, "--one-file-system"
-		, Obnam.keepParam [Obnam.KeepDays 7, Obnam.KeepWeeks 4, Obnam.KeepMonths 6]
-		] Obnam.OnlyClient (Gpg.GpgKeyId "98147487")
-		`requires` rootsshkey
-		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
+		]
+		[ Borg.KeepDays 7
+		, Borg.KeepWeeks 4
+		, Borg.KeepMonths 6
+		]
+		`requires` Ssh.knownHost hosts "eubackup.kitenet.net" (User "root")
+		`requires` Ssh.userKeys (User "root")
+			(Context "kite.kitenet.net")
+			[ (SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC5Gza2sNqSKfNtUN4dN/Z3rlqw18nijmXFx6df2GtBoZbkIak73uQfDuZLP+AXlyfHocwdkdHEf/zrxgXS4EokQMGLZhJ37Pr3edrEn/NEnqroiffw7kyd7EqaziA6UOezcLTjWGv+Zqg9JhitYs4WWTpNzrPH3yQf1V9FunZnkzb4gJGndts13wGmPEwSuf+QHbgQvjMOMCJwWSNcJGdhDR66hFlxfG26xx50uIczXYAbgLfHp5W6WuR/lcaS9J6i7HAPwcsPDA04XDinrcpl29QwsMW1HyGS/4FSCgrDqNZ2jzP49Bka78iCLRqfl1efyYas/Zo1jQ0x+pxq2RMr root@kite")
+			]
 
 	& alias "smtp.kitenet.net"
 	& alias "imap.kitenet.net"
@@ -308,6 +314,7 @@ kite = host "kite.kitenet.net" $ props
 	& myDnsPrimary True "kitenet.net"
 		[ (RelDomain "mouse-onion", CNAME $ AbsDomain "htieo6yu2qtcn2j3.onion")
 		, (RelDomain "beaver-onion", CNAME $ AbsDomain "tl4xsvaxryjylgxs.onion")
+		, (RelDomain "peregrine-onion", CNAME $ AbsDomain "ahw47zqw6qszoufl.onion")
 		]
 	& myDnsPrimary True "joeyh.name" []
 	& myDnsPrimary True "ikiwiki.info" []
@@ -317,9 +324,15 @@ kite = host "kite.kitenet.net" $ props
 	& alias "ns4.branchable.com"
 	& branchableSecondary
 	& Dns.secondaryFor ["animx"] hosts "animx.eu.org"
-
+	-- Use its own name server (amoung other things this avoids
+	-- spamassassin URIBL_BLOCKED.
+	& "/etc/resolv.conf" `File.hasContent`
+		[ "nameserver 127.0.0.1"
+		, "domain kitenet.net"
+		, "search kitenet.net"
+		]
 	& alias "debug-me.joeyh.name"
-	-- debug-me installed manually until package is available
+	& Apt.installed ["debug-me"]
 	& Systemd.enabled "debug-me"
 
 	-- testing
@@ -327,10 +340,6 @@ kite = host "kite.kitenet.net" $ props
 		(LetsEncrypt.AgreeTOS (Just "id@joeyh.name"))
 	& alias "letsencrypt.joeyh.name"
   where
-	rootsshkey = Ssh.userKeys (User "root")
-		(Context "kite.kitenet.net")
-		[ (SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC5Gza2sNqSKfNtUN4dN/Z3rlqw18nijmXFx6df2GtBoZbkIak73uQfDuZLP+AXlyfHocwdkdHEf/zrxgXS4EokQMGLZhJ37Pr3edrEn/NEnqroiffw7kyd7EqaziA6UOezcLTjWGv+Zqg9JhitYs4WWTpNzrPH3yQf1V9FunZnkzb4gJGndts13wGmPEwSuf+QHbgQvjMOMCJwWSNcJGdhDR66hFlxfG26xx50uIczXYAbgLfHp5W6WuR/lcaS9J6i7HAPwcsPDA04XDinrcpl29QwsMW1HyGS/4FSCgrDqNZ2jzP49Bka78iCLRqfl1efyYas/Zo1jQ0x+pxq2RMr root@kite")
-		]
 
 elephant :: Host
 elephant = host "elephant.kitenet.net" $ props
@@ -357,8 +366,7 @@ elephant = host "elephant.kitenet.net" $ props
 	& Apt.serviceInstalledRunning "swapspace"
 
 	& alias "eubackup.kitenet.net"
-	& Apt.installed ["obnam", "sshfs", "rsync"]
-	& JoeySites.obnamRepos ["pell", "kite"]
+	& Apt.installed ["sshfs", "rsync", "borgbackup"]
 	& JoeySites.githubBackup
 	& JoeySites.rsyncNetBackup hosts
 
@@ -369,9 +377,6 @@ elephant = host "elephant.kitenet.net" $ props
 	& JoeySites.ircBouncer
 	& alias "kgb.kitenet.net"
 	& JoeySites.kgbServer
-
-	& alias "mumble.kitenet.net"
-	& JoeySites.mumbleServer hosts
 
 	& alias "ns3.kitenet.net"
 	& myDnsSecondary
@@ -414,6 +419,12 @@ mouse = host "mouse.kitenet.net" $ props
 	& Tor.installed
 	& Tor.hiddenServiceAvailable "ssh" (Port 22)
 
+peregrine :: Host
+peregrine = host "peregrine.kitenet.net" $ props
+	& Apt.installed ["ssh"]
+	& Tor.installed
+	& Tor.hiddenServiceAvailable "ssh" (Port 22)
+
 -- Branchable is not completely deployed with propellor yet.
 pell :: Host
 pell = host "pell.branchable.com" $ props
@@ -436,8 +447,8 @@ pell = host "pell.branchable.com" $ props
 	& alias "dist-bugs.kitenet.net"
 	& alias "family.kitenet.net"
 
-	& osDebian (Stable "jessie") X86_64
-	& Apt.installed ["linux-image-amd64"]
+	& osDebian (Stable "stretch") X86_64
+	& Apt.installed ["linux-image-686-pae"]
 	& Apt.unattendedUpgrades
 	& Branchable.server hosts
 	& Linode.serialGrub
@@ -552,6 +563,7 @@ standardSystemUnhardened suite arch motd = propertyList "standard system" $ prop
 	& osDebian suite arch
 	& Hostname.sane
 	& Hostname.searchDomain
+	& Locale.available "en_US.UTF-8"
 	& File.hasContent "/etc/motd" ("":motd++[""])
 	& Apt.stdSourcesList `onChange` Apt.upgrade
 	& Apt.cacheCleaned
@@ -616,8 +628,7 @@ monsters =            -- but do want to track their public keys etc.
 	, host "ns6.gandi.net" $ props
 		& ipv4 "217.70.177.40"
 	, host "animx" $ props
-		& ipv4 "76.7.162.186"
-		& ipv4 "76.7.162.187"
+		& ipv4 "76.7.174.49"
 	]
 
 

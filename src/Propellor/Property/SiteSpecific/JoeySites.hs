@@ -15,10 +15,12 @@ import qualified Propellor.Property.Git as Git
 import qualified Propellor.Property.Cron as Cron
 import qualified Propellor.Property.Service as Service
 import qualified Propellor.Property.User as User
-import qualified Propellor.Property.Obnam as Obnam
+import qualified Propellor.Property.Group as Group
+import qualified Propellor.Property.Borg as Borg
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Postfix as Postfix
 import qualified Propellor.Property.Systemd as Systemd
+import qualified Propellor.Property.Network as Network
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
 import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
 import Utility.FileMode
@@ -140,17 +142,17 @@ oldUseNetServer hosts = propertyList "olduse.net server" $ props
 		)
 
 	oldUseNetBackup :: Property (HasInfo + DebianLike)
-	oldUseNetBackup = Obnam.backup datadir (Cron.Times "33 4 * * *")
-		[ "--repository=sftp://2318@usw-s002.rsync.net/~/olduse.net"
-		, "--client-name=spool"
-		, "--ssh-key=" ++ keyfile
-		, Obnam.keepParam [Obnam.KeepDays 30]
-		] Obnam.OnlyClient
+	oldUseNetBackup = Borg.backup datadir borgrepo 
+		(Cron.Times "33 4 * * *")
+		[]
+		[Borg.KeepDays 30]
 		`requires` Ssh.userKeyAt (Just keyfile)
 			(User "root")
 			(Context "olduse.net")
 			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD0F6L76SChMCIGmeyGhlFMUTgZ3BoTbATiOSs0A7KXQoI1LTE5ZtDzzUkrQRJVpJ640pfMR7cQZyBm8tv+kYIPp0238GrX43c1vgm0L78agDnBU7r2iNMyWIwhssK8O3ZAhp8Q4KCz1r8hP2nIiD0y1D1VWW8h4KWOS7I1XCEAjOTvFvEjTh6a9MyHrcIkv7teUUzTBRjNrsyijCFRk1+pEET54RueoOmEjQcWd/sK1tYRiMZjegRLBOus2wUWsUOvznJ2iniLONUTGAWRnEV+O7hLN6CD44osJ+wkZk8bPAumTS0zcSLckX1jpdHJicmAyeniWSd4FCqm1YE6/xDD")
-		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
+		`requires` Ssh.knownHost hosts "eubackup.kitenet.net" (User "root")
+	borgrepo = Borg.BorgRepoUsing [Borg.UseSshKey keyfile]
+		"joey@eubackup.kitenet.net:/home/joey/lib/backup/olduse.net/olduse.net.borg"
 	keyfile = "/root/.ssh/olduse.net.key"
 
 oldUseNetShellBox :: Property DebianLike
@@ -161,13 +163,13 @@ oldUseNetShellBox = propertyList "olduse.net shellbox" $ props
 oldUseNetInstalled :: Apt.Package -> Property DebianLike
 oldUseNetInstalled pkg = check (not <$> Apt.isInstalled pkg) $
 	propertyList ("olduse.net " ++ pkg) $ props
-		& Apt.installed (words "build-essential devscripts debhelper git libncursesw5-dev libpcre3-dev pkg-config bison libicu-dev libidn11-dev libcanlock2-dev libuu-dev ghc libghc-strptime-dev libghc-hamlet-dev libghc-ifelse-dev libghc-hxt-dev libghc-utf8-string-dev libghc-missingh-dev libghc-sha-dev")
+		& Apt.installed (words "build-essential devscripts debhelper git libncursesw5-dev libpcre3-dev pkg-config bison libicu-dev libidn11-dev libcanlock2-dev libuu-dev ghc libghc-ifelse-dev libghc-hxt-dev libghc-utf8-string-dev libghc-missingh-dev libghc-sha-dev haskell-stack")
 			`describe` "olduse.net build deps"
 		& scriptProperty
 			[ "rm -rf /root/tmp/oldusenet" -- idenpotency
 			, "git clone git://olduse.net/ /root/tmp/oldusenet/source"
 			, "cd /root/tmp/oldusenet/source/"
-			, "dpkg-buildpackage -us -uc"
+			, "HOME=/root dpkg-buildpackage -us -uc"
 			, "dpkg -i ../" ++ pkg ++ "_*.deb || true"
 			, "apt-get -fy install" -- dependencies
 			, "rm -rf /root/tmp/oldusenet"
@@ -192,42 +194,20 @@ kgbServer = propertyList desc $ props
 					`onChange` Service.running "kgb-bot"
 		_ -> error "kgb server needs Debian unstable (for kgb-bot 1.31+)"
 
-mumbleServer :: [Host] -> Property (HasInfo + DebianLike)
-mumbleServer hosts = combineProperties hn $ props
-	& Apt.serviceInstalledRunning "mumble-server"
-	& Obnam.backup "/var/lib/mumble-server" (Cron.Times "55 5 * * *")
-		[ "--repository=sftp://2318@usw-s002.rsync.net/~/" ++ hn ++ ".obnam"
-		, "--ssh-key=" ++ sshkey
-		, "--client-name=mumble"
-		, Obnam.keepParam [Obnam.KeepDays 30]
-		] Obnam.OnlyClient
-		`requires` Ssh.userKeyAt (Just sshkey)
-			(User "root")
- 			(Context hn)
-			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSXXSM3mM8SNu+qel9R/LkDIkjpV3bfpUtRtYv2PTNqicHP+DdoThrr0ColFCtLH+k2vQJvR2n8uMzHn53Dq2IO3TtD27+7rJSsJwAZ8oftNzuTir8IjAwX5g6JYJs+L0Ny4RB0ausd+An0k/CPMRl79zKxpZd2MBMDNXt8hyqu0vS0v1ohq5VBEVhBBvRvmNQvWOCj7PdrKQXpUBHruZOeVVEdUUXZkVc1H0t7LVfJnE+nGKyWbw2jM+7r3Rn5Semc4R1DxsfaF8lKkZyE88/5uZQ/ddomv8ptz6YZ5b+Bg6wfooWPC3RWAALjxnHaC2yN1VONAvHmT0uNn1o6v0b")
-		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
-	& cmdProperty "chown" ["-R", "mumble-server:mumble-server", "/var/lib/mumble-server"]
-		`assume` NoChange
-  where
-	hn = "mumble.debian.net"
-	sshkey = "/root/.ssh/mumble.debian.net.key"
-
 -- git.kitenet.net and git.joeyh.name
 gitServer :: [Host] -> Property (HasInfo + DebianLike)
 gitServer hosts = propertyList "git.kitenet.net setup" $ props
-	& Obnam.backupEncrypted "/srv/git" (Cron.Times "33 3 * * *")
-		[ "--repository=sftp://2318@usw-s002.rsync.net/~/git.kitenet.net"
-		, "--ssh-key=" ++ sshkey
-		, "--client-name=wren" -- historical
-		, Obnam.keepParam [Obnam.KeepDays 30]
-		] Obnam.OnlyClient (Gpg.GpgKeyId "1B169BE1")
+	& Borg.backup "/srv/git" borgrepo
+		(Cron.Times "33 3 * * *")
+		[]
+		[Borg.KeepDays 30]
 		`requires` Ssh.userKeyAt (Just sshkey)
 			(User "root")
 			(Context "git.kitenet.net")
-			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD0F6L76SChMCIGmeyGhlFMUTgZ3BoTbATiOSs0A7KXQoI1LTE5ZtDzzUkrQRJVpJ640pfMR7cQZyBm8tv+kYIPp0238GrX43c1vgm0L78agDnBU7r2iNMyWIwhssK8O3ZAhp8Q4KCz1r8hP2nIiD0y1D1VWW8h4KWOS7I1XCEAjOTvFvEjTh6a9MyHrcIkv7teUUzTBRjNrsyijCFRk1+pEET54RueoOmEjQcWd/sK1tYRiMZjegRLBOus2wUWsUOvznJ2iniLONUTGAWRnEV+O7hLN6CD44osJ+wkZk8bPAumTS0zcSLckX1jpdHJicmAyeniWSd4FCqm1YE6/xDD")
-		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
-		`requires` Ssh.authorizedKeys (User "family") (Context "git.kitenet.net")
-		`requires` User.accountFor (User "family")
+			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDLwUUkpkI9c2Wcnv/E4v9bJ7WcpiNkToltXfzRDd1F31AYrucfSMgzu3rtDpEL+wSnQLua/taJkWUWT/pyXOAh+90K6O/YeBZmY5CK01rYDz3kSTAtwHkMqednsRjdQS6NNJsuWc1reO8a4pKtsToJ3G9VAKufCkt2b8Nhqz0yLvLYwwU/mdI8DmfX6IgXhdy9njVEG/jsQnLFXY6QEfwKbIPs9O6qo4iFJg3defXX+zVMLsh3NE1P2i2VxMjxJEQdPdy9Z1sVpkiQM+mgJuylQQ5flPK8sxhO9r4uoK/JROkjPJNYoJMlsN+QlK04ABb7JV2JwhAL/Y8ypjQ13JdT")
+		`requires` Ssh.knownHost hosts "eubackup.kitenet.net" (User "root")
+	& Ssh.authorizedKeys (User "family") (Context "git.kitenet.net")
+	& User.accountFor (User "family")
 	& Apt.installed ["git", "rsync", "cgit"]
 	& Apt.installed ["git-annex"]
 	& Apt.installed ["kgb-client"]
@@ -256,6 +236,8 @@ gitServer hosts = propertyList "git.kitenet.net setup" $ props
 	& Apache.modEnabled "cgi"
   where
 	sshkey = "/root/.ssh/git.kitenet.net.key"
+	borgrepo = Borg.BorgRepoUsing [Borg.UseSshKey sshkey]
+		"joey@eubackup.kitenet.net:/home/joey/lib/backup/git.kitenet.net/git.kitenet.net.borg"
 	website hn = Apache.httpsVirtualHost' hn "/srv/web/git.kitenet.net/" letos
 		[ Apache.iconDir
 		, "  <Directory /srv/web/git.kitenet.net/>"
@@ -439,16 +421,6 @@ backupsBackedupFrom hosts srchost destdir = Cron.niceJob desc
 	desc = "backups copied from " ++ srchost ++ " on boot"
 	cmd = "sleep 30m && rsync -az --bwlimit=300K --partial --delete " ++ srchost ++ ":lib/backup/ " ++ destdir </> srchost
 
-obnamRepos :: [String] -> Property UnixLike
-obnamRepos rs = propertyList ("obnam repos for " ++ unwords rs) $
-	toProps (mkbase : map mkrepo rs)
-  where
-	mkbase = mkdir "/home/joey/lib/backup"
-		`requires` mkdir "/home/joey/lib"
-	mkrepo r = mkdir ("/home/joey/lib/backup/" ++ r ++ ".obnam")
-	mkdir d = File.dirExists d
-		`before` File.ownerGroup d (User "joey") (Group "joey")
-
 podcatcher :: Property DebianLike
 podcatcher = Cron.niceJob "podcatcher run hourly" (Cron.Times "55 * * * *")
 	(User "joey") "/home/joey/lib/sound/podcasts"
@@ -570,7 +542,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "smtpd_sasl_security_options = noanonymous"
 		, "smtpd_sasl_local_domain = kitenet.net"
 
-		, "# Enable postgrey."
+		, "# Enable postgrey and sasl auth and client certs."
 		, "smtpd_recipient_restrictions = permit_tls_clientcerts,permit_sasl_authenticated,,permit_mynetworks,reject_unauth_destination,check_policy_service inet:127.0.0.1:10023"
 
 		, "# Enable spamass-milter, amavis-milter (opendkim is not enabled because it causes mails forwarded from eg gmail to be rejected)"
@@ -624,19 +596,16 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		[ "#!/bin/sh"
 		, "# deployed with propellor"
 		, "set -e"
-		, "pass=$HOME/.pine-password"
-		, "if [ ! -e $pass ]; then"
-		, "\ttouch $pass"
-		, "fi"
-		, "chmod 600 $pass"
-		, "exec alpine -passfile $pass \"$@\""
+		, "exec alpine \"$@\""
 		]
 		`onChange` (pinescript `File.mode`
 			combineModes (readModes ++ executeModes))
 		`describe` "pine wrapper script"
+	-- Make pine use dovecot pipe to read maildir.
 	& "/etc/pine.conf" `File.hasContent`
 		[ "# deployed with propellor"
-		, "inbox-path={localhost/novalidate-cert/NoRsh}inbox"
+		, "inbox-path={localhost}inbox"
+		, "rsh-command=/usr/lib/dovecot/imap"
 		]
 		`describe` "pine configured to use local imap server"
 
@@ -668,6 +637,7 @@ dkimMilter = Postfix.mainCfFile `File.containsLines`
 	`onChange` Postfix.dedupMainCf
 	`onChange` Postfix.reloaded
 	`requires` dkimInstalled
+	`requires` Postfix.installed
 
 -- This does not configure postfix to use the dkim milter,
 -- nor does it set up domainkey DNS.
@@ -678,7 +648,7 @@ dkimInstalled = go `onChange` Service.restarted "opendkim"
 		& Apt.serviceInstalledRunning "opendkim"
 		& File.dirExists "/etc/mail"
 		& File.hasPrivContent "/etc/mail/dkim.key" (Context "kitenet.net")
-		& File.ownerGroup "/etc/mail/dkim.key" (User "opendkim") (Group "opendkim")
+		& File.ownerGroup "/etc/mail/dkim.key" (User "root") (Group "root")
 		& "/etc/default/opendkim" `File.containsLine`
 			"SOCKET=\"inet:8891@localhost\""
 			`onChange` 
@@ -700,7 +670,6 @@ domainKey = (RelDomain "mail._domainkey", TXT "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb
 
 postfixSaslPasswordClient :: Property (HasInfo + DebianLike)
 postfixSaslPasswordClient = combineProperties "postfix uses SASL password to authenticate with smarthost" $ props
-	& Postfix.satellite
 	& Postfix.mappedFile "/etc/postfix/sasl_passwd" 
 		(`File.hasPrivContent` (Context "kitenet.net"))
 	& Postfix.mainCfFile `File.containsLines`
@@ -710,10 +679,11 @@ postfixSaslPasswordClient = combineProperties "postfix uses SASL password to aut
 		, "smtp_sasl_tls_security_options = noanonymous"
 		, "relayhost = [kitenet.net]"
 		, "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
-		, "# kite's fingerprint"
-		, "smtp_tls_fingerprint_cert_match = 13:B0:0C:F3:11:83:A5:EB:A9:37:C6:C5:ED:16:60:86"
 		]
 		`onChange` Postfix.reloaded
+	-- Comes after so it does not set relayhost but uses the setting 
+	-- above.
+	& Postfix.satellite
 
 hasPostfixCert :: Context -> Property (HasInfo + UnixLike)
 hasPostfixCert ctx = combineProperties "postfix tls cert installed" $ props
@@ -793,6 +763,15 @@ legacyWebSites = propertyList "legacy web sites" $ props
 
 		, "# Redirect all to joeyh.name."
 		, "rewriterule (.*) http://joeyh.name$1 [r]"
+		]
+	& alias "homepower.joeyh.name"
+	& apacheSite "homepower.joeyh.name"
+		[ "DocumentRoot /srv/web/homepower.joeyh.name"
+		, "<Directory /srv/web/homepower.joeyh.name>"
+		, "  Options Indexes ExecCGI"
+		, "  AllowOverride None"
+		, Apache.allowAll
+		, "</Directory>"
 		]
   where
 	kitenetcfg =
@@ -929,3 +908,271 @@ alarmClock oncalendar (User user) command = combineProperties "goodmorning timer
 	& Systemd.started "goodmorning.timer"
 	& "/etc/systemd/logind.conf" `ConfFile.containsIniSetting`
 		("Login", "LidSwitchIgnoreInhibited", "no")
+
+homePower :: IsContext c => User -> [Host] -> c -> (SshKeyType, Ssh.PubKeyText) -> Property (HasInfo + DebianLike)
+homePower user hosts ctx sshkey = propertyList "home power" $ props
+	& Apache.installed
+	& Apt.installed ["python", "python-pymodbus", "rrdtool", "rsync"]
+	& File.ownerGroup "/var/www/html" user (userGroup user)
+	& Git.cloned user "https://git.joeyh.name/git/joey/homepower.git" d Nothing
+	& Git.cloned user "https://git.joeyh.name/git/reactive-banana-automation.git" (d </> "reactive-banana-automation") Nothing
+	& build
+	& Systemd.enabled setupservicename
+		`requires` setupserviceinstalled
+		`onChange` Systemd.started setupservicename
+	& Systemd.enabled pollerservicename
+		`requires` pollerserviceinstalled
+		`onChange` Systemd.started pollerservicename
+	& Systemd.enabled controllerservicename
+		`requires` controllerserviceinstalled
+		`onChange` Systemd.started controllerservicename
+	& User.hasGroup user (Group "dialout")
+	& Group.exists (Group "gpio") Nothing
+	& User.hasGroup user (Group "gpio")
+	& Cron.niceJob "homepower upload"
+		(Cron.Times "1 * * * *") user d rsynccommand
+		`requires` Ssh.userKeyAt (Just sshkeyfile) user ctx sshkey
+		`requires` File.ownerGroup (takeDirectory sshkeyfile)
+			user (userGroup user)
+		`requires` File.dirExists (takeDirectory sshkeyfile)
+		`requires` Ssh.knownHost hosts "kitenet.net" user
+  where
+	d = "/var/www/html/homepower"
+	sshkeyfile = d </> ".ssh/key"
+	build = userScriptProperty (User "joey")
+		[ "cd " ++ d </> "reactive-banana-automation"
+		, "cabal install"
+		, "cd " ++ d
+		, "make"
+		]
+		`assume` MadeChange
+		`requires` Apt.installed
+			[ "ghc", "cabal-install", "make"
+			, "libghc-http-types-dev"
+			, "libghc-stm-dev"
+			, "libghc-aeson-dev"
+			, "libghc-wai-dev"
+			, "libghc-warp-dev"
+			, "libghc-http-client-dev"
+			, "libghc-reactive-banana-dev"
+			, "libghc-hinotify-dev"
+			]
+	pollerservicename = "homepower"
+	pollerservicefile = "/etc/systemd/system/" ++ pollerservicename ++ ".service"
+	pollerserviceinstalled = pollerservicefile `File.hasContent`
+		[ "[Unit]"
+		, "Description=home power poller"
+		, ""
+		, "[Service]"
+		, "ExecStart=" ++ d ++ "/poller"
+		, "WorkingDirectory=" ++ d
+		, "User=joey"
+		, "Group=joey"
+		, "Restart=always"
+		, ""
+		, "[Install]"
+		, "WantedBy=multi-user.target"
+		, "WantedBy=homepower-controller.target"
+		]
+	controllerservicename = "homepower-controller"
+	controllerservicefile = "/etc/systemd/system/" ++ controllerservicename ++ ".service"
+	controllerserviceinstalled = controllerservicefile `File.hasContent`
+		[ "[Unit]"
+		, "Description=home power controller"
+		, ""
+		, "[Service]"
+		, "ExecStart=" ++ d ++ "/controller"
+		, "WorkingDirectory=" ++ d
+		, "User=joey"
+		, "Group=joey"
+		, "Restart=always"
+		, ""
+		, "[Install]"
+		, "WantedBy=multi-user.target"
+		]
+	setupservicename = "homepower-setup"
+	setupservicefile = "/etc/systemd/system/" ++ setupservicename ++ ".service"
+	setupserviceinstalled = setupservicefile `File.hasContent`
+		[ "[Unit]"
+		, "Description=home power monitor setup"
+		, ""
+		, "[Service]"
+		, "ExecStart=" ++ d ++ "/setup"
+		, "WorkingDirectory=" ++ d
+		, "User=root"
+		, "Group=root"
+		, "Type=oneshot"
+		, ""
+		, "[Install]"
+		, "WantedBy=multi-user.target"
+		, "WantedBy=homepower.target"
+		]
+	-- Any changes to the rsync command will need my .authorized_keys
+	-- rsync server command to be updated too.
+	rsynccommand = "rsync -e 'ssh -i" ++ sshkeyfile ++ "' -avz rrds/ joey@kitenet.net:/srv/web/homepower.joeyh.name/rrds/"
+
+-- My home router, running hostapd and dnsmasq for wlan0,
+-- with eth0 connected to a satellite modem, and a fallback ppp connection.
+homeRouter :: Property (HasInfo + DebianLike)
+homeRouter = propertyList "home router" $ props
+	& Network.static "wlan0" (IPv4 "10.1.1.1") Nothing
+		`requires` Network.cleanInterfacesFile
+	& Apt.installed ["hostapd"]
+	& File.hasContent "/etc/hostapd/hostapd.conf"
+			[ "interface=wlan0"
+			, "ssid=house"
+			, "hw_mode=g"
+			, "channel=8"
+			]
+		`requires` File.dirExists "/etc/hostapd"
+		`requires` File.hasContent "/etc/default/hostapd"
+			[ "DAEMON_CONF=/etc/hostapd/hostapd.conf" ]
+		`onChange` Service.running "hostapd"
+	& File.hasContent "/etc/resolv.conf"
+		[ "domain kitenet.net"
+		, "search kitenet.net"
+		, "nameserver 8.8.8.8"
+		, "nameserver 8.8.4.4"
+		]
+	& Apt.installed ["dnsmasq"]
+	& File.hasContent "/etc/dnsmasq.conf"
+		[ "domain-needed"
+		, "bogus-priv"
+		, "interface=wlan0"
+		, "domain=kitenet.net"
+		-- lease time is short because the homepower
+		-- controller wants to know when clients disconnect
+		, "dhcp-range=10.1.1.100,10.1.1.150,10m"
+		, "no-hosts"
+		, "address=/honeybee.kitenet.net/10.1.1.1"
+		, "address=/house.kitenet.net/10.1.1.1"
+		]
+		`onChange` Service.restarted "dnsmasq"
+	& ipmasq "wlan0"
+	& Apt.serviceInstalledRunning "netplug"
+	& Network.static' "eth0" (IPv4 "192.168.1.100")
+		(Just (Network.Gateway (IPv4 "192.168.1.1")))
+		-- When satellite is down, fall back to dialup
+		[ ("pre-up", "poff -a || true")
+		, ("post-down", "pon")
+		]
+		`requires` Network.cleanInterfacesFile
+	& Apt.installed ["ppp"]
+		`before` File.hasContent "/etc/ppp/peers/provider"
+			[ "user \"joeyh@arczip.com\""
+			, "connect \"/usr/sbin/chat -v -f /etc/chatscripts/pap -T 3825441\""
+			, "/dev/ttyACM0"
+			, "115200"
+			, "noipdefault"
+			, "defaultroute"
+			, "persist"
+			, "noauth"
+			]
+		`before` File.hasPrivContent "/etc/ppp/pap-secrets" (Context "joeyh@arczip.com")
+
+-- | Enable IP masqerading, on whatever other interfaces come up than the
+-- provided intif.
+ipmasq :: String -> Property DebianLike
+ipmasq intif = File.hasContent ifupscript
+	[ "#!/bin/sh"
+	, "INTIF=" ++ intif
+	, "if [ \"$IFACE\" = $INTIF ] || [ \"$IFACE\" = lo ]; then"
+	, "exit 0"
+	, "fi"
+	, "iptables -F"
+	, "iptables -A FORWARD -i $IFACE -o $INTIF -m state --state ESTABLISHED,RELATED -j ACCEPT"
+	, "iptables -A FORWARD -i $INTIF -o $IFACE -j ACCEPT"
+	, "iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE"
+	, "echo 1 > /proc/sys/net/ipv4/ip_forward"
+	]
+	`before` scriptmode ifupscript
+	`before` File.hasContent pppupscript
+		[ "#!/bin/sh"
+		, "IFACE=$PPP_IFACE " ++ ifupscript
+		]
+	`before` scriptmode pppupscript
+	`requires` Apt.installed ["iptables"]
+  where
+	ifupscript = "/etc/network/if-up.d/ipmasq"
+	pppupscript = "/etc/ppp/ip-up.d/ipmasq"
+	scriptmode f = f `File.mode` combineModes (readModes ++ executeModes)
+
+laptopSoftware :: Property DebianLike
+laptopSoftware = Apt.installed
+	[ "intel-microcode", "acpi"
+	, "procmeter3", "xfce4", "procmeter3", "unclutter"
+	, "mplayer", "fbreader", "firefox", "chromium"
+	, "libdatetime-event-sunrise-perl", "libtime-duration-perl"
+	, "network-manager", "gtk-redshift", "powertop"
+	, "gimp", "gthumb", "inkscape", "sozi", "xzgv", "hugin"
+	, "mpc", "mpd", "ncmpc", "sonata", "mpdtoys"
+	, "bsdgames", "nethack-console"
+	, "xmonad", "libghc-xmonad-dev", "libghc-xmonad-contrib-dev"
+	, "ttf-bitstream-vera"
+	, "mairix", "offlineimap", "mutt", "slrn"
+	, "mtr", "nmap", "whois", "wireshark", "tcpdump", "iftop"
+	, "pmount", "tree", "pv"
+	, "arbtt", "hledger", "bc"
+	, "apache2", "ikiwiki", "libhighlight-perl"
+	, "avahi-daemon", "avahi-discover"
+	, "pal"
+	, "yeahconsole", "xkbset", "xinput"
+	, "assword", "pumpa"
+	, "vorbis-tools", "audacity"
+	, "xul-ext-ublock-origin", "xul-ext-pdf.js", "xul-ext-status4evar"
+	, "vim-syntastic", "vim-fugitive"
+	, "adb", "gthumb"
+	, "w3m", "sm", "weechat"
+	, "borgbackup", "wipe", "smartmontools", "libgfshare-bin"
+	, "units"
+	]
+	`requires` baseSoftware
+	`requires` devSoftware
+
+baseSoftware :: Property DebianLike
+baseSoftware = Apt.installed
+	[ "bash", "bash-completion", "vim", "screen", "less", "moreutils"
+	, "git", "mr", "etckeeper", "git-annex", "ssh", "vim-vimoutliner"
+	]
+
+devSoftware :: Property DebianLike
+devSoftware = Apt.installed
+	[ "build-essential", "debhelper", "devscripts"
+	, "ghc", "cabal-install", "haskell-stack"
+	, "hothasktags", "hdevtools", "hlint"
+	, "gdb", "time"
+	, "dpkg-repack", "lintian"
+	, "pristine-tar", "github-backup"
+	]
+
+cubieTruckOneWire :: Property DebianLike
+cubieTruckOneWire = 
+	File.hasContent "/etc/easy-peasy-devicetree-squeezy/my.dts" mydts
+		`onChange` utilitysetup
+		`requires` utilityinstalled
+  where
+	utilityinstalled = Git.cloned (User "root") "https://git.joeyh.name/git/easy-peasy-devicetree-squeezy.git" "/usr/local/easy-peasy-devicetree-squeezy" Nothing
+		`onChange` File.isSymlinkedTo "/usr/local/bin/easy-peasy-devicetree-squeezy" (File.LinkTarget "/usr/local/easy-peasy-devicetree-squeezy/easy-peasy-devicetree-squeezy")
+	utilitysetup = cmdProperty "easy-peasy-devicetree-squeezy"
+		["--debian", "sun7i-a20-cubietruck"]
+		`assume` MadeChange
+	mydts =
+		[ "/* Device tree addition enabling onewire sensors on CubieTruck GPIO pin PC21 */"
+		, "#include <dt-bindings/gpio/gpio.h>"
+		, ""
+		, "/ {"
+		, "\tonewire_device {"
+		, "\t\tcompatible = \"w1-gpio\";"
+		, "\t\tgpios = <&pio 2 21 GPIO_ACTIVE_HIGH>; /* PC21 */"
+		, "\t\tpinctrl-names = \"default\";"
+		, "\t\tpinctrl-0 = <&my_w1_pin>;"
+		, "\t};"
+		, "};"
+		, ""
+		, "&pio {"
+		, "\tmy_w1_pin: my_w1_pin@0 {"
+		, "\t\tallwinner,pins = \"PC21\";"
+		, "\t\tallwinner,function = \"gpio_in\";"
+		, "\t};"
+		, "};"
+		]

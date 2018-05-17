@@ -119,10 +119,10 @@ standardAutoBuilder :: DebianSuite -> Architecture -> Flavor -> Property (HasInf
 standardAutoBuilder suite arch flavor =
 	propertyList "standard git-annex autobuilder" $ props
 		& osDebian suite arch
-		& buildDepsApt
 		& Apt.stdSourcesList
 		& Apt.unattendedUpgrades
 		& Apt.cacheCleaned
+		& buildDepsApt
 		& User.accountFor (User builduser)
 		& tree (architectureToDebianArchString arch) flavor
 
@@ -177,13 +177,12 @@ armAutoBuilder :: DebianSuite -> Architecture -> Flavor -> Property (HasInfo + D
 armAutoBuilder suite arch flavor =
 	propertyList "arm git-annex autobuilder" $ props
 		& standardAutoBuilder suite arch flavor
-		& buildDepsNoHaskellLibs
+		& buildDepsApt
 		-- Works around ghc crash with parallel builds on arm.
 		& (homedir </> ".cabal" </> "config")
 			`File.lacksLine` "jobs: $ncpus"
-		-- Install patched haskell packages for portability to
-		-- arm NAS's using old kernel versions.
-		& haskellPkgsInstalled "linux"
+		-- Work around https://github.com/systemd/systemd/issues/7135
+		& Systemd.containerCfg "--system-call-filter=set_tls"
 
 androidAutoBuilderContainer :: Times -> TimeOut -> Systemd.Container
 androidAutoBuilderContainer crontimes timeout =

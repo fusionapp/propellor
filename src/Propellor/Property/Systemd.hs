@@ -205,8 +205,8 @@ machined = withOS "machined installed" $ \w o ->
 	case o of
 		-- Split into separate debian package since systemd 225.
 		(Just (System (Debian _ suite) _))
-			| not (isStable suite) -> ensureProperty w $
-				Apt.installed ["systemd-container"]
+			| not (isStable suite) || suite == (Stable "stretch") ->
+				ensureProperty w $ Apt.installed ["systemd-container"]
 		_ -> noChange
 
 -- | Defines a container with a given machine name,
@@ -217,7 +217,7 @@ machined = withOS "machined installed" $ \w o ->
 -- to bootstrap.
 --
 -- > container "webserver" $ \d -> Chroot.debootstrapped mempty d $ props
--- >	& osDebian Unstable X86_64
+-- >    & osDebian Unstable X86_64
 -- >    & Apt.installedRunning "apache2"
 -- >    & ...
 container :: MachineName -> (FilePath -> Chroot.Chroot) -> Container
@@ -238,7 +238,7 @@ container name mkchroot =
 -- to bootstrap.
 --
 -- > debContainer "webserver" $ props
--- >	& osDebian Unstable X86_64
+-- >    & osDebian Unstable X86_64
 -- >    & Apt.installedRunning "apache2"
 -- >    & ...
 debContainer :: MachineName -> Props metatypes -> Container
@@ -283,54 +283,42 @@ nspawned c@(Container name (Chroot.Chroot loc builder _ _) h) =
 
 	chroot = Chroot.Chroot loc builder Chroot.propagateChrootInfo h
 
--- | Sets up the service file for the container, and then starts
--- it running.
+-- | Sets up the service files for the container, using the
+-- systemd-nspawn@.service template, and starts it running.
 nspawnService :: Container -> ChrootCfg -> RevertableProperty Linux Linux
 nspawnService (Container name _ _) cfg = setup <!> teardown
   where
 	service = nspawnServiceName name
-	servicefile = "/etc/systemd/system/multi-user.target.wants" </> service
+	overridedir = "/etc/systemd/system" </> nspawnServiceName name ++ ".d"
+	overridefile = overridedir </> "local.conf"
+	overridecontent = 
+		[ "[Service]"
+		, "# Reset ExecStart from the template"
+		, "ExecStart="
+		, "ExecStart=/usr/bin/systemd-nspawn " ++ unwords nspawnparams
+		]
+	nspawnparams = 
+		[ "--quiet"
+		, "--keep-unit"
+		, "--boot"
+		, "--directory=" ++ containerDir name
+		, "--machine=" ++ name
+		] ++ nspawnServiceParams cfg
 
-	servicefilecontent = do
-		ls <- lines <$> readFile "/lib/systemd/system/systemd-nspawn@.service"
-		return $ unlines $
-			"# deployed by propellor" : map addparams ls
-	addparams l
-		| "ExecStart=" `isPrefixOf` l = unwords $
-			[ "ExecStart = /usr/bin/systemd-nspawn"
-			, "--quiet"
-			, "--keep-unit"
-			, "--boot"
-			, "--directory=" ++ containerDir name
-			, "--machine=%i"
-			] ++ nspawnServiceParams cfg
-		| otherwise = l
-
-	goodservicefile = (==)
-		<$> servicefilecontent
-		<*> catchDefaultIO "" (readFile servicefile)
-
-	writeservicefile :: Property Linux
-	writeservicefile = property servicefile $ makeChange $ do
-		c <- servicefilecontent
-		File.viaStableTmp (\t -> writeFile t c) servicefile
-
-	setupservicefile :: Property Linux
-	setupservicefile = check (not <$> goodservicefile) $
-		-- if it's running, it has the wrong configuration,
-		-- so stop it
-		stopped service
-			`requires` daemonReloaded
-			`requires` writeservicefile
+	overrideconfigured = File.hasContent overridefile overridecontent
+		`onChange` daemonReloaded
+		`requires` File.dirExists overridedir
 
 	setup :: Property Linux
 	setup = started service
-		`requires` setupservicefile
+		`requires` enabled service
+		`requires` overrideconfigured
 		`requires` machined
 
 	teardown :: Property Linux
-	teardown = check (doesFileExist servicefile) $
-		disabled service `requires` stopped service
+	teardown = stopped service
+		`before` disabled service
+		`before` File.notPresent overridefile
 
 nspawnServiceParams :: ChrootCfg -> [String]
 nspawnServiceParams NoChrootCfg = []

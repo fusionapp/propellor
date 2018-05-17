@@ -10,6 +10,7 @@ import Propellor.Base
 import Utility.Path
 
 import Data.List
+import qualified Data.Semigroup as Sem
 
 -- | type of filesystem to mount ("auto" to autodetect)
 type FsType = String
@@ -24,7 +25,7 @@ type MountPoint = FilePath
 --
 -- For default mount options, use `mempty`.
 newtype MountOpts = MountOpts [String]
-	deriving Monoid
+	deriving (Sem.Semigroup, Monoid)
 
 class ToMountOpts a where
 	toMountOpts :: a -> MountOpts
@@ -78,6 +79,10 @@ mount fs src mnt opts = boolSystem "mount" $
 mountPoints :: IO [MountPoint]
 mountPoints = lines <$> readProcess "findmnt" ["-rn", "--output", "target"]
 
+-- | Checks if anything is mounted at the MountPoint.
+isMounted :: MountPoint -> IO Bool
+isMounted mnt = isJust <$> getFsType mnt
+
 -- | Finds all filesystems mounted inside the specified directory.
 mountPointsBelow :: FilePath -> IO [MountPoint]
 mountPointsBelow target = filter (\p -> simplifyPath p /= simplifyPath target)
@@ -86,18 +91,18 @@ mountPointsBelow target = filter (\p -> simplifyPath p /= simplifyPath target)
 
 -- | Filesystem type mounted at a given location.
 getFsType :: MountPoint -> IO (Maybe FsType)
-getFsType = findmntField "fstype"
+getFsType p = findmntField "fstype" [p]
 
 -- | Mount options for the filesystem mounted at a given location.
 getFsMountOpts :: MountPoint -> IO MountOpts
 getFsMountOpts p = maybe mempty toMountOpts
-	<$> findmntField "fs-options" p
+	<$> findmntField "fs-options" [p]
 
 type UUID = String
 
 -- | UUID of filesystem mounted at a given location.
 getMountUUID :: MountPoint -> IO (Maybe UUID)
-getMountUUID = findmntField "uuid"
+getMountUUID p = findmntField "uuid" [p]
 
 -- | UUID of a device
 getSourceUUID :: Source -> IO (Maybe UUID)
@@ -107,7 +112,7 @@ type Label = String
 
 -- | Label of filesystem mounted at a given location.
 getMountLabel :: MountPoint -> IO (Maybe Label)
-getMountLabel = findmntField "label"
+getMountLabel p = findmntField "label" [p]
 
 -- | Label of a device
 getSourceLabel :: Source -> IO (Maybe UUID)
@@ -115,12 +120,16 @@ getSourceLabel = blkidTag "LABEL"
 
 -- | Device mounted at a given location.
 getMountSource :: MountPoint -> IO (Maybe Source)
-getMountSource = findmntField "source"
+getMountSource p = findmntField "source" [p]
 
-findmntField :: String -> FilePath -> IO (Maybe String)
-findmntField field mnt = catchDefaultIO Nothing $
+-- | Device that a given path is located within.
+getMountContaining :: FilePath -> IO (Maybe Source)
+getMountContaining p = findmntField "source" ["-T", p]
+
+findmntField :: String -> [String] -> IO (Maybe String)
+findmntField field ps = catchDefaultIO Nothing $
 	headMaybe . filter (not . null) . lines
-		<$> readProcess "findmnt" ["-n", mnt, "--output", field]
+		<$> readProcess "findmnt" ("-n" : ps ++ ["--output", field])
 
 blkidTag :: String -> Source -> IO (Maybe String)
 blkidTag tag dev = catchDefaultIO Nothing $
@@ -129,13 +138,18 @@ blkidTag tag dev = catchDefaultIO Nothing $
 
 -- | Unmounts a device or mountpoint,
 -- lazily so any running processes don't block it.
+--
+-- Note that this will fail if it's not mounted.
 umountLazy :: FilePath -> IO ()
 umountLazy mnt =  
 	unlessM (boolSystem "umount" [ Param "-l", Param mnt ]) $
 		stopPropellorMessage $ "failed unmounting " ++ mnt
 
--- | Unmounts anything mounted inside the specified directory.
+-- | Unmounts anything mounted inside the specified directory,
+-- not including the directory itself.
 unmountBelow :: FilePath -> IO ()
 unmountBelow d = do
 	submnts <- mountPointsBelow d
-	forM_ submnts umountLazy
+	-- sort so sub-mounts are unmounted before the mount point
+	-- containing them
+	forM_ (reverse (sort submnts)) umountLazy

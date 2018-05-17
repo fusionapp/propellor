@@ -46,7 +46,7 @@ newtype Pattern = Pattern String
 -- is found, the file is processed.
 syncDirFiltered :: [Filter] -> Src -> Dest -> Property (DebianLike + ArchLinux)
 syncDirFiltered filters src dest = rsync $
-	[ "-av"
+	[ "-a"
 	-- Add trailing '/' to get rsync to sync the Dest directory,
 	-- rather than a subdir inside it, which it will do without a
 	-- trailing '/'.
@@ -54,10 +54,13 @@ syncDirFiltered filters src dest = rsync $
 	, addTrailingPathSeparator dest
 	, "--delete"
 	, "--delete-excluded"
-	, "--quiet"
+	, "--info=progress2"
 	] ++ map toRsync filters
 
 rsync :: [String] -> Property (DebianLike + ArchLinux)
 rsync ps = cmdProperty "rsync" ps
 	`assume` MadeChange
-	`requires` Apt.installed ["rsync"] `pickOS` Pacman.installed ["rsync"]
+	`requires` installed
+
+installed :: Property (DebianLike + ArchLinux)
+installed = Apt.installed ["rsync"] `pickOS` Pacman.installed ["rsync"]

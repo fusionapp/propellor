@@ -1,8 +1,12 @@
 -- | Maintainer: Félix Sipma <felix+propellor@gueux.org>
 --
 -- Support for the Attic backup tool <https://attic-backup.org/>
+--
+-- This module is deprecated because Attic is not available in debian
+-- stable any longer (so the installed property no longer works), and it
+-- appears to have been mostly supersceded by Borg.
 
-module Propellor.Property.Attic
+module Propellor.Property.Attic {-# DEPRECATED "Use Borg instead" #-}
 	( installed
 	, repoExists
 	, init
@@ -55,7 +59,7 @@ restored dir backupdir = go `requires` installed
 		, noChange
 		)
 
-	needsRestore = null <$> catchDefaultIO [] (dirContents dir)
+	needsRestore = isUnpopulated dir
 
 	restore = withTmpDirIn (takeDirectory dir) "attic-restore" $ \tmpdir -> do
 		ok <- boolSystem "attic" $
@@ -104,7 +108,7 @@ backup' dir backupdir crontimes extraargs kp = cronjob
   where
 	desc = backupdir ++ " attic backup"
 	cronjob = Cron.niceJob ("attic_backup" ++ dir) crontimes (User "root") "/" $
-		"flock " ++ shellEscape lockfile ++ " sh -c " ++ backupcmd
+		"flock " ++ shellEscape lockfile ++ " sh -c " ++ shellEscape backupcmd
 	lockfile = "/var/lock/propellor-attic.lock"
 	backupcmd = intercalate ";" $
 		createCommand

@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Propellor.Bootstrap (
 	Bootstrapper(..),
 	Builder(..),
@@ -31,10 +33,10 @@ type ShellCommand = String
 -- `OSOnly` uses the OS's native packages of Cabal and all of propellor's
 -- build dependencies. It may not work on all systems.
 data Bootstrapper = Robustly Builder | OSOnly
-	deriving (Show)
+	deriving (Show, Typeable)
 
 data Builder = Cabal | Stack
-	deriving (Show)
+	deriving (Show, Typeable)
 
 defaultBootstrapper :: Bootstrapper
 defaultBootstrapper = Robustly Cabal
@@ -78,7 +80,7 @@ buildCommand bs = intercalate " && " (go (getBuilder bs))
   where
 	go Cabal =
 		[ "cabal configure"
-		, "cabal build propellor-config"
+		, "cabal build -j1 propellor-config"
 		, "ln -sf dist/build/propellor-config/propellor-config propellor"
 		]
 	go Stack =
@@ -131,9 +133,9 @@ depsCommand bs msys = "( " ++ intercalate " ; " (go bs) ++ ") || true"
 	pkginstall p = "ASSUME_ALWAYS_YES=yes pkg install " ++ p
 	pacmaninstall p = "pacman -S --noconfirm --needed " ++ p
 
-	-- This is the same deps listed in debian/control.
 	debdeps Cabal =
 		[ "gnupg"
+		-- Below are the same deps listed in debian/control.
 		, "ghc"
 		, "cabal-install"
 		, "libghc-async-dev"
@@ -278,7 +280,9 @@ cabalBuild msys = do
 				boolSystem "sh" [Param "-c", Param (depsCommand (Robustly Cabal) (Just sys))]
 					<&&> cabal ["configure"]
 		)
-	cabal_build = cabal ["build", "propellor-config"]
+	-- The -j1 is to only run one job at a time -- in some situations,
+	-- eg in qemu, ghc does not run reliably in parallel.
+	cabal_build = cabal ["build", "-j1", "propellor-config"]
 
 stackBuild :: Maybe System -> IO Bool
 stackBuild _msys = do
