@@ -48,7 +48,8 @@ Library
     base >= 4.9, base < 5,
     directory, filepath, IfElse, process, bytestring, hslogger, split,
     unix, unix-compat, ansi-terminal, containers (>= 0.5), network, async,
-    time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable
+    time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable,
+    template-haskell, file-embed
 
   Exposed-Modules:
     Propellor
@@ -183,6 +184,7 @@ Library
     Propellor.Types.Singletons
     Propellor.Types.ZFS
     Propellor.Wrapper
+    Utility.Embed
     Utility.FileMode
   Other-Modules:
     Propellor.Bootstrap

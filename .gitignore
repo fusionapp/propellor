@@ -1,5 +1,6 @@
 /propellor
 dist/*
+.built/*
 tags
 privdata/local
 privdata/keyring.gpg~

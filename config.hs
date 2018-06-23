@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 import           Control.Applicative ((<$>), (<*>))
 import           Propellor
 import           Propellor.Base
@@ -15,6 +17,7 @@ import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.User as User
 import           System.Posix.Files
+import           Utility.Embed
 import           Utility.FileMode
 
 main :: IO ()
@@ -52,7 +55,8 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasPrivContent "/srv/catcher-in-the-rye/config.yaml" (Context "fusion aux")
           & prometheusConfig
           & File.dirExists "/srv/drone-scheduler"
-          & droneSchedules
+          & File.hasContent "/srv/drone-scheduler/schedules.yaml"
+          $(sourceFile "files/schedules.yaml")
 
 
 onyx :: Host
@@ -908,15 +912,4 @@ prometheusProdConfig =
   , "        refresh_interval: 15s"
   , "        type: A"
   , "        port: 80"
-  ]
-
-
-droneSchedules :: Property UnixLike
-droneSchedules =
-  "/srv/drone-scheduler/schedules.yaml" `File.hasContent`
-  [ "- user: fusionapp"
-  , "  repo: fusion"
-  , "  branch: prod"
-  , "  environment: production"
-  , "  schedule: '10 22 * * *'"
   ]

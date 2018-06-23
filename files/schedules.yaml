@@ -1,0 +1,5 @@
+- user: fusionapp
+  repo: fusion
+  branch: prod
+  environment: production
+  schedule: '10 22 * * *'
