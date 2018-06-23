@@ -502,14 +502,15 @@ nginxPrimary =
   & entropySite
   & File.dirExists "/srv/www/fusiontest.net"
   & fusionSites
-  & lets "fusiontest.net" "/srv/www/fusiontest.net"
-  `onChange` Nginx.reloaded
   & Apt.installedBackport ["certbot"]
-  & File.dirExists "/srv/www/quotemaster.co.za"
+  & Systemd.disabled "certbot.timer"
+  & Systemd.stopped "certbot.timer"
+  & lets "fusiontest.net" [] "/srv/www/fusiontest.net"
+  `onChange` Nginx.reloaded
 
 
-lets :: Domain -> LetsEncrypt.WebRoot -> Property DebianLike
-lets = LetsEncrypt.letsEncrypt
+lets :: Domain -> [Domain] -> LetsEncrypt.WebRoot -> Property DebianLike
+lets = LetsEncrypt.letsEncrypt'
   (LetsEncrypt.AgreeTOS (Just "dev@fusionapp.com"))
 
 
