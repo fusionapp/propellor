@@ -55,8 +55,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasPrivContent "/srv/catcher-in-the-rye/config.yaml" (Context "fusion aux")
           & prometheusConfig
           & File.dirExists "/srv/drone-scheduler"
-          & File.hasContent "/srv/drone-scheduler/schedules.yaml"
-          $(sourceFile "files/schedules.yaml")
+          & File.hasContent "/srv/drone-scheduler/schedules.yaml" $(sourceFile "files/drone-schedules.yaml")
 
 
 onyx :: Host
@@ -817,6 +816,8 @@ prometheusConfig =
   & File.dirExists "/srv/prometheus/storage"
   & File.ownerGroup "/srv/prometheus/storage" (User "nobody") (Group "nogroup")
   & prometheusRulesCfg
+  `requires`
+  File.hasPrivContent "/srv/prometheus/drone-token" (Context "fusion production")
   & mainCfg
   where mainCfg :: Property (HasInfo + DebianLike)
         mainCfg = withPrivData src ctx $

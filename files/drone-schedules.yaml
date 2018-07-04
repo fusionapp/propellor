@@ -1,3 +1,4 @@
+# Need to restart the service in Rancher after changing this
 - user: fusionapp
   repo: fusion
   branch: prod
