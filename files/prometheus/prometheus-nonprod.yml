@@ -21,7 +21,7 @@ scrape_configs:
           - drone-server.drone7
         refresh_interval: 15s
         type: A
-        port: 000
+        port: 8000
   - job_name: 'clj-documint-uat'
     dns_sd_configs:
       - names:
