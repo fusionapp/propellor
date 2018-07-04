@@ -796,83 +796,15 @@ caddyfile = propertyList "Configuration for Caddy" $ props
   ]
 
 
-prometheusConfig :: Property (HasInfo + DebianLike)
+prometheusConfig :: Property (HasInfo + UnixLike)
 prometheusConfig =
   propertyList "Configuration for Prometheus" $ props
   & File.dirExists "/srv/prometheus"
   & File.dirExists "/srv/prometheus/storage"
   & File.ownerGroup "/srv/prometheus/storage" (User "nobody") (Group "nogroup")
   & prometheusRulesCfg
-  `requires`
-  File.hasPrivContent "/srv/prometheus/drone-token" (Context "fusion production")
-  & mainCfg
-  where mainCfg :: Property (HasInfo + DebianLike)
-        mainCfg = withPrivData src ctx $
-          \gettoken -> property' "Prometheus configuration" $
-          \p -> gettoken $
-          \token -> ensureProperty p $
-                    "/srv/prometheus/prometheus.yml"
-                    `File.hasContent`
-                    cfg (privDataVal token)
-        src = Password "Drone scrape token"
-        ctx = Context "Fusion production"
-        cfg token =
-          [ "global:"
-          , "  external_labels:"
-          , "    deployment: 'testing'"
-          , "rule_files:"
-          , "  - /prometheus-data/recording.rules.yml"
-          , "scrape_configs:"
-          , "  - job_name: 'prometheus'"
-          , "    static_configs:"
-          , "      - targets: ['localhost:9090']"
-          , "  - job_name: 'HostsMetrics'"
-          , "    dns_sd_configs:"
-          , "      - names:"
-          , "        - node-exporter"
-          , "        refresh_interval: 15s"
-          , "        type: A"
-          , "        port: 9100"
-          , "  - job_name: 'Drone'"
-          , "    bearer_token: " <> token
-          , "    dns_sd_configs:"
-          , "      - names:"
-          , "        - drone-server.drone7"
-          , "        refresh_interval: 15s"
-          , "        type: A"
-          , "        port: 8000"
-          , "  - job_name: 'clj-documint-uat'"
-          , "    dns_sd_configs:"
-          , "      - names:"
-          , "        - clj-documint.fusion"
-          , "        refresh_interval: 15s"
-          , "        type: A"
-          , "        port: 80"
-          ]
-
-
-prometheusRulesCfg :: Property UnixLike
-prometheusRulesCfg = "/srv/prometheus/recording.rules.yml" `File.hasContent`
-  [ "groups:"
-  , "  - name: clj-documint"
-  , "    rules:"
-  , "      - record: job_statusclass:http_requests_total:irate"
-  , "        expr: sum(irate(http_requests_total[15m])) BY (job, statusClass)"
-  , "      - record: job:http_request_latency_seconds:50p"
-  , "        expr: histogram_quantile(0.5, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
-  , "      - record: job:http_request_latency_seconds:90p"
-  , "        expr: histogram_quantile(0.9, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
-  , "      - record: job:http_request_latency_seconds:99p"
-  , "        expr: histogram_quantile(0.99, sum(irate(http_request_latency_seconds_bucket[15m])) BY (job, le))"
-  , "      - record: job_action:documint_actions_seconds:50p"
-  , "        expr: histogram_quantile(0.5, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
-  , "      - record: job_action:documint_actions_seconds:90p"
-  , "        expr: histogram_quantile(0.9, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
-  , "      - record: job_action:documint_actions_seconds:99p"
-  , "        expr: histogram_quantile(0.99, sum(irate(documint_actions_seconds_bucket[15m])) BY (job, action, le))"
-  , "      - record: job_action:documint_actions_total:irate"
-  , "        expr: sum(irate(documint_actions_total[15m])) BY (job, action)"
-  ]
+  & File.hasPrivContent "/srv/prometheus/drone-token" (Context "fusion production")
+  & File.hasContent "/srv/prometheus/prometheus.yml" $(sourceFile "files/prometheus/prometheus-nonprod.yml")
 
 
 prometheusProdConfig :: Property UnixLike
@@ -882,22 +814,9 @@ prometheusProdConfig =
   & File.dirExists "/srv/prometheus/storage"
   & File.ownerGroup "/srv/prometheus/storage" (User "nobody") (Group "nogroup")
   & prometheusRulesCfg
-  & "/srv/prometheus/prometheus.yml" `File.hasContent`
-  [ "global:"
-  , "  scrape_interval: 15s"
-  , "  external_labels:"
-  , "    deployment: 'production'"
-  , "rule_files:"
-  , "  - /prometheus-data/recording.rules.yml"
-  , "scrape_configs:"
-  , "  - job_name: 'prometheus'"
-  , "    static_configs:"
-  , "      - targets: ['localhost:9090']"
-  , "  - job_name: 'clj-documint-prod'"
-  , "    dns_sd_configs:"
-  , "      - names:"
-  , "        - clj-documint.fusion"
-  , "        refresh_interval: 15s"
-  , "        type: A"
-  , "        port: 80"
-  ]
+  & File.hasContent "/srv/prometheus/prometheus.yml" $(sourceFile "files/prometheus/prometheus-prod.yml")
+
+
+prometheusRulesCfg :: Property UnixLike
+prometheusRulesCfg =
+  "/srv/prometheus/recording.rules.yml" `File.hasContent` $(sourceFile "files/prometheus/recording.rules.yml")
