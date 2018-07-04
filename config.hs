@@ -275,7 +275,7 @@ restoreScript =
 globalCerts :: Property UnixLike
 globalCerts = propertyList "Certificates installed globally" $ props
               & File.dirExists "/srv/certs"
-              & File.hasContent "/srv/certs/dhparam.pem" dhparam2048
+              & File.hasContent "/srv/certs/dhparam.pem" $(sourceFile "files/dhparam.pem")
               & File.dirExists "/srv/certs/public"
               & File.hasContent "/srv/certs/public/fusion-ca.crt.pem" fusionCa
 
@@ -764,19 +764,6 @@ fusionSites =
   , "        proxy_redirect          https?://([^/]+)/ $scheme://$1/;"
   , "    }"
   , "}"
-  ]
-
-
-dhparam2048 :: [String]
-dhparam2048 =
-  [ "-----BEGIN DH PARAMETERS-----"
-  , "MIIBCAKCAQEAxDV+dxRNpt4NL5EfIq9XpCd25rABEgjgA1oRdAs5CXl9Kd+DADmR"
-  , "Hg74z1qVnN9z3u+IsPB26xR9tT6RjihCRhPL8ONcs/+1s0KpSiVd8qYzMz7NyYDk"
-  , "EIxOdtf1555DKPJvKKkGkua5r9a5XkFhB/+ozH7AkqRdyj20PjsYtvFHbtePsslG"
-  , "B0sQPB1iXyYyrZQ2TKP9Sqpe6AwqpxODBUwl+h4azXrtmzkQ6smj0BPKMg+g/GGp"
-  , "aWglEnO4tQofYz48zRvHDtLNkcTfVhZ/Lwz+NZwyQ3uPlXmDppIyn8xwrkwq/6XN"
-  , "6YHa2mdiITbsIILkNoRGtUSwFsKbyQaUcwIBAg=="
-  , "-----END DH PARAMETERS-----"
   ]
 
 
