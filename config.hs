@@ -804,6 +804,7 @@ prometheusConfig =
   & File.ownerGroup "/srv/prometheus/storage" (User "nobody") (Group "nogroup")
   & prometheusRulesCfg
   & File.hasPrivContent "/srv/prometheus/drone-token" (Context "fusion production")
+  & File.ownerGroup "/srv/prometheus/drone-token" (User "nobody") (Group "nogroup")
   & File.hasContent "/srv/prometheus/prometheus.yml" $(sourceFile "files/prometheus/prometheus-nonprod.yml")
 
 
