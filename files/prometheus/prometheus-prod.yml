@@ -28,4 +28,4 @@ scrape_configs:
           - fusion.fusion
         refresh_interval: 15s
         type: A
-        port: 8001
+        port: 80
