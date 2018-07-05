@@ -22,3 +22,10 @@ scrape_configs:
         refresh_interval: 15s
         type: A
         port: 80
+  - job_name: 'fusion-prod'
+    dns_sd_configs:
+      - names:
+          - fusion.fusion
+        refresh_interval: 15s
+        type: A
+        port: 80
