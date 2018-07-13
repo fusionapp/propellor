@@ -2,7 +2,6 @@
 
 import           Control.Applicative ((<$>), (<*>))
 import           Propellor
-import           Propellor.Base
 import qualified Propellor.Property.Apt as Apt
 import           Propellor.Property.Bootstrap
 import qualified Propellor.Property.Cron as Cron
