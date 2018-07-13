@@ -504,11 +504,21 @@ nginxPrimary =
   & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
   & entropySite
   & File.dirExists "/srv/www/fusiontest.net"
+  & File.dirExists "/srv/www/fusionapp.com"
   & fusionSites
   & Apt.installedBackport ["certbot"]
   & Systemd.disabled "certbot.timer"
   & Systemd.stopped "certbot.timer"
   & lets "fusiontest.net" [] "/srv/www/fusiontest.net"
+  `onChange` Nginx.reloaded
+  & lets "fusionapp.com"
+  [ "entropy.fusionapp.com"
+  , "bz-entropy.fusionapp.com"
+  , "bz-ext.fusionapp.com"
+  , "prod.fusionapp.com"
+  , "bz.fusionapp.com"
+  , "bn.fusionapp.com"
+  ] "/srv/www/fusionapp.com"
   `onChange` Nginx.reloaded
 
 
@@ -593,6 +603,11 @@ fusionSites =
   , ""
   , "    error_page  502     /fusion-error/502.html;"
   , "    error_page  504     /fusion-error/504.html;"
+  , ""
+  , "    location '/.well-known/acme-challenge' {"
+  , "        default_type 'text/plain';"
+  , "        root /srv/www/fusionapp.com;"
+  , "    }"
   , ""
   , "    location /__jsmodule__/ {"
   , "        root            /srv/nginx/cache;"
