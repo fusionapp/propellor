@@ -574,7 +574,7 @@ fusionSites =
   & Nginx.siteEnabled "fusion-prod-bz"
   [ "server {"
   , "    listen              41.72.130.253:80;"
-  , "    listen              41.72.130.253:443 default ssl;"
+  , "    listen              41.72.130.253:443 default_server ssl http2;"
   , "    server_name         fusionapp.com bz-ext.fusionapp.com bz.fusionapp.com prod.fusionapp.com bn.fusionapp.com;"
   -- , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "fusionapp.com" <> ";"
   -- , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "fusionapp.com" <> ";"
