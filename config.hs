@@ -694,7 +694,6 @@ fusionSites =
   , "    gzip_comp_level     9;"
   , "    gzip_types          text/javascript application/javascript text/css text/csv text/tab-separated-values text/plain;"
   , "    proxy_buffering     on;"
-  , "    proxy_set_header    Host            $host;"
   , "    proxy_set_header    X-Real-IP       $remote_addr;"
   , "    proxy_set_header    X-Forwarded-Proto $scheme;"
   , "    proxy_read_timeout  600;"
@@ -710,6 +709,7 @@ fusionSites =
   , "    }"
   , "    location / {"
   , "        proxy_pass              https://bz-ext.fusionapp.com;"
+  , "        proxy_set_header        Host bz-ext.fusionapp.com;"
   , "    }"
   , "}"
   ]
