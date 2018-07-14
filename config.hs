@@ -677,7 +677,7 @@ fusionSites =
   , "}"
   , "server {"
   , "    listen              41.72.130.253:80;"
-  , "    listen              41.72.130.253:443 ssl http2;"
+  , "    listen              41.72.130.253:443 ssl;"
   , "    server_name         prod.fusionapp.com;"
   , "    ssl_certificate     /srv/certs/private/star.fusionapp.com.pem;"
   , "    ssl_certificate_key /srv/certs/private/star.fusionapp.com.pem;"
