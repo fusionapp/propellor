@@ -55,6 +55,8 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & prometheusConfig
           & File.dirExists "/srv/drone-scheduler"
           & File.hasContent "/srv/drone-scheduler/schedules.yaml" $(sourceFile "files/drone-schedules.yaml")
+          & File.dirExists "/srv/sentry"
+          & File.hasPrivContent "/srv/sentry/config.yml" (Context "fusion aux")
 
 
 onyx :: Host
