@@ -57,6 +57,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasContent "/srv/drone-scheduler/schedules.yaml" $(sourceFile "files/drone-schedules.yaml")
           & File.dirExists "/srv/sentry"
           & File.hasPrivContent "/srv/sentry/config.yml" (Context "fusion aux")
+          & File.ownerGroup "/srv/sentry/config.yml" (User "999") (Group "999")
 
 
 onyx :: Host
