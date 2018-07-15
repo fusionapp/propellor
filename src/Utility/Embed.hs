@@ -5,4 +5,4 @@ import Language.Haskell.TH
 import qualified Data.FileEmbed as FE
 
 sourceFile :: FilePath -> Q Exp
-sourceFile path = return . AppE (VarE 'lines) =<< FE.embedStringFile path
+sourceFile path = AppE (VarE 'lines) <$> FE.embedStringFile path
