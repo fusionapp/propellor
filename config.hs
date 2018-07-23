@@ -520,7 +520,6 @@ nginxPrimary =
   , "prod.fusionapp.com"
   , "bz.fusionapp.com"
   , "bn.fusionapp.com"
-  , "entropy.fusiontest.net"
   ] "/srv/www/fusionapp.com"
   `onChange` Nginx.reloaded
 
