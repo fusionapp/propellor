@@ -520,6 +520,7 @@ nginxPrimary =
   , "prod.fusionapp.com"
   , "bz.fusionapp.com"
   , "bn.fusionapp.com"
+  , "entropy.fusiontest.net"
   ] "/srv/www/fusionapp.com"
   `onChange` Nginx.reloaded
 
@@ -534,7 +535,15 @@ entropySite =
   Nginx.siteEnabled "entropy.fusionapp.com"
   [ "server {"
   , "    listen              41.72.130.253:80;"
+  , "    listen              41.72.130.253:443 ssl http2;"
   , "    server_name         entropy.fusionapp.com entropy.fusiontest.net bz-entropy.fusionapp.com;"
+  , "    ssl_certificate     " <> LetsEncrypt.fullChainFile "fusionapp.com" <> ";"
+  , "    ssl_certificate_key " <> LetsEncrypt.privKeyFile "fusionapp.com" <> ";"
+  , "    ssl_prefer_server_ciphers on;"
+  , "    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;"
+  , "    ssl_session_cache   none;"
+  , "    ssl_session_tickets off;"
+  , "    ssl_dhparam         /srv/certs/dhparam.pem;"
   , "    access_log          /var/log/nginx/entropy.access.log;"
   , "    gzip                off;"
   , ""
