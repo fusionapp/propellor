@@ -77,6 +77,7 @@ letsEncrypt' (AgreeTOS memail) domain domains webroot =
 		, "--text"
 		, "--noninteractive"
 		, "--keep-until-expiring"
+                , "--expand"
 		] ++ map (\d -> "--domain="++d) alldomains
 
 	getstats = mapM statcertfiles alldomains
