@@ -28,6 +28,7 @@ main = defaultMain hosts
 hosts :: [Host]
 hosts = [ scarlet
         , onyx
+        , onyxDr
         ]
 
 
@@ -65,7 +66,6 @@ onyx = host "onyx.fusionapp.com" $ props
        & fusionHost
        -- Local private certificates
        & File.dirExists "/srv/certs/private"
-       & File.notPresent "/srv/certs/private/star.fusionapp.com.pem"
        & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" hostContext
        & File.hasPrivContent "/srv/certs/private/prod.fusionapp.com.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" (Context "fusion production")
@@ -75,7 +75,6 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/absa-datapower-prod.pem" (Context "fusion production")
-       & File.notPresent "/srv/certs/private/quotemaster.co.za.pem"
        -- Work around Propellor issue, not sure exactly what is wrong here.
        & Apt.installed ["debootstrap"]
        & Apt.installed ["systemd-container"]
@@ -84,6 +83,31 @@ onyx = host "onyx.fusionapp.com" $ props
        & Cron.job "fusion-index-backup" (Cron.Times "41 1 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-index /srv/db/fusion-index s3://s3-eu-west-1.amazonaws.com/backups-fusion-index.fusionapp.com"
        & Cron.job "fusion-prod backup" (Cron.Times "17 0-23/4 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion-prod /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-fusion-prod.fusionapp.com"
        & Cron.job "weekly btrfs balance" (Cron.Times "18 3 * * Sun") (User "root") "/tmp" "/bin/btrfs balance start -v -dusage=50 -musage=50 /"
+       & fusionDumpsCleaned
+       & prometheusProdConfig
+
+
+onyxDr :: Host
+onyxDr = host "onyx-dr.fusionapp.com" $ props
+       & standardSystem (Stable "stretch") X86_64
+       & ipv4 undefined
+       & fusionHost
+       -- Local private certificates
+       & File.dirExists "/srv/certs/private"
+       & File.hasPrivContent "/srv/certs/private/onyx.fusionapp.com.pem" (Context "onyx.fusionapp.com")
+       & File.hasPrivContent "/srv/certs/private/prod.fusionapp.com.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/mfc-fusion-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/absa-datapower-prod.pem" (Context "fusion production")
+       -- Work around Propellor issue, not sure exactly what is wrong here.
+       & Apt.installed ["debootstrap"]
+       & Apt.installed ["systemd-container"]
+       & Systemd.running Systemd.networkd
+       & Systemd.nspawned nginxPrimary
        & fusionDumpsCleaned
        & prometheusProdConfig
 
@@ -105,7 +129,6 @@ fusionHost = propertyList "Platform dependencies for Fusion services" $ props
              & File.dirExists "/srv/locks"
              & backupScript
              & restoreScript
-             & droneKeys
              & duplicityLocksCleaned
 
 
@@ -244,7 +267,6 @@ standardSystem suite arch =
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
-  & darrenKeys (User "darren")
   & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
@@ -313,31 +335,11 @@ jjKeys user = propertyList "keys for jj"
               ]
 
 
-darrenKeys :: User -> Property UnixLike
-darrenKeys user = propertyList "keys for darren"
-                  . toProps
-                  . map (undoRevertableProperty . Ssh.authorizedKey user) $
-                  [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQD0SNokEjxqHvWbdyHs2pkf7gTpL464wv2I4vmIzFIjmd+8G5OMZkDme1CrS7jhi33dGM99zMZF1TC6Wbi7DshL9jX8Q8A2VJBN8Tm8FH1bmVM1eV44biAzvFmV9J2xeiGX2cM1rJMYn9CSbYBhwoi32OhvWxEV7FsKI6sipZiHtP0ClxyNbd8foM/AEfrRIEmTQad+ep6OvKsdkTwcJoywvqtgF0giiCMYkuXAYZzAm5+0ZcgYhdQdLXf8cCoxWxjX7cpwx+3CGJPbWVejmAunOjSuTQ1sfl73OrtjZd7hDdhtvQXhmJaJc8+bqoODUP94mS6zIKv8e09kY/ijcMRpHMC6ERtf3bB5qc+yWFGVwcIzwvta3IZ1nbmbea3gMv1yGXc5Qf4KSqrQvghZ7N/8Ava36njj3Zab6DqYNtnpdIeGUK5mGApE7PSHiVQWYtK11IPaYrnhiAQlN2V91G1J3hu6DkuO6d+ZdfzBEEfcCosW1MWdUyzX2X+34YOyFNEDVGy6gOk26Y9W57yPwH0FRmcOqNfWVqFGQuwrNY3m9J6XjJuhmhwTOeLUjePo68NDeEoabQ4IfPdMX5G3+mI6DgbwhOKlWLI8Lj35n8n0m0HwkIn6pm1Fov8eboE8oAzMoAoJH7Xb9zAgJxf2m+f1X/Dsks4Vv9X+rJza4xDCqQ== potato@potatop"
-                  , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCx+BiVfTdyZ4dDyethjL4PHltDB1jBJI65iKIzrg6DBkG/DJxNShCbrS/SsR9xkJVlUhyUxjdLQvdGTsbIxPphCuRivk71ccMj1/iN32PkoNIujSCa66rGL/NKO000Ir/ZWiBXG+p5svSZuojTfL+BEPsEfpLoLhBvt8M1TbhyCJl+bQ7wW0Djlp/tYcpSkmAg5fXXragf4Q6t8UrTjkigzDqi0SAttGylflPlQBo23ImJdEbduYQJdtOx8E7675bodSADqK03ouBXti1/1ZKYO6e1X8KMzvJZEmRTz7JcNFB7ICJJJWIYSW05uoJCTKk2ZACa8XyM+b3vXRvqXzVd darren@yk2"
-                  ]
-
-
 adminKeys :: User -> Property UnixLike
 adminKeys user = propertyList "admin keys" . toProps . map ($ user) $
                  [ tristanKeys
                  , jjKeys
-                 , darrenKeys
                  ]
-
-
-droneKeys :: Property UnixLike
-droneKeys = propertyList "drone.io CI deployment keys"
-            . toProps
-            . map (undoRevertableProperty . Ssh.authorizedKey (User "root")) $
-            [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4NcWgAGV+mmTQgMS56MmZBWs6wQzBDh5q36pE+iCztI+tzTSPAPd6yoZthDtk1OkHfNAqfSEnxhYneKF1a893jPhNCwJ1BgIYmuVUvX4NPy0A62iI3xaNKx9fXrW679TIYm21pkmkNs2O81P7oUl+wfuo5j33GRdNQxZKas8uJZ/HE09h+Vd4OH6GsjklBWJTSliidrzOWNyv7XvzUIBMOey6dfZOVMraKxTux0xhb28ITklMWLxZwJJzK9uzUlbZJa2P5lO3e30+IWbMZnFiRQqrPwofjsWxR7OUk4qn/KE4MejsNVo6YrnHGj9VKZQMWBJNS8aARq+zq8A8Fre1 fusionapp-diamond@drone"
-            , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCaL+2DoGktW0DRLBpLdJm4icbotFQwHMwRmyTQc+XTXmpq0w3FiO2xE2Vr0wDlaFKWfMsscVDbmfK6ViihVUOPSlG2rjaEnSHVRdw68yvl5uEA84Xtqu7D/lnjgOwHZT9wC3mCi2e0LpVvQSU4g27e0SSb+EyxTd7JrvVjJpR7+ycAqx0xnC0jHvjTDO1n5nDqiAicStk6W/BmXARIb0YoeKyowqTpyl2brmzjnmuDy28cmLSZXbshHUxaL1C2ZmJh6oVbBPQmBhZ4SsrGP4CgY66EVt3SlCQ4IE6dL+kOklRrxcnDGCh8uNKXs/dkZyT5Um0q6xhsy/JnDjQ+ruo7 fusionapp-fusion@drone"
-            , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC1lvZPseVOYjIKm8jrxpvI1CcOo7aSkkk61u6/LJMPfD2nJOalGzMdUHU7dLlZDLkY4adH9/YlHOleP1u2Jw38PjA6wkuaLVXcGwo7zrkU8ufGlsG/yZL1ZZNk/5ltaz34pZ5DFkQuCq7NUDTZYN+tXkhH31EfbpOPMFPLurQFG5heG7spf1LxNybHd3tYUPm+/3n1tAZpWAzcGjHm03Ubw0ByM0zNt+fDG3+VF80j/x9/v0SpXXpHxYVANHAm+w8It0EmWht2dYexQF8ixvmAqXKZu6b3vTqYSn3xSrEIucGaZ0F0kK/Khw4u+B/QLbkYvIPTAk0W/9vh+wTU+FTv fusionapp-entropy@drone"
-            ]
 
 
 standardContainer :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
@@ -418,6 +420,64 @@ nginxPrimary =
   , "bz.fusionapp.com"
   , "bn.fusionapp.com"
   ] "/srv/www/fusionapp.com"
+  `onChange` Nginx.reloaded
+
+
+nginxDr :: Systemd.Container
+nginxDr =
+  Systemd.debContainer "nginx-dr" $ props
+  & standardContainer (Stable "stretch") X86_64
+  & File.dirExists "/etc/systemd/system/nginx.service.d"
+  & "/etc/systemd/system/nginx.service.d/limits.conf" `File.hasContent`
+  [ "[Service]"
+  , "LimitNOFILE=100000"
+  , "LimitCORE=500000000"
+  ]
+  & Apt.installed ["logrotate", "xz-utils"]
+  & "/etc/logrotate.d/nginx"
+  `File.hasContent`
+  [ "/var/log/nginx/*.log {"
+  , "    daily"
+  , "    missingok"
+  , "    rotate 30"
+  , "    compress"
+  , "    compresscmd /usr/bin/xz"
+  , "    compressext .xz"
+  , "    delaycompress"
+  , "    notifempty"
+  , "    create 0640 www-data adm"
+  , "    sharedscripts"
+  , "    prerotate"
+  , "        if [ -d /etc/logrotate.d/httpd-prerotate ]; then \\"
+  , "            run-parts /etc/logrotate.d/httpd-prerotate; \\"
+  , "        fi \\"
+  , "    endscript"
+  , "    postrotate"
+  , "        invoke-rc.d nginx rotate >/dev/null 2>&1"
+  , "    endscript"
+  , "}"
+  ]
+  & Nginx.installed
+  & Systemd.bind ("/srv/certs" :: String)
+  & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
+  & File.dirExists "/srv/nginx/cache"
+  & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
+  & Nginx.siteEnabled "entropy.fusionapp.com" $(sourceFile "files/nginx/entropy.conf")
+  & File.dirExists "/srv/www/fusionapp.com"
+  & Nginx.siteEnabled "fusion-prod-dr" $(sourceFile "files/nginx/fusion-prod-dr.conf")
+  & Apt.installedBackport ["certbot"]
+  & Systemd.disabled "certbot.timer"
+  & Systemd.stopped "certbot.timer"
+  `onChange` Nginx.reloaded
+  -- & lets "fusionapp.com"
+  -- [ "entropy.fusionapp.com"
+  -- , "bz-entropy.fusionapp.com"
+  -- , "bz-ext.fusionapp.com"
+  -- , "prod.fusionapp.com"
+  -- , "bz.fusionapp.com"
+  -- , "bn.fusionapp.com"
+  -- ] "/srv/www/fusionapp.com"
+  & lets "onyx-dr.fusionapp.com" [] "/srv/www/fusionapp.com"
   `onChange` Nginx.reloaded
 
 
