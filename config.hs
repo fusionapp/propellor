@@ -434,29 +434,6 @@ nginxDr =
   , "LimitCORE=500000000"
   ]
   & Apt.installed ["logrotate", "xz-utils"]
-  & "/etc/logrotate.d/nginx"
-  `File.hasContent`
-  [ "/var/log/nginx/*.log {"
-  , "    daily"
-  , "    missingok"
-  , "    rotate 30"
-  , "    compress"
-  , "    compresscmd /usr/bin/xz"
-  , "    compressext .xz"
-  , "    delaycompress"
-  , "    notifempty"
-  , "    create 0640 www-data adm"
-  , "    sharedscripts"
-  , "    prerotate"
-  , "        if [ -d /etc/logrotate.d/httpd-prerotate ]; then \\"
-  , "            run-parts /etc/logrotate.d/httpd-prerotate; \\"
-  , "        fi \\"
-  , "    endscript"
-  , "    postrotate"
-  , "        invoke-rc.d nginx rotate >/dev/null 2>&1"
-  , "    endscript"
-  , "}"
-  ]
   & Nginx.installed
   & Systemd.bind ("/srv/certs" :: String)
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
