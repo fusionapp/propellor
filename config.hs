@@ -75,6 +75,9 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/absa-datapower-prod.pem" (Context "fusion production")
+       & File.dirExists "/srv/db/clj-documint"
+       & File.hasContent "/srv/db/clj-documint/documint.config.json" $(sourceFile "files/documint.config-prod.json")
+       & File.hasPrivContent "/srv/db/clj-documint/documint_keystore_prod.jks" (Context "fusion production")
        -- Work around Propellor issue, not sure exactly what is wrong here.
        & Apt.installed ["debootstrap"]
        & Apt.installed ["systemd-container"]
@@ -105,6 +108,9 @@ onyxDr = host "onyx-dr.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/absa-datapower-prod.pem" (Context "fusion production")
+       & File.dirExists "/srv/db/clj-documint"
+       & File.hasContent "/srv/db/clj-documint/documint.config.json" $(sourceFile "files/documint.config-prod.json")
+       & File.hasPrivContent "/srv/db/clj-documint/documint_keystore_prod.jks" (Context "fusion production")
        -- Work around Propellor issue, not sure exactly what is wrong here.
        & Apt.installed ["debootstrap"]
        & Apt.installed ["systemd-container"]
