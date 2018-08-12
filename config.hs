@@ -91,6 +91,7 @@ onyxDr :: Host
 onyxDr = host "onyx-dr.fusionapp.com" $ props
        & standardSystem (Stable "stretch") X86_64
        & ipv4 "34.251.195.56"
+       & "/etc/hostname" `File.hasContent` ["onyx-dr"]
        & fusionHost
        -- Local private certificates
        & File.dirExists "/srv/certs/private"
