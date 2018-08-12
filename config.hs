@@ -398,6 +398,7 @@ nginxPrimary =
   , "}"
   ]
   & Nginx.installed
+  & Systemd.started "nginx.service"
   & Systemd.bind ("/srv/certs" :: String)
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
   & File.dirExists "/srv/nginx/cache"
@@ -435,6 +436,7 @@ nginxDr =
   ]
   & Apt.installed ["logrotate", "xz-utils"]
   & Nginx.installed
+  & Systemd.started "nginx.service"
   & Systemd.bind ("/srv/certs" :: String)
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
   & File.dirExists "/srv/nginx/cache"
@@ -453,8 +455,8 @@ nginxDr =
   -- , "bz.fusionapp.com"
   -- , "bn.fusionapp.com"
   -- ] "/srv/www/fusionapp.com"
-  -- & lets "onyx-dr.fusionapp.com" [] "/srv/www/fusionapp.com"
-  -- `onChange` Nginx.reloaded
+  & lets "onyx-dr.fusionapp.com" [] "/srv/www/fusionapp.com"
+  `onChange` Nginx.reloaded
 
 
 lets :: Domain -> [Domain] -> LetsEncrypt.WebRoot -> Property DebianLike
