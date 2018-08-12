@@ -107,7 +107,7 @@ onyxDr = host "onyx-dr.fusionapp.com" $ props
        & Apt.installed ["debootstrap"]
        & Apt.installed ["systemd-container"]
        & Systemd.running Systemd.networkd
-       & Systemd.nspawned nginxPrimary
+       & Systemd.nspawned nginxDr
        & fusionDumpsCleaned
        & prometheusProdConfig
 
