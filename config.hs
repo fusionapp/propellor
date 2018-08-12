@@ -439,7 +439,6 @@ nginxDr =
   & Git.cloned (User "root") "https://github.com/fusionapp/fusion-error.git" "/srv/nginx/fusion-error" Nothing
   & File.dirExists "/srv/nginx/cache"
   & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
-  & Nginx.siteEnabled "entropy.fusionapp.com" $(sourceFile "files/nginx/entropy.conf")
   & File.dirExists "/srv/www/fusionapp.com"
   & Nginx.siteEnabled "fusion-prod-dr" $(sourceFile "files/nginx/fusion-prod-dr.conf")
   & Apt.installedBackport ["certbot"]
@@ -454,8 +453,8 @@ nginxDr =
   -- , "bz.fusionapp.com"
   -- , "bn.fusionapp.com"
   -- ] "/srv/www/fusionapp.com"
-  & lets "onyx-dr.fusionapp.com" [] "/srv/www/fusionapp.com"
-  `onChange` Nginx.reloaded
+  -- & lets "onyx-dr.fusionapp.com" [] "/srv/www/fusionapp.com"
+  -- `onChange` Nginx.reloaded
 
 
 lets :: Domain -> [Domain] -> LetsEncrypt.WebRoot -> Property DebianLike
