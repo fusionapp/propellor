@@ -331,6 +331,7 @@ tristanKeys user = propertyList "keys for tristan"
                    . map (setupRevertableProperty . Ssh.authorizedKey user) $
                    [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTItuXoGILFK8Y7+y07e5pomUwNfsvptD/jiep8MA8ChcVYZMe/Pl++eBXPz71fjGUWR8H86chPYa5omMLaaJQ0KNjmqzyp27GKVxrSYxt3pkv34xkxkN0HYoGRR6a7JiV2vjOI7Av71lh6WOMA315I+y7vpIenLU/kWiy/YkRO6fe7Bh9ZbMCspmREupsnHH8Zxu13xakQFZ2OzxhbDjWDHG42zZnbR3KCEVAE5/IM+RREZfFGiqTlbCEe2pCRKAntk2CS9E9f360KxMerRJAoQtHzuF1EZ+A1rn2lNLm9KW7n99EyuUt5W1E0dnB0Au7uYs7tUyAKjIZIg9OrHjR cardno000603011845"
                    , "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOg4PwvtqWHhan0rGxKAQn+n1IIKJJ0JsTMFdZiTFeOj mithrandi@lorien"
+                   , "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDeeQYCEZt4AObYhOEqtBefF7aMaOLh7ITG8xTQ9zbYgM5A9nAjUShvlUbb4HvE9cJcAmxyS6nO+p1AkMLbldMRadkQdKrhb389GDUkRHI5N61PvQ+Fn8HS3jzWJ1Ft5jAY9wroq2bNW+mdVGClMFaqczkPfNWUEwp7Bv1WE43TOJ2v2lHOFO3azmxzd4CAusNEPwExXXuqoP7fW4ew7QgUcL9xFnKxGXxZ+PZxhViF/ql3wUoe41Ksi2vJu88aSWNXslO2FQzBNzpIISCIPSfQTHvo14GYsJ/jP1nzD6eFHyVrqINU+FO+KS/6r126a8P23ektMwut+9Z74FqdZs61 mithrandi@ykn4c"
                    ]
 
 
