@@ -1,5 +1,5 @@
 Name: propellor
-Version: 5.3.6
+Version: 5.4.1
 Cabal-Version: 1.20
 License: BSD2
 Maintainer: Joey Hess <id@joeyh.name>
@@ -80,6 +80,7 @@ Library
     Propellor.Property.Dns
     Propellor.Property.DnsSec
     Propellor.Property.Docker
+    Propellor.Property.EtcDefault
     Propellor.Property.Fail2Ban
     Propellor.Property.File
     Propellor.Property.Firejail

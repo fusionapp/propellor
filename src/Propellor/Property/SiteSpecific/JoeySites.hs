@@ -570,6 +570,13 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "smtp_tls_loglevel = 1"
 		, "smtp_use_tls = yes"
 		, "smtp_tls_session_cache_database = sdbm:/etc/postfix/smtp_scache"
+
+		, "# Allow larger attachments, up to 200 mb."
+		, "# (Avoid setting too high; the postfix queue must have"
+		, "# 1.5 times this much space free, or postfix will reject"
+		, "# ALL mail!)"
+		, "message_size_limit = 204800000"
+		, "virtual_mailbox_limit = 20480000"
 		]
 		`onChange` Postfix.dedupMainCf
 		`onChange` Postfix.reloaded
@@ -920,6 +927,9 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 	& Systemd.enabled setupservicename
 		`requires` setupserviceinstalled
 		`onChange` Systemd.started setupservicename
+	& Systemd.enabled watchdogservicename
+		`requires` watchdogserviceinstalled
+		`onChange` Systemd.started watchdogservicename
 	& Systemd.enabled pollerservicename
 		`requires` pollerserviceinstalled
 		`onChange` Systemd.started pollerservicename
@@ -929,6 +939,9 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 	& User.hasGroup user (Group "dialout")
 	& Group.exists (Group "gpio") Nothing
 	& User.hasGroup user (Group "gpio")
+	& Apt.installed ["i2c-tools"]
+	& User.hasGroup user (Group "i2c")
+	& "/etc/modules-load.d/homepower.conf" `File.hasContent` ["i2c-dev"]
 	& Cron.niceJob "homepower upload"
 		(Cron.Times "1 * * * *") user d rsynccommand
 		`requires` Ssh.userKeyAt (Just sshkeyfile) user ctx sshkey
@@ -939,12 +952,13 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
   where
 	d = "/var/www/html/homepower"
 	sshkeyfile = d </> ".ssh/key"
-	build = userScriptProperty (User "joey")
-		[ "cd " ++ d </> "reactive-banana-automation"
-		, "cabal install"
-		, "cd " ++ d
-		, "make"
-		]
+	build = check (not <$> doesFileExist (d </> "controller")) $
+		userScriptProperty (User "joey")
+			[ "cd " ++ d </> "reactive-banana-automation"
+			, "cabal install"
+			, "cd " ++ d
+			, "make"
+			]
 		`assume` MadeChange
 		`requires` Apt.installed
 			[ "ghc", "cabal-install", "make"
@@ -954,6 +968,7 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 			, "libghc-wai-dev"
 			, "libghc-warp-dev"
 			, "libghc-http-client-dev"
+			, "libghc-http-client-tls-dev"
 			, "libghc-reactive-banana-dev"
 			, "libghc-hinotify-dev"
 			]
@@ -985,6 +1000,22 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 		, "WorkingDirectory=" ++ d
 		, "User=joey"
 		, "Group=joey"
+		, "Restart=always"
+		, ""
+		, "[Install]"
+		, "WantedBy=multi-user.target"
+		]
+	watchdogservicename = "homepower-watchdog"
+	watchdogservicefile = "/etc/systemd/system/" ++ watchdogservicename ++ ".service"
+	watchdogserviceinstalled = watchdogservicefile `File.hasContent`
+		[ "[Unit]"
+		, "Description=home power watchdog"
+		, ""
+		, "[Service]"
+		, "ExecStart=" ++ d ++ "/watchdog"
+		, "WorkingDirectory=" ++ d
+		, "User=root"
+		, "Group=root"
 		, "Restart=always"
 		, ""
 		, "[Install]"
@@ -1103,12 +1134,13 @@ laptopSoftware = Apt.installed
 	, "procmeter3", "xfce4", "procmeter3", "unclutter"
 	, "mplayer", "fbreader", "firefox", "chromium"
 	, "libdatetime-event-sunrise-perl", "libtime-duration-perl"
-	, "network-manager", "gtk-redshift", "powertop"
+	, "network-manager", "network-manager-openvpn-gnome", "openvpn"
+	, "gtk-redshift", "powertop"
 	, "gimp", "gthumb", "inkscape", "sozi", "xzgv", "hugin"
 	, "mpc", "mpd", "ncmpc", "sonata", "mpdtoys"
 	, "bsdgames", "nethack-console"
 	, "xmonad", "libghc-xmonad-dev", "libghc-xmonad-contrib-dev"
-	, "ttf-bitstream-vera"
+	, "ttf-bitstream-vera", "fonts-symbola", "fonts-noto-color-emoji"
 	, "mairix", "offlineimap", "mutt", "slrn"
 	, "mtr", "nmap", "whois", "wireshark", "tcpdump", "iftop"
 	, "pmount", "tree", "pv"
@@ -1125,6 +1157,7 @@ laptopSoftware = Apt.installed
 	, "w3m", "sm", "weechat"
 	, "borgbackup", "wipe", "smartmontools", "libgfshare-bin"
 	, "units"
+	, "virtualbox", "qemu-kvm"
 	]
 	`requires` baseSoftware
 	`requires` devSoftware

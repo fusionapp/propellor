@@ -1,3 +1,42 @@
+propellor (5.4.2) UNRELEASED; urgency=medium
+
+  * letsencrypt': Pass --expand to support expanding the list of domains
+
+ -- Joey Hess <id@joeyh.name>  Thu, 09 Aug 2018 10:54:41 -0400
+
+propellor (5.4.1) unstable; urgency=medium
+
+  * Modernized and simplified the MetaTypes implementation now that
+    compatability with ghc 7 is no longer needed.
+  * Use git verify-commit to verify gpg signatures, rather than the old
+    method of parsing git log output. Needs git 2.0.
+  * Added ConfFile.containsShellSetting, ConfFile.lacksShellSetting,
+    and EtcDefault.set properties. Thanks, Sean Whitton
+  * Dns: Support TXT values longer than bind's maximum string length
+    of 255 bytes. Thanks, rsiddharth.
+  * Docker and HostingProvider.CloudAtCost modules are not being
+    maintained, so marked them as such.
+    Seeking a maintainer for the Docker module; I anticipate
+    removing the CloudAtCost module in the next API bump.
+
+ -- Joey Hess <id@joeyh.name>  Wed, 08 Aug 2018 10:29:27 -0400
+
+propellor (5.4.0) unstable; urgency=medium
+
+  [ Sean Whitton ]
+  * Apt.installedBackport replaced with Apt.backportInstalled.  (API change)
+    The old property would install dependencies from backports even when
+    the versions in stable satisfy the requested backport's dependencies.
+    The new property installs only the listed packages from backports;
+    all other dependencies come from stable.
+    So in some cases, you may need to list additional backports to install,
+    that would not have needed to be listed before. Due to this behavior
+    change the property has been renamed so uses of it will be checked.
+  * Restic.installed: stop trying to install a backport on jessie, because no
+    such backport exists.
+
+ -- Joey Hess <id@joeyh.name>  Thu, 17 May 2018 10:43:20 -0400
+
 propellor (5.3.6) unstable; urgency=medium
 
   * Fix build with ghc 8.4, which broke due to the Semigroup Monoid change.
