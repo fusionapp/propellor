@@ -417,7 +417,7 @@ nginxPrimary =
   & File.dirExists "/srv/www/fusionapp.com"
   & Nginx.siteEnabled "fusion-prod-bz" $(sourceFile "files/nginx/fusion-prod-bz.conf")
   & Nginx.siteEnabled "fusion-uat" $(sourceFile "files/nginx/fusion-uat.conf")
-  & Apt.installedBackport ["certbot"]
+  & Apt.backportInstalled ["certbot", "python3-certbot"]
   & Systemd.disabled "certbot.timer"
   & Systemd.stopped "certbot.timer"
   & lets "fusiontest.net" [] "/srv/www/fusiontest.net"
@@ -452,7 +452,7 @@ nginxDr =
   & File.ownerGroup "/srv/nginx/cache" (User "www-data") (Group "www-data")
   & File.dirExists "/srv/www/fusionapp.com"
   & Nginx.siteEnabled "fusion-prod-dr" $(sourceFile "files/nginx/fusion-prod-dr.conf")
-  & Apt.installedBackport ["certbot"]
+  & Apt.backportInstalled ["certbot", "python3-certbot"]
   & Systemd.disabled "certbot.timer"
   & Systemd.stopped "certbot.timer"
   `onChange` Nginx.reloaded
