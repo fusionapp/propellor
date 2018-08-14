@@ -93,7 +93,7 @@ onyx = host "onyx.fusionapp.com" $ props
 onyxDr :: Host
 onyxDr = host "onyx-dr.fusionapp.com" $ props
        & standardSystem (Stable "stretch") X86_64
-       & ipv4 "34.244.247.14"
+       & ipv4 "54.154.233.199"
        & "/etc/hostname" `File.hasContent` ["onyx-dr"]
        & cmdProperty "hostname" ["onyx-dr"] `assume` NoChange
        & fusionHost
