@@ -1,0 +1,17 @@
+{
+    "keystore": {
+        "path": "/db/documint_keystore_uat.jks",
+        "password": "123456"
+    },
+    "signing": {
+        "certificate-passwords": {
+            "selfsigned": "123456"
+        }
+    },
+    "renderer": {
+        "font-path": "/appenv/fonts"
+    },
+    "renderer-fop": {
+	"xconf": "/appenv/fop.xconf"
+    }
+}

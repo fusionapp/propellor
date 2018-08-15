@@ -56,6 +56,9 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.dirExists "/srv/sentry"
           & File.hasPrivContent "/srv/sentry/config.yml" (Context "fusion aux")
           & File.ownerGroup "/srv/sentry/config.yml" (User "999") (Group "999")
+          & File.dirExists "/srv/db/clj-documint"
+          & File.hasContent "/srv/db/clj-documint/documint.config.json" $(sourceFile "files/documint.config-uat.json")
+          & File.hasPrivContent "/srv/db/clj-documint/documint_keystore_prod.jks" (Context "fusion uat")
 
 
 onyx :: Host
