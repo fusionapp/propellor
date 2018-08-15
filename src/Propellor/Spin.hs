@@ -252,6 +252,8 @@ sendRepoUrl hst toh = sendMarked toh repoUrlMarker =<< geturl
 
 sendPrivData :: HostName -> Handle -> PrivMap -> IO ()
 sendPrivData hn toh privdata = void $ actionMessage msg $ do
+        hPutStrLn stderr . show =<< hGetEncoding toh
+        hSetEncoding toh utf8
 	sendMarked toh privDataMarker d
 	return True
   where
