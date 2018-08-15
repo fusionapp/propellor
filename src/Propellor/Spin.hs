@@ -181,6 +181,7 @@ getSshTarget target hst
 -- running the updateServer
 update :: Maybe HostName -> IO ()
 update forhost = do
+	hPrint stderr =<< hGetEncoding stdin
 	hSetEncoding stdin utf8
 	whenM hasGitRepo $
 		req NeedRepoUrl repoUrlMarker setRepoUrl
