@@ -183,6 +183,7 @@ update :: Maybe HostName -> IO ()
 update forhost = do
 	hPrint stderr =<< hGetEncoding stdin
 	hSetEncoding stdin utf8
+	hPrint stderr =<< hGetEncoding stdin
 	whenM hasGitRepo $
 		req NeedRepoUrl repoUrlMarker setRepoUrl
 
