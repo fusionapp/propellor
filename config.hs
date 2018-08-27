@@ -278,6 +278,7 @@ standardSystem suite arch =
   & adminKeys (User "root")
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
+  & shiradzKeys (User "shiradz")
   & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
@@ -325,7 +326,7 @@ standardNsSwitch =
 
 
 admins :: [User]
-admins = map User ["tristan", "jj"]
+admins = map User ["tristan", "jj", "shiradz"]
 
 
 tristanKeys :: User -> Property UnixLike
@@ -347,10 +348,19 @@ jjKeys user = propertyList "keys for jj"
               ]
 
 
+shiradzKeys :: User -> Property UnixLike
+shiradzKeys user = propertyList "keys for shiradz"
+              . toProps
+              . map (setupRevertableProperty . Ssh.authorizedKey user) $
+              [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdaJnt80AmFMZD93jBQ4zj2+BLK4iyCcfn9Gxr0dkrZ0dFu7UlAHAT1x+a+ml5hg49VXIpxnTJIjDHWdagXYKmjzyhcdpRrLSct9zDMTlhe4T3R8cLjBapt+UfbIFeYRTBQxCkMVgfOVI5F/4ZH2SFb5zWkZpy9HVD2NrOJkXX1TaOzj29dbGIwRa5k2KPxS67vjfCjBUUSqM0OUrv0viRwwRbajl1dUmawuIlWU0Iqc3EySkCTi4OfZrGb46PBCQOFJa1vYHN8xVnebt9HNLYXkdQ4addKlABAyVbcmYa31HpgSxojJajrCc+vXie7ro/DknkBhxob6+CCv5NVN8z shiradz"
+              ]
+
+
 adminKeys :: User -> Property UnixLike
 adminKeys user = propertyList "admin keys" . toProps . map ($ user) $
                  [ tristanKeys
                  , jjKeys
+                 , shiradzKeys
                  ]
 
 
