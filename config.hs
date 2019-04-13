@@ -46,8 +46,8 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
           & File.hasPrivContent "/srv/certs/private/absa-datapower-uat.pem" hostContext
-          & File.hasPrivContent "/srv/certs/private/verified-bearer-token-uat" hostContext
-          & File.hasPrivContent "/srv/certs/private/verified-jwt-prod.pem" hostContext
+          & File.hasPrivContent "/srv/certs/private/verified-bearer-token" (Context "fusion production")
+          & File.hasPrivContent "/srv/certs/private/verified-jwt.pem" (Context "fusion production")
           & Cron.niceJob "fusion-backup" (Cron.Times "23 3 * * *") (User "root") "/srv/duplicity" "/usr/local/bin/fusion-backup fusion /srv/db/fusion s3://s3-eu-west-1.amazonaws.com/backups-eu-uat.fusionapp.com"
           & caddyfile
           & File.dirExists "/srv/catcher-in-the-rye"
@@ -80,8 +80,8 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/absa-datapower-prod.pem" (Context "fusion production")
-       & File.hasPrivContent "/srv/certs/private/verified-bearer-token-prod" (Context "fusion production")
-       & File.hasPrivContent "/srv/certs/private/verified-jwt-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/verified-bearer-token" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/verified-jwt.pem" (Context "fusion production")
        & File.dirExists "/srv/db/clj-documint"
        & File.hasContent "/srv/db/clj-documint/documint.config.json" $(sourceFile "files/documint.config-prod.json")
        & File.hasPrivContent "/srv/db/clj-documint/documint_keystore_prod.jks" (Context "fusion production")
