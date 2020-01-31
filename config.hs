@@ -283,6 +283,7 @@ standardSystem suite arch =
   & tristanKeys (User "tristan")
   & jjKeys (User "jj")
   & shiradzKeys (User "shiradz")
+  & jacquesKeys (User "jacques")
   & Ssh.noPasswords
   & File.hasContent "/etc/sysctl.d/local-net.conf"
     [ "net.core.default_qdisc=fq"
@@ -330,7 +331,7 @@ standardNsSwitch =
 
 
 admins :: [User]
-admins = map User ["tristan", "jj", "shiradz"]
+admins = map User ["tristan", "jj", "shiradz", "jacques"]
 
 
 tristanKeys :: User -> Property UnixLike
@@ -359,12 +360,19 @@ shiradzKeys user = propertyList "keys for shiradz"
               [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdaJnt80AmFMZD93jBQ4zj2+BLK4iyCcfn9Gxr0dkrZ0dFu7UlAHAT1x+a+ml5hg49VXIpxnTJIjDHWdagXYKmjzyhcdpRrLSct9zDMTlhe4T3R8cLjBapt+UfbIFeYRTBQxCkMVgfOVI5F/4ZH2SFb5zWkZpy9HVD2NrOJkXX1TaOzj29dbGIwRa5k2KPxS67vjfCjBUUSqM0OUrv0viRwwRbajl1dUmawuIlWU0Iqc3EySkCTi4OfZrGb46PBCQOFJa1vYHN8xVnebt9HNLYXkdQ4addKlABAyVbcmYa31HpgSxojJajrCc+vXie7ro/DknkBhxob6+CCv5NVN8z shiradz"
               ]
 
+jacquesKeys :: User -> Property UnixLike
+jacquesKeys user = propertyList "keys for jacques"
+              . toProps
+              . map (setupRevertableProperty . Ssh.authorizedKey user) $
+              [ "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDE5wWD2sobwMxdab0LLvtB3Yk/zbddGtG8w59iOowBhIMfvtm26dA94e3Gb/y+Qa3Iy1jMRl5UHWE4V5ZW7VSRjJI1OssgnBmaZhCVbTFJqN3QBkaiSg3gXN+/UVl7mbCNwlUgf+PrkOsUh1S/IeEHd/6eAuHk6QMrr+MfY7p/IIS/DhJl47lpyHKy9esDxoj/OwIgHbHH0A22/L+FoVxWRFLKIc6jc26qqRVla8e53ZNPZ9LNAjzp4pzwwOM7vAgneOjmy7sGmloty3EXUfgY1zDVsdpJeXXWQ/8maapYaOOTou59QgS42fn4rRJ9Jlca0jlREkVcxk8PTeDV6FkcUMMFJjw2h3/v/pL1kZ3ndAlPe09LUIMjPIpBknhmfmp1H/cFdyAG1xgrO3tt2Rsr8m6mD+bN6Y/4gcZUp1+96moIvMBFM5xDQDhYdl4HWYx1HrnYXHkkjz2wAAHVlRgab5vRTgioTbqNKVgdKZ+gpHvljdTLACQniG/O5pb9EaOBZcugIKUfU1rYNNsLjPcAUHOKKRNZpuEsXK9T2y3i7Vz4JL0QH9QEJ5YQlGma8qMF/Gx04rznDVUKA0nuYxk40t71npZDPFy4nYLmSrCfyow3a8WGkQjGpGgAHWFKTXYidiK9f64BocO84Frq5iGASrxjbMP2hbb46NQXRnVHbw== jpm@dealersonline.co.za"
+              ]
 
 adminKeys :: User -> Property UnixLike
 adminKeys user = propertyList "admin keys" . toProps . map ($ user) $
                  [ tristanKeys
                  , jjKeys
                  , shiradzKeys
+                 , jacquesKeys
                  ]
 
 
