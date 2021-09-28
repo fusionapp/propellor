@@ -3,6 +3,9 @@ propellor (5.13) UNRELEASED; urgency=medium
   * Sudo.enabledFor: Deal with new @includedir syntax in sudoers file.
   * Apt.securityUpdates: Stop generating testing-security lines, as
     testing-security is unused per debian documentation.
+  * Renamed Linode.mlocateEnabled to Linode.locateEnabled, and made it also
+    make sure plocate is enabled, if it's installed rather than mlocate.
+    (API change)
 
  -- Joey Hess <id@joeyh.name>  Sun, 04 Oct 2020 10:24:36 -0400
 

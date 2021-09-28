@@ -216,7 +216,7 @@ kite = host "kite.kitenet.net" $ props
 	& Apt.installed ["linux-image-amd64"]
 	& Apt.serviceInstalledRunning "swapspace"
 	& Linode.serialGrub
-	& Linode.mlocateEnabled
+	& Linode.locateEnabled
 	& Apt.unattendedUpgrades
 	& Systemd.installed
 	& Systemd.persistentJournal
