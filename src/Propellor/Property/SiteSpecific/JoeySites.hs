@@ -537,7 +537,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "smtpd_tls_received_header = yes"
 		, "smtpd_use_tls = yes"
 		, "smtpd_tls_ask_ccert = yes"
-		, "smtpd_tls_session_cache_database = sdbm:/etc/postfix/smtpd_scache"
+		, "smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache"
 
 		, "# TLS setup -- client"
 		, "smtp_tls_CAfile = /etc/ssl/certs/joeyca.pem"
@@ -545,7 +545,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "smtp_tls_key_file = /etc/ssl/private/postfix.pem"
 		, "smtp_tls_loglevel = 1"
 		, "smtp_use_tls = yes"
-		, "smtp_tls_session_cache_database = sdbm:/etc/postfix/smtp_scache"
+		, "smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache"
 
 		, "# Allow larger attachments, up to 200 mb."
 		, "# (Avoid setting too high; the postfix queue must have"
