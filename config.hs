@@ -516,7 +516,7 @@ caddyfile :: Property UnixLike
 caddyfile = propertyList "Configuration for Caddy" $ props
   & File.dirExists "/srv/caddy"
   & File.hasContent "/srv/caddy/Caddyfile"
-  [ "https://rancher.fusionapp.com:443, https://rancher.fusionapp.com:4433"
+  [ "https://rancher.fusionapp.com:443, https://rancher.fusionapp.com:4433, http://rancher.fusionapp.com:80"
   , "gzip"
   , "log stdout"
   , "proxy / rancher-server:8080 {"
