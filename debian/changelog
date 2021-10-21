@@ -12,6 +12,8 @@ propellor (5.14) UNRELEASED; urgency=medium
   * Qemu.removeHostEmulationBinary: Removed this property, which is no
     longer necessary since qemu-debootstrap is not used.
     (API change)
+  * Flashkernel.installed: Deal with a behavior change in flash-kernel,
+    which will fail to install if is not configured first.
 
  -- Joey Hess <id@joeyh.name>  Sat, 14 Aug 2021 14:27:27 -0400
 
