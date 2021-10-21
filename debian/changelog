@@ -5,6 +5,13 @@ propellor (5.14) UNRELEASED; urgency=medium
   * Renamed Linode.mlocateEnabled to Linode.locateEnabled, and made it also
     make sure plocate is enabled, if it's installed rather than mlocate.
     (API change)
+  * Debootstrap.built: Stop using the deprecated qemu-debootstrap
+    for bootstrapping foreign architectures. It is not needed since qemu
+    2.12, which, at least on Debian, enabled the 
+    binfmt-support --fix-binary option.
+  * Qemu.removeHostEmulationBinary: Removed this property, which is no
+    longer necessary since qemu-debootstrap is not used.
+    (API change)
 
  -- Joey Hess <id@joeyh.name>  Sat, 14 Aug 2021 14:27:27 -0400
 
