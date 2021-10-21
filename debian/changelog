@@ -2,6 +2,9 @@ propellor (5.14) UNRELEASED; urgency=medium
 
   * Removed Propellor.Property.OpenID module, since the simpleid package
     got removed from Debian.
+  * Renamed Linode.mlocateEnabled to Linode.locateEnabled, and made it also
+    make sure plocate is enabled, if it's installed rather than mlocate.
+    (API change)
 
  -- Joey Hess <id@joeyh.name>  Sat, 14 Aug 2021 14:27:27 -0400
 
@@ -13,9 +16,6 @@ propellor (5.13) unstable; urgency=medium
   * Sudo.enabledFor: Deal with new @includedir syntax in sudoers file.
   * Apt.securityUpdates: Stop generating testing-security lines, as
     testing-security is unused per debian documentation.
-  * Renamed Linode.mlocateEnabled to Linode.locateEnabled, and made it also
-    make sure plocate is enabled, if it's installed rather than mlocate.
-    (API change)
   * Utility.HumanNumber: Fix rounding bug that could result in
     sometimes quite wrong values, eg "1.1 GB" when the input value was a
     few bytes less than 2 GB. Properties in Ccache and Journald that
