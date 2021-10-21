@@ -133,7 +133,7 @@ honeybee = host "honeybee.kitenet.net" $ props
 		)
 	& JoeySites.cubieTruckOneWire
 	& Systemd.persistentJournal
-	& Apt.installed ["firmware-brcm80211"] -- wifi
+	& Apt.installed ["firmware-atheros"]
 	& Apt.serviceInstalledRunning "ntp" -- no hardware clock
 	& bootstrappedFrom GitRepoOutsideChroot
 	& Ssh.hostKeys hostContext

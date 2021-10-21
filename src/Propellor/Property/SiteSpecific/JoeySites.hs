@@ -959,7 +959,7 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		)
 
 homerouterWifiInterface :: String
-homerouterWifiInterface = "wlan0"
+homerouterWifiInterface = "wlx00c0ca82eb78"
 
 homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
