@@ -151,6 +151,8 @@ honeybee = host "honeybee.kitenet.net" $ props
 	& JoeySites.homeRouter
 	& JoeySites.homeNAS
 	& Apt.installed ["mtr-tiny", "iftop", "screen"]
+	-- Currently manually building the xr_usb_serial module.
+	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
 
 	& check (not <$> hasContainerCapability Systemd.FilesystemContained) 
