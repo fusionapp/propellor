@@ -959,10 +959,10 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		)
 
 homerouterWifiInterface :: String
-homerouterWifiInterface = "wlx9cefd5fcd6f3"
+homerouterWifiInterface = "wlan0"
 
 homerouterWifiInterfaceOld :: String
-homerouterWifiInterfaceOld = "wlx7cdd90753b9f"
+homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 
 -- My home router, running hostapd and dnsmasq,
 -- with eth0 connected to a satellite modem, and a fallback ppp connection.
