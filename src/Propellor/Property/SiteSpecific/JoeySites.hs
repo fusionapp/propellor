@@ -829,8 +829,6 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 	& Apache.installed
 	& Apt.installed ["libmodbus-dev", "rrdtool", "rsync"]
 	& Git.cloned user "https://git.joeyh.name/git/joey/house.git" d Nothing
-	& Git.cloned user "https://git.joeyh.name/git/reactive-banana-automation.git" (d </> "reactive-banana-automation") Nothing
-	& Git.cloned user "https://git.joeyh.name/git/haskell-libmodbus.git" (d </> "haskell-libmodbus") Nothing
 	& websitesymlink
 	& build
 	& Systemd.enabled setupservicename
@@ -865,11 +863,8 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 	sshkeyfile = d </> ".ssh/key"
 	build = check (not <$> doesFileExist (d </> "controller")) $
 		userScriptProperty (User "joey")
-			[ "cd " ++ d </> "reactive-banana-automation"
-			, "cabal install"
-			, "cd " ++ d </> "haskell-libmodbus"
-			, "cabal install"
-			, "cd " ++ d
+			[ "cd " ++ d
+			, "cabal update"
 			, "make"
 			]
 		`assume` MadeChange
