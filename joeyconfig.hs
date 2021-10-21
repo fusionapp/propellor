@@ -16,7 +16,6 @@ import qualified Propellor.Property.Cron as Cron
 import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.User as User
 import qualified Propellor.Property.Hostname as Hostname
-import qualified Propellor.Property.Fstab as Fstab
 import qualified Propellor.Property.Tor as Tor
 import qualified Propellor.Property.Dns as Dns
 import qualified Propellor.Property.Git as Git
@@ -26,7 +25,6 @@ import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
 import qualified Propellor.Property.Locale as Locale
 import qualified Propellor.Property.Grub as Grub
 import qualified Propellor.Property.Borg as Borg
-import qualified Propellor.Property.OpenId as OpenId
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Journald as Journald
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
@@ -46,9 +44,8 @@ hosts :: [Host]          --   *             \ | |           '--------'
 hosts =                 --                  (o)  `
 	[ darkstar
 	, dragon
-	, clam
+	, oyster
 	, orca
-	, baleen
 	, honeybee
 	, kite
 	, beaver
@@ -90,45 +87,14 @@ dragon = host "dragon.kitenet.net" $ props
 	& JoeySites.dkimMilter
 	& JoeySites.postfixSaslPasswordClient
 
-clam :: Host
-clam = host "clam.kitenet.net" $ props
+oyster :: Host
+oyster = host "oyster.kitenet.net" $ props
 	& standardSystem (Stable "buster") X86_64
 		["Unreliable server. Anything here may be lost at any time!" ]
-	& ipv4 "46.36.41.13"
+	& ipv4 "45.138.157.89"
 
 	& User.hasPassword (User "root")
-	& Ssh.hostKeys hostContext
-		[ (SshEcdsa, "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBPhfvcOuw0Yt+MnsFc4TI2gWkKi62Eajxz+TgbHMO/uRTYF8c5V8fOI3o+J/3m5+lT0S5o8j8a7xIC3COvi+AVw=")
-		]
 	& Apt.unattendedUpgrades
-
-	-- & Tor.isRelay
-	-- & Tor.named "kite1"
-	-- & Tor.bandwidthRate (Tor.PerMonth "400 GB")
-	
-	& "/etc/resolv.conf" `File.hasContent`
-		[ "nameserver 8.8.8.8"
-		, "nameserver 8.8.4.4"
-		, "nameserver 1.1.1.1"
-		, "domain kitenet.net"
-		, "search kitenet.net"
-		]
-
-baleen :: Host
-baleen = host "baleen.kitenet.net" $ props
-	& standardSystem Unstable X86_64 [ "New git-annex build box." ]
-
-	-- Not on public network; ssh access via bounce host.
-	& ipv4 "138.38.77.40"
-	
-	-- The root filesystem content may be lost if the VM is resized.
-	-- /dev/vdb contains persistent storage.
-	& Fstab.mounted "auto" "/dev/vdb" "/var/lib/container" mempty
-	
-	& Apt.unattendedUpgrades
-	& Postfix.satellite
-	& Apt.serviceInstalledRunning "ntp"
-	& Systemd.persistentJournal
 
 orca :: Host
 orca = host "orca.kitenet.net" $ props
@@ -241,7 +207,6 @@ kite = host "kite.kitenet.net" $ props
 		, "--exclude=/home/joey/lib"
 		-- These directories are backed up and restored separately.
 		, "--exclude=/srv/git"
-		, "--exclude=/var/spool/oldusenet"
 		]
 		[ Borg.KeepDays 7
 		, Borg.KeepWeeks 4
@@ -280,10 +245,6 @@ kite = host "kite.kitenet.net" $ props
 		, "zsh"
 		]
 
-	& alias "nntp.olduse.net"
-	& JoeySites.oldUseNetServer hosts
-	& Systemd.nspawned oldusenetShellBox
-	
 	& alias "znc.kitenet.net"
 	& JoeySites.ircBouncer
 
@@ -291,7 +252,6 @@ kite = host "kite.kitenet.net" $ props
 	& JoeySites.kgbServer
 	
 	& Systemd.nspawned ancientKitenet
-	! Systemd.nspawned openidProvider
 	
 	& alias "podcatcher.kitenet.net"
 	& JoeySites.podcatcher
@@ -414,23 +374,6 @@ ancientKitenet = Systemd.debContainer "ancient-kitenet" $ props
   where
 	p = Port 1994
 	hn = "ancient.kitenet.net"
-
-oldusenetShellBox :: Systemd.Container
-oldusenetShellBox = Systemd.debContainer "oldusenet-shellbox" $ props
-	& standardContainer (Stable "buster")
-	& alias "shell.olduse.net"
-	& JoeySites.oldUseNetShellBox
-
--- My own openid provider. Uses php, so containerized for security
--- and administrative sanity.
-openidProvider :: Systemd.Container
-openidProvider = Systemd.debContainer "openid-provider" $ props
-	-- simpleid is not in buster
-	& standardContainer (Stable "stretch")
-	& alias hn
-	& OpenId.providerFor [User "joey", User "liw"] hn (Just (Port 8086))
-  where
-	hn = "openid.kitenet.net"
 
 type Motd = [String]
 
