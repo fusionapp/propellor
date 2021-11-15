@@ -133,7 +133,7 @@ honeybee = host "honeybee.kitenet.net" $ props
 		)
 	& JoeySites.cubieTruckOneWire
 	& Systemd.persistentJournal
-	& Apt.installed ["firmware-misc-nonfree"] -- wifi
+	& Apt.installed ["firmware-atheros"]
 	& Apt.serviceInstalledRunning "ntp" -- no hardware clock
 	& bootstrappedFrom GitRepoOutsideChroot
 	& Ssh.hostKeys hostContext
@@ -258,10 +258,6 @@ kite = host "kite.kitenet.net" $ props
 	& alias "podcatcher.kitenet.net"
 	& JoeySites.podcatcher
 
-	& JoeySites.scrollBox
-	& alias "scroll.joeyh.name"
-	& alias "us.scroll.joeyh.name"
-
 	& alias "ns4.kitenet.net"
 	& myDnsPrimary "kitenet.net"
 		[ (RelDomain "mouse-onion", CNAME $ AbsDomain "htieo6yu2qtcn2j3.onion")
@@ -277,7 +273,6 @@ kite = host "kite.kitenet.net" $ props
 	! myDnsPrimary "quarantimer.app" []
 	& alias "ns4.branchable.com"
 	& branchableSecondary
-	& Dns.secondaryFor ["animx"] hosts "animx.eu.org"
 	-- Use its own name server (amoung other things this avoids
 	-- spamassassin URIBL_BLOCKED.
 	& "/etc/resolv.conf" `File.hasContent`
@@ -441,8 +436,6 @@ monsters =
 		& Ssh.hostPubKey SshEd25519 "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB7yTEBGfQYdwG/oeL+U9XPMIh/dW7XNs9T+M79YIOrd"
 	, host "ns6.gandi.net" $ props
 		& ipv4 "217.70.177.40"
-	, host "animx" $ props
-		& ipv4 "76.7.174.49"
 	]
 
 
