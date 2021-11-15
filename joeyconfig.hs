@@ -258,10 +258,6 @@ kite = host "kite.kitenet.net" $ props
 	& alias "podcatcher.kitenet.net"
 	& JoeySites.podcatcher
 
-	& JoeySites.scrollBox
-	& alias "scroll.joeyh.name"
-	& alias "us.scroll.joeyh.name"
-
 	& alias "ns4.kitenet.net"
 	& myDnsPrimary "kitenet.net"
 		[ (RelDomain "mouse-onion", CNAME $ AbsDomain "htieo6yu2qtcn2j3.onion")
