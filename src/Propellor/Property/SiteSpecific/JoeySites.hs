@@ -245,7 +245,7 @@ rsyncNetBackup hosts = Cron.niceJob "rsync.net copied in daily" (Cron.Times "30 
 podcatcher :: Property DebianLike
 podcatcher = Cron.niceJob "podcatcher run hourly" (Cron.Times "55 * * * *")
 	(User "joey") "/home/joey/lib/sound/podcasts"
-	"xargs git-annex importfeed -c annex.genmetadata=true < feeds; mr --quiet update"
+	"timeout 2h xargs git-annex importfeed -c annex.genmetadata=true < feeds; mr --quiet update"
 	`requires` Apt.installed ["git-annex", "myrepos"]
 
 spamdEnabled :: Property DebianLike
