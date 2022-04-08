@@ -453,13 +453,6 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		`onChange` (imapalpinescript `File.mode`
 			combineModes (readModes ++ executeModes))
 		`describe` "imap script for pine"
-	-- XXX temporarily disabled installing as it's not available in
-	-- debian unstable any longer. Need to upgrade to mailman3
-	-- at some point. (nontrivial)
-	-- & Apt.serviceInstalledRunning "mailman"
-	-- Override the default http url. (Only affects new lists.)
-	& "/etc/mailman/mm_cfg.py" `File.containsLine`
-		"DEFAULT_URL_PATTERN = 'https://%s/cgi-bin/mailman/'"
 
 	& Postfix.service ssmtp
 
@@ -630,27 +623,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "  AllowOverride None"
 		, Apache.allowAll
 		, "</Directory>"
-		, "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/"
-
-		-- for mailman cgi scripts
-		, "<Directory /usr/lib/cgi-bin>"
-		, "  AllowOverride None"
-		, "  Options ExecCGI"
-		, Apache.allowAll
-		, "</Directory>"
-		, "Alias /pipermail/ /var/lib/mailman/archives/public/"
-		, "<Directory /var/lib/mailman/archives/public/>"
-		, "  Options Indexes MultiViews FollowSymlinks"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		, "Alias /images/ /usr/share/images/"
-		, "<Directory /usr/share/images/>"
-		, "  Options Indexes MultiViews"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-
 		, "RewriteEngine On"
 		, "# Force hostname to kitenet.net"
 		, "RewriteCond %{HTTP_HOST} !^kitenet\\.net [NC]"
@@ -686,7 +658,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "# Old ikiwiki filenames for kitenet.net wiki."
 		, "rewritecond $1 !^/~"
 		, "rewritecond $1 !^/doc/"
-		, "rewritecond $1 !^/pipermail/"
 		, "rewritecond $1 !^/cgi-bin/"
 		, "rewritecond $1 !.*/index$"
 		, "rewriterule (.+).html$ $1/ [r]"
