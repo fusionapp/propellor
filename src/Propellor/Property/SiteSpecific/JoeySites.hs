@@ -868,9 +868,22 @@ homerouterWifiInterface = "wlx00c0ca82eb78"
 homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 
+-- This is temporary, connecting via wifi to the starlink router.
+connectStarlinkRouter :: Property DebianLike
+connectStarlinkRouter = propertyList "connected via starlink router" $ props
+	& Network.dhcp' homerouterWifiInterface
+		[ ("wireless-essid", "starlink")
+		, ("wireless-mode", "managed")
+		]
+		`requires` Network.cleanInterfacesFile
+	& Apt.removed ["hostapd", "dnsmasq"]
+	& File.notPresent "/etc/hostapd/hostapd.conf"
+	& File.notPresent "/etc/dnsmasq.conf"
+	& File.notPresent "/etc/network/if-up.d/ipmasq"
+
 -- My home router, running hostapd and dnsmasq,
--- with eth0 connected to a satellite modem, and a fallback ppp connection.
-homeRouter :: Property (HasInfo + DebianLike)
+-- with eth0 connected to viasat satellite modem.
+homeRouter :: Property DebianLike
 homeRouter = propertyList "home router" $ props
 	& File.notPresent (Network.interfaceDFile homerouterWifiInterfaceOld)
 	& Network.static homerouterWifiInterface (IPv4 "10.1.1.1") Nothing
@@ -912,29 +925,14 @@ homeRouter = propertyList "home router" $ props
 	& ipmasq homerouterWifiInterface
 	& Network.static' "eth0" (IPv4 "192.168.1.100")
 		(Just (Network.Gateway (IPv4 "192.168.1.1")))
-		-- When satellite is down, fall back to dialup
-		[ ("pre-up", "poff -a || true")
-		, ("post-down", "pon")
-		-- ethernet autonegotiation with satellite receiver 
+		-- ethernet autonegotiation with viasat satellite receiver 
 		-- sometimes fails
-		, ("ethernet-autoneg", "off")
+		[ ("ethernet-autoneg", "off")
 		, ("link-speed", "100")
 		, ("link-duplex", "full")
 		]
 		`requires` Network.cleanInterfacesFile
 		`requires` Apt.installed ["ethtool"]
-	& Apt.installed ["ppp"]
-		`before` File.hasContent "/etc/ppp/peers/provider"
-			[ "user \"joeyh@arczip.com\""
-			, "connect \"/usr/sbin/chat -v -f /etc/chatscripts/pap -T 3825441\""
-			, "/dev/ttyACM0"
-			, "115200"
-			, "noipdefault"
-			, "defaultroute"
-			, "persist"
-			, "noauth"
-			]
-		`before` File.hasPrivContent "/etc/ppp/pap-secrets" (Context "joeyh@arczip.com")
 
 -- | Enable IP masqerading, on whatever other interfaces come up, besides the
 -- provided intif.
@@ -952,16 +950,9 @@ ipmasq intif = File.hasContent ifupscript
 	, "echo 1 > /proc/sys/net/ipv4/ip_forward"
 	]
 	`before` scriptmode ifupscript
-	`before` File.dirExists (takeDirectory pppupscript)
-	`before` File.hasContent pppupscript
-		[ "#!/bin/sh"
-		, "IFACE=$PPP_IFACE " ++ ifupscript
-		]
-	`before` scriptmode pppupscript
 	`requires` Apt.installed ["iptables"]
   where
 	ifupscript = "/etc/network/if-up.d/ipmasq"
-	pppupscript = "/etc/ppp/ip-up.d/ipmasq"
 	scriptmode f = f `File.mode` combineModes (readModes ++ executeModes)
 
 laptopSoftware :: Property DebianLike
