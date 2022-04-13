@@ -518,7 +518,7 @@ postfixSaslPasswordClient = combineProperties "postfix uses SASL password to aut
 		, "smtp_sasl_auth_enable = yes"
 		, "smtp_tls_security_level = encrypt"
 		, "smtp_sasl_tls_security_options = noanonymous"
-		, "relayhost = [kitenet.net]"
+		, "relayhost = kitenet.net:587"
 		, "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
 		]
 		`onChange` Postfix.reloaded
@@ -871,11 +871,18 @@ homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 -- This is temporary, connecting via wifi to the starlink router.
 connectStarlinkRouter :: Property DebianLike
 connectStarlinkRouter = propertyList "connected via starlink router" $ props
-	& Network.dhcp' homerouterWifiInterface
-		[ ("wireless-essid", "starlink")
-		, ("wireless-mode", "managed")
+	& Apt.installed ["iwd"]
+	& File.hasContent "/var/lib/iwd/.known_network.freq"
+		[ "[8ee63c13-d441-54c3-8e97-68590d23fce2]"
+		, "name=/var/lib/iwd//starlink.open"
+		, "list= 2462"
 		]
-		`requires` Network.cleanInterfacesFile
+	& File.hasContent "/var/lib/iwd/starlink.open" 
+		[ "[IPv4]"
+		, "SendHostname=true"
+		, "DomainName=kitenet.net"
+		]
+	& Systemd.enabled "iwd"
 	& Apt.removed ["hostapd", "dnsmasq"]
 	& File.notPresent "/etc/hostapd/hostapd.conf"
 	& File.notPresent "/etc/dnsmasq.conf"
