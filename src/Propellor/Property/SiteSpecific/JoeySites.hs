@@ -245,7 +245,7 @@ rsyncNetBackup hosts = Cron.niceJob "rsync.net copied in daily" (Cron.Times "30 
 podcatcher :: Property DebianLike
 podcatcher = Cron.niceJob "podcatcher run hourly" (Cron.Times "55 * * * *")
 	(User "joey") "/home/joey/lib/sound/podcasts"
-	"xargs git-annex importfeed -c annex.genmetadata=true < feeds; mr --quiet update"
+	"timeout 2h xargs git-annex importfeed -c annex.genmetadata=true < feeds; mr --quiet update"
 	`requires` Apt.installed ["git-annex", "myrepos"]
 
 spamdEnabled :: Property DebianLike
@@ -453,13 +453,6 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		`onChange` (imapalpinescript `File.mode`
 			combineModes (readModes ++ executeModes))
 		`describe` "imap script for pine"
-	-- XXX temporarily disabled installing as it's not available in
-	-- debian unstable any longer. Need to upgrade to mailman3
-	-- at some point. (nontrivial)
-	-- & Apt.serviceInstalledRunning "mailman"
-	-- Override the default http url. (Only affects new lists.)
-	& "/etc/mailman/mm_cfg.py" `File.containsLine`
-		"DEFAULT_URL_PATTERN = 'https://%s/cgi-bin/mailman/'"
 
 	& Postfix.service ssmtp
 
@@ -525,7 +518,7 @@ postfixSaslPasswordClient = combineProperties "postfix uses SASL password to aut
 		, "smtp_sasl_auth_enable = yes"
 		, "smtp_tls_security_level = encrypt"
 		, "smtp_sasl_tls_security_options = noanonymous"
-		, "relayhost = [kitenet.net]"
+		, "relayhost = kitenet.net:587"
 		, "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
 		]
 		`onChange` Postfix.reloaded
@@ -630,27 +623,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "  AllowOverride None"
 		, Apache.allowAll
 		, "</Directory>"
-		, "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/"
-
-		-- for mailman cgi scripts
-		, "<Directory /usr/lib/cgi-bin>"
-		, "  AllowOverride None"
-		, "  Options ExecCGI"
-		, Apache.allowAll
-		, "</Directory>"
-		, "Alias /pipermail/ /var/lib/mailman/archives/public/"
-		, "<Directory /var/lib/mailman/archives/public/>"
-		, "  Options Indexes MultiViews FollowSymlinks"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		, "Alias /images/ /usr/share/images/"
-		, "<Directory /usr/share/images/>"
-		, "  Options Indexes MultiViews"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-
 		, "RewriteEngine On"
 		, "# Force hostname to kitenet.net"
 		, "RewriteCond %{HTTP_HOST} !^kitenet\\.net [NC]"
@@ -686,7 +658,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "# Old ikiwiki filenames for kitenet.net wiki."
 		, "rewritecond $1 !^/~"
 		, "rewritecond $1 !^/doc/"
-		, "rewritecond $1 !^/pipermail/"
 		, "rewritecond $1 !^/cgi-bin/"
 		, "rewritecond $1 !.*/index$"
 		, "rewriterule (.+).html$ $1/ [r]"
@@ -897,9 +868,29 @@ homerouterWifiInterface = "wlx00c0ca82eb78"
 homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 
+-- This is temporary, connecting via wifi to the starlink router.
+connectStarlinkRouter :: Property DebianLike
+connectStarlinkRouter = propertyList "connected via starlink router" $ props
+	& Apt.installed ["iwd"]
+	& File.hasContent "/var/lib/iwd/.known_network.freq"
+		[ "[8ee63c13-d441-54c3-8e97-68590d23fce2]"
+		, "name=/var/lib/iwd//starlink.open"
+		, "list= 2462"
+		]
+	& File.hasContent "/var/lib/iwd/starlink.open" 
+		[ "[IPv4]"
+		, "SendHostname=true"
+		, "DomainName=kitenet.net"
+		]
+	& Systemd.enabled "iwd"
+	& Apt.removed ["hostapd", "dnsmasq"]
+	& File.notPresent "/etc/hostapd/hostapd.conf"
+	& File.notPresent "/etc/dnsmasq.conf"
+	& File.notPresent "/etc/network/if-up.d/ipmasq"
+
 -- My home router, running hostapd and dnsmasq,
--- with eth0 connected to a satellite modem, and a fallback ppp connection.
-homeRouter :: Property (HasInfo + DebianLike)
+-- with eth0 connected to viasat satellite modem.
+homeRouter :: Property DebianLike
 homeRouter = propertyList "home router" $ props
 	& File.notPresent (Network.interfaceDFile homerouterWifiInterfaceOld)
 	& Network.static homerouterWifiInterface (IPv4 "10.1.1.1") Nothing
@@ -941,29 +932,14 @@ homeRouter = propertyList "home router" $ props
 	& ipmasq homerouterWifiInterface
 	& Network.static' "eth0" (IPv4 "192.168.1.100")
 		(Just (Network.Gateway (IPv4 "192.168.1.1")))
-		-- When satellite is down, fall back to dialup
-		[ ("pre-up", "poff -a || true")
-		, ("post-down", "pon")
-		-- ethernet autonegotiation with satellite receiver 
+		-- ethernet autonegotiation with viasat satellite receiver 
 		-- sometimes fails
-		, ("ethernet-autoneg", "off")
+		[ ("ethernet-autoneg", "off")
 		, ("link-speed", "100")
 		, ("link-duplex", "full")
 		]
 		`requires` Network.cleanInterfacesFile
 		`requires` Apt.installed ["ethtool"]
-	& Apt.installed ["ppp"]
-		`before` File.hasContent "/etc/ppp/peers/provider"
-			[ "user \"joeyh@arczip.com\""
-			, "connect \"/usr/sbin/chat -v -f /etc/chatscripts/pap -T 3825441\""
-			, "/dev/ttyACM0"
-			, "115200"
-			, "noipdefault"
-			, "defaultroute"
-			, "persist"
-			, "noauth"
-			]
-		`before` File.hasPrivContent "/etc/ppp/pap-secrets" (Context "joeyh@arczip.com")
 
 -- | Enable IP masqerading, on whatever other interfaces come up, besides the
 -- provided intif.
@@ -981,16 +957,9 @@ ipmasq intif = File.hasContent ifupscript
 	, "echo 1 > /proc/sys/net/ipv4/ip_forward"
 	]
 	`before` scriptmode ifupscript
-	`before` File.dirExists (takeDirectory pppupscript)
-	`before` File.hasContent pppupscript
-		[ "#!/bin/sh"
-		, "IFACE=$PPP_IFACE " ++ ifupscript
-		]
-	`before` scriptmode pppupscript
 	`requires` Apt.installed ["iptables"]
   where
 	ifupscript = "/etc/network/if-up.d/ipmasq"
-	pppupscript = "/etc/ppp/ip-up.d/ipmasq"
 	scriptmode f = f `File.mode` combineModes (readModes ++ executeModes)
 
 laptopSoftware :: Property DebianLike

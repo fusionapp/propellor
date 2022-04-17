@@ -120,7 +120,7 @@ orca = host "orca.kitenet.net" $ props
 		Testing ARM64 Nothing (Cron.Times "1 * * * *") "4h")
 
 honeybee :: Host
-honeybee = host "honeybee.kitenet.net" $ props
+honeybee = host "honeybee.lan" $ props
 	& standardSystem Testing ARMHF
 		[ "Home router and arm git-annex build box." ]
 	& Apt.removed ["rsyslog"]
@@ -148,9 +148,10 @@ honeybee = host "honeybee.kitenet.net" $ props
 		hosts
 		(Context "house.joeyh.name")
 		(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMAmVYddg/RgCbIj+cLcEiddeFXaYFnbEJ3uGj9G/EyV joey@honeybee")
-	& JoeySites.homeRouter
+	-- & JoeySites.homeRouter
+	& JoeySites.connectStarlinkRouter
 	& JoeySites.homeNAS
-	& Apt.installed ["mtr-tiny", "iftop", "screen"]
+	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	-- Currently manually building the xr_usb_serial module.
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
