@@ -151,7 +151,7 @@ honeybee = host "honeybee.lan" $ props
 	-- & JoeySites.homeRouter
 	& JoeySites.connectStarlinkRouter
 	& JoeySites.homeNAS
-	& Apt.installed ["mtr-tiny", "iftop", "screen"]
+	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	-- Currently manually building the xr_usb_serial module.
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
