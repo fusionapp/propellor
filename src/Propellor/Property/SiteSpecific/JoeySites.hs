@@ -868,28 +868,13 @@ homerouterWifiInterface = "wlx00c0ca82eb78"
 homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 
--- This is temporary, connecting via wifi to the starlink router.
+-- Connect to the starlink router with its ethernet adapter.
 connectStarlinkRouter :: Property DebianLike
 connectStarlinkRouter = propertyList "connected via starlink router" $ props
-	& Apt.installed ["iwd"]
-	& File.hasContent "/var/lib/iwd/.known_network.freq"
-		[ "[8ee63c13-d441-54c3-8e97-68590d23fce2]"
-		, "name=/var/lib/iwd//starlink.open"
-		, "list= 2462"
-		]
-	& File.hasContent "/var/lib/iwd/starlink.open" 
-		[ "[IPv4]"
-		, "SendHostname=true"
-		, "DomainName=kitenet.net"
-		]
-	& Systemd.enabled "iwd"
-	& Apt.removed ["hostapd", "dnsmasq"]
-	& File.notPresent "/etc/hostapd/hostapd.conf"
-	& File.notPresent "/etc/dnsmasq.conf"
-	& File.notPresent "/etc/network/if-up.d/ipmasq"
+	& Network.dhcp "eth0"
+		`requires` Network.cleanInterfacesFile
 
--- My home router, running hostapd and dnsmasq,
--- with eth0 connected to viasat satellite modem.
+-- My home router, running hostapd and dnsmasq.
 homeRouter :: Property DebianLike
 homeRouter = propertyList "home router" $ props
 	& File.notPresent (Network.interfaceDFile homerouterWifiInterfaceOld)
@@ -930,16 +915,6 @@ homeRouter = propertyList "home router" $ props
 		]
 		`onChange` Service.restarted "dnsmasq"
 	& ipmasq homerouterWifiInterface
-	& Network.static' "eth0" (IPv4 "192.168.1.100")
-		(Just (Network.Gateway (IPv4 "192.168.1.1")))
-		-- ethernet autonegotiation with viasat satellite receiver 
-		-- sometimes fails
-		[ ("ethernet-autoneg", "off")
-		, ("link-speed", "100")
-		, ("link-duplex", "full")
-		]
-		`requires` Network.cleanInterfacesFile
-		`requires` Apt.installed ["ethtool"]
 
 -- | Enable IP masqerading, on whatever other interfaces come up, besides the
 -- provided intif.
