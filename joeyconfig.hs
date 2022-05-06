@@ -149,6 +149,7 @@ honeybee = host "honeybee.lan" $ props
 		(Context "house.joeyh.name")
 		(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMAmVYddg/RgCbIj+cLcEiddeFXaYFnbEJ3uGj9G/EyV joey@honeybee")
 	& JoeySites.connectStarlinkRouter
+	& JoeySites.homeRouter
 	& JoeySites.homeNAS
 	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	-- Currently manually building the xr_usb_serial module.
