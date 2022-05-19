@@ -882,11 +882,9 @@ homeRouter = propertyList "home router" $ props
 		`requires` Network.cleanInterfacesFile
 	& Apt.installed ["hostapd"]
 	& File.hasContent "/etc/hostapd/hostapd.conf"
-			[ "interface=" ++ homerouterWifiInterface
+			([ "interface=" ++ homerouterWifiInterface
 			, "ssid=house"
-			, "hw_mode=g"
-			, "channel=8"
-			]
+			] ++ hostapd5GhzConfig)
 		`requires` File.dirExists "/etc/hostapd"
 		`requires` File.hasContent "/etc/default/hostapd"
 			[ "DAEMON_CONF=/etc/hostapd/hostapd.conf" ]
@@ -1189,3 +1187,21 @@ rsyncNetBorgRepo d os = Borg.BorgRepoUsing os' ("2318@usw-s002.rsync.net:" ++ d)
 noExim :: Property DebianLike
 noExim = Apt.removed ["exim4", "exim4-base", "exim4-daemon-light"]
 	`onChange` Apt.autoRemove
+
+hostapd2GhzConfig :: [String]
+hostapd2GhzConfig = 
+	[ "hw_mode=g"
+	, "channel=8"
+	]
+
+hostapd5GhzConfig :: [String]
+hostapd5GhzConfig = 
+	[ "hw_mode=a"
+	, "channel=36"
+	, "country_code=US"
+	, "ieee80211d=1"
+	, "ieee80211n=1"
+	, "ieee80211ac=1"
+	, "wmm_enabled=1"
+	]
+
