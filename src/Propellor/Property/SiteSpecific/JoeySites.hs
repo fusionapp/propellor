@@ -863,10 +863,10 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		)
 
 homerouterWifiInterface :: String
-homerouterWifiInterface = "wlx00c0ca82eb78"
+homerouterWifiInterface = "wlx00c0cab064eb"
 
 homerouterWifiInterfaceOld :: String
-homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
+homerouterWifiInterfaceOld = "wlx00c0ca82eb78"
 
 -- Connect to the starlink router with its ethernet adapter.
 connectStarlinkRouter :: Property DebianLike
