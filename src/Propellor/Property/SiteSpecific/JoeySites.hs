@@ -995,7 +995,7 @@ cubieTruckOneWire = utilitysetup
 	dtsinstalled = File.hasContent "/etc/easy-peasy-devicetree-squeezy/my.dts" mydts
 		`requires` File.dirExists "/etc/easy-peasy-devicetree-squeezy"
 	utilityinstalled = Git.cloned (User "root") "https://git.joeyh.name/git/easy-peasy-devicetree-squeezy.git" "/usr/local/easy-peasy-devicetree-squeezy" Nothing
-		`onChange` File.isSymlinkedTo "/usr/local/bin/easy-peasy-devicetree-squeezy" (File.LinkTarget "/usr/local/easy-peasy-devicetree-squeezy/easy-peasy-devicetree-squeezy")
+		`onChange` File.isSymlinkedTo "/usr/sbin/easy-peasy-devicetree-squeezy" (File.LinkTarget "/usr/local/easy-peasy-devicetree-squeezy/easy-peasy-devicetree-squeezy")
 		`requires` Apt.installed ["pv", "device-tree-compiler", "cpp", "linux-source"]
 	utilitysetup = check (not <$> doesFileExist dtb) $ 
 		cmdProperty "easy-peasy-devicetree-squeezy"
