@@ -884,7 +884,7 @@ homeRouter = propertyList "home router" $ props
 	& File.hasContent "/etc/hostapd/hostapd.conf"
 			([ "interface=" ++ homerouterWifiInterface
 			, "ssid=house"
-			] ++ hostapd5GhzConfig)
+			] ++ hostapd2GhzConfig)
 		`requires` File.dirExists "/etc/hostapd"
 		`requires` File.hasContent "/etc/default/hostapd"
 			[ "DAEMON_CONF=/etc/hostapd/hostapd.conf" ]
