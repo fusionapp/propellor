@@ -271,7 +271,7 @@ kite = host "kite.kitenet.net" $ props
 		]
 	& myDnsPrimary "joeyh.name" []
 	& myDnsPrimary "ikiwiki.info" []
-	& myDnsPrimary "olduse.net"
+	! myDnsPrimary "olduse.net"
 		[ (RelDomain "article", CNAME $ AbsDomain "virgil.koldfront.dk")
 		]
 	! myDnsPrimary "quarantimer.app" []
@@ -331,8 +331,6 @@ pell = host "pell.branchable.com" $ props
 
 	-- All the websites I host at branchable that don't use
 	-- branchable.com dns.
-	& alias "olduse.net"
-	& alias "www.olduse.net"
 	& alias "www.kitenet.net"
 	& alias "joeyh.name"
 	& alias "www.joeyh.name"
