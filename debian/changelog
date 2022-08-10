@@ -21,6 +21,9 @@ propellor (5.14) UNRELEASED; urgency=medium
     container's /etc/resolv.conf. 
   * Add lower bounds on async and split.
     Thanks, Simon Jakobi
+  * propellor.cabal: Deduplicate exposed modules, which fixes a build
+    problem with recent cabal versions.
+    Thanks, Simon Jakobi
 
  -- Joey Hess <id@joeyh.name>  Sat, 14 Aug 2021 14:27:27 -0400
 
