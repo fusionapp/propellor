@@ -911,6 +911,10 @@ homeRouter = propertyList "home router" $ props
 		, "address=/house.kitenet.net/10.1.1.1"
 		]
 		`onChange` Service.restarted "dnsmasq"
+	-- Avoid DHCPNAK of lease obtained at boot, after NTP slews clock
+	-- forward too far, causing that least to not be valid.
+	& "/etc/default/dnsmasq" `File.containsLine` "DNSMASQ_OPTS=\"--dhcp-authoritative\""
+		`onChange` Service.restarted "dnsmasq"
 	& ipmasq homerouterWifiInterface
 
 -- | Enable IP masqerading, on whatever other interfaces come up, besides the
