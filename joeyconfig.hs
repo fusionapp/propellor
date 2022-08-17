@@ -46,7 +46,7 @@ hosts =                 --                  (o)  `
 	, dragon
 	, oyster
 	, orca
-	, honeybee
+	, house
 	, kite
 	, beaver
 	, sow
@@ -77,8 +77,8 @@ darkstar = host "darkstar.kitenet.net" $ props
 	& Ssh.userKeys (User "joey") hostContext
 		[ (SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICfFntnesZcYz2B2T41ay45igfckXRSh5uVffkuCQkLv joey@darkstar")
 		]
-	& imageBuiltFor honeybee
-		(RawDiskImage "/srv/honeybee.img")
+	& imageBuiltFor house
+		(RawDiskImage "/srv/house.img")
 		(Debootstrapped mempty)
 
 dragon :: Host
@@ -119,8 +119,8 @@ orca = host "orca.kitenet.net" $ props
 		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 Nothing (Cron.Times "1 * * * *") "4h")
 
-honeybee :: Host
-honeybee = host "house.lan" $ props
+house :: Host
+house = host "house.lan" $ props
 	& standardSystem Testing ARMHF
 		[ "Home router and arm git-annex build box." ]
 	& Apt.removed ["rsyslog"]
