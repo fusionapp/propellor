@@ -903,13 +903,13 @@ homeRouter = propertyList "home router" $ props
 		, "bogus-priv"
 		, "interface=" ++ homerouterWifiInterface
 		, "interface=eth0"
-		, "domain=kitenet.net"
+		, "domain=lan"
 		-- lease time is short because the house
 		-- controller wants to know when clients disconnect
 		, "dhcp-range=10.1.1.100,10.1.1.150,10m"
 		, "no-hosts"
 		, "address=/honeybee.kitenet.net/10.1.1.1"
-		, "address=/house.kitenet.net/10.1.1.1"
+		, "address=/house.lan/10.1.1.1"
 		]
 		`onChange` Service.restarted "dnsmasq"
 	-- Avoid DHCPNAK of lease obtained at boot, after NTP slews clock
