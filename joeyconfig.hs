@@ -120,7 +120,7 @@ orca = host "orca.kitenet.net" $ props
 		Testing ARM64 Nothing (Cron.Times "1 * * * *") "4h")
 
 honeybee :: Host
-honeybee = host "honeybee.lan" $ props
+honeybee = host "house.lan" $ props
 	& standardSystem Testing ARMHF
 		[ "Home router and arm git-annex build box." ]
 	& Apt.removed ["rsyslog"]
