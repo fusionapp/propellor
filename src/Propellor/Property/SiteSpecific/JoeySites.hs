@@ -748,6 +748,13 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		`requires` watchdogserviceinstalled
 		`onChange` Systemd.started watchdogservicename
 	& Apt.serviceInstalledRunning "watchdog"
+	& "/etc/watchdog.conf" `File.containsLines`
+		[ "watchdog-device = /dev/watchdog0"
+		, "watchdog-timeout = 16" -- maximum supported by cubietruck
+		, "interval = 1"
+		]
+		`onChange` Service.reloaded "watchdog"
+	-- Comes after so it does not set relayhost but uses the setting 
 	& User.hasGroup user (Group "dialout")
 	& Group.exists (Group "gpio") Nothing
 	& User.hasGroup user (Group "gpio")
