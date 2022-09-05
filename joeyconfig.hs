@@ -245,7 +245,7 @@ kite = host "kite.kitenet.net" $ props
 	& Apt.installed
 		[ "git-annex", "myrepos"
 		, "build-essential", "make"
-		, "rss2email", "archivemail"
+		, "rss2email", "chewmail"
 		, "devscripts"
 		-- Some users have zsh as their login shell.
 		, "zsh"
