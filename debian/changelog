@@ -19,6 +19,7 @@ propellor (5.14) UNRELEASED; urgency=medium
     was back in 2014, and this avoids a problem where the host's
     /etc/resolv.conf gets overwritten when systemd is managing the
     container's /etc/resolv.conf. 
+  * Borg: To support borg 1.2, run borg compact to free up space after pruning.
   * Add lower bounds on async and split.
     Thanks, Simon Jakobi
   * propellor.cabal: Deduplicate exposed modules, which fixes a build
