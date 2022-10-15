@@ -1,4 +1,4 @@
-propellor (5.14) UNRELEASED; urgency=medium
+propellor (5.14) unstable; urgency=medium
 
   * Removed Propellor.Property.OpenID module, since the simpleid package
     got removed from Debian.
@@ -26,7 +26,7 @@ propellor (5.14) UNRELEASED; urgency=medium
     problem with recent cabal versions.
     Thanks, Simon Jakobi
 
- -- Joey Hess <id@joeyh.name>  Sat, 14 Aug 2021 14:27:27 -0400
+ -- Joey Hess <id@joeyh.name>  Sat, 15 Oct 2022 14:40:31 -0400
 
 propellor (5.13) unstable; urgency=medium
 
