@@ -4,8 +4,11 @@ propellor (5.15) UNRELEASED; urgency=medium
     blowup when several MetaTypes fail to unify. This should result in less
     memory use by ghc when there's a type error.
   * Avoid OOM when built by ghc 9.2.
-  * Thanks to the GHC developers for their assistance, particularly spj
+  * Thanks to the ghc developers for their assistance, particularly spj
     and Sam Derbyshire.
+  * Remove workaround to ghc using a lot of memory displaying an error
+    message about a property of a host having the wrong number of
+    arguments. This brings back clear error messages in such situations.
 
  -- Joey Hess <id@joeyh.name>  Tue, 15 Nov 2022 14:48:25 -0400
 
