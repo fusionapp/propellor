@@ -128,11 +128,22 @@ type family Concat (list1 :: [a]) (list2 :: [a]) :: [a] where
 -- | Combine two MetaTypes lists, yielding a list
 -- that has targets present in both, and nontargets present in either.
 type family Combine (list1 :: [a]) (list2 :: [a]) :: [a] where
-	Combine (list1 :: [a]) (list2 :: [a]) =
-		(Concat
-			(NonTargets list1 `Union` NonTargets list2)
-			(Targets list1 `Intersect` Targets list2)
-		)
+	Combine ('WithInfo : list1) ('WithInfo : list2) = 'WithInfo ':
+		list1 `Intersect` list2
+	Combine ('WithInfo : list1) list2 = 'WithInfo ':
+		list1 `Intersect` list2
+	Combine list1 ('WithInfo : list2) = 'WithInfo ':
+		list1 `Intersect` list2
+	Combine list1 list2 =
+		list1 `Intersect` list2
+	-- This is a cleaner implementation, but it causes an exponential
+	-- blowup of the type checker due to referencing list1 twice on
+	-- the right hand side.
+	-- Combine (list1 :: [a]) (list2 :: [a]) =
+	--	(Concat
+	--		(NonTargets list1 `Union` NonTargets list2)
+	--		(Targets list1 `Intersect` Targets list2)
+	--	)
 
 -- | Checks if two MetaTypes lists can be safly combined;
 -- eg they have at least one Target in common.
