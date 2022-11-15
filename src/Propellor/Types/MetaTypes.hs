@@ -41,6 +41,7 @@ import Propellor.Types.OS
 import GHC.TypeLits hiding (type (+))
 import GHC.Exts (Constraint)
 import Data.Type.Bool
+import Data.Kind (Type)
 
 #ifdef WITH_TYPE_ERRORS
 import Type.Errors
@@ -118,7 +119,7 @@ instance SingKind ('KProxy :: KProxy MetaType) where
 -- Which is shorthand for this type:
 --
 -- > MetaTypes '[WithInfo, Targeting OSDebian]
-type family a + b :: * where
+type family a + b :: Type where
 	(MetaTypes a) + (MetaTypes b) = MetaTypes (Concat a b)
 
 type family Concat (list1 :: [a]) (list2 :: [a]) :: [a] where

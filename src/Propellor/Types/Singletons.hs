@@ -7,6 +7,8 @@ module Propellor.Types.Singletons (
 	KProxy(..)
 ) where
 
+import Data.Kind (Type)
+
 #if __GLASGOW_HASKELL__ > 707
 import Data.Proxy (KProxy(..))
 #else
@@ -34,7 +36,7 @@ instance SingI 'True where sing = TrueS
 instance SingI 'False where sing = FalseS
 
 class (kparam ~ 'KProxy) => SingKind (kparam :: KProxy k) where
-	type DemoteRep kparam :: *
+	type DemoteRep kparam :: Type
 	-- | From singleton to value.
 	fromSing :: Sing (a :: k) -> DemoteRep kparam
 
