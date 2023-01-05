@@ -52,6 +52,7 @@ hosts =                 --                  (o)  `
 	, sow
 	, mouse
 	, peregrine
+	, eel
 	, pell
 	] ++ monsters
 
@@ -267,6 +268,7 @@ kite = host "kite.kitenet.net" $ props
 		[ (RelDomain "mouse-onion", CNAME $ AbsDomain "htieo6yu2qtcn2j3.onion")
 		, (RelDomain "beaver-onion", CNAME $ AbsDomain "tl4xsvaxryjylgxs.onion")
 		, (RelDomain "peregrine-onion", CNAME $ AbsDomain "rsdwvaabir6ty2kdzblq7wdda26ib4fuc6hzxzwum75jbn6thqbojvid.onion")
+		, (RelDomain "eel-onion", CNAME $ AbsDomain "4yuc425lsa6ho2c6dlsg4cinadxvsn7vvir7a36ljv7wdyvg52h3inid.onion")
 		, (RelDomain "sow-onion", CNAME $ AbsDomain "urt4g2tq32qktgtp.onion")
 		]
 	& myDnsPrimary "joeyh.name" []
@@ -314,6 +316,13 @@ mouse = host "mouse.kitenet.net" $ props
 	& Apt.installed ["ssh"]
 	& Tor.installed
 	& Tor.hiddenServiceAvailable "ssh" (Port 22)
+
+eel :: Host
+eel = host "eel.kitenet.net" $ props
+	& Apt.installed ["ssh", "screen", "git-annex"]
+	& Tor.installed
+	& Tor.hiddenServiceAvailable "ssh" (Port 22)
+	& LightDM.autoLogin (User "desktop")
 
 peregrine :: Host
 peregrine = host "peregrine.kitenet.net" $ props
