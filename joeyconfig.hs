@@ -116,10 +116,11 @@ orca = host "orca.kitenet.net" $ props
 		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") X86_32 mempty (Just "ancient") (Cron.Times "45 * * * *") "2h")
+		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring
+		(Just "ancient") (Cron.Times "45 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Testing ARM64 Debootstrap.UseOldGpgKeyring Nothing (Cron.Times "1 * * * *") "4h")
+		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
 
 house :: Host
 house = host "house.lan" $ props
@@ -305,7 +306,11 @@ kite = host "kite.kitenet.net" $ props
 		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring (Just "ancient") (Cron.Times "45 * * * *") "2h")
+		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring
+		(Just "ancient") (Cron.Times "45 * * * *") "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
