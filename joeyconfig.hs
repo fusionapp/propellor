@@ -30,6 +30,7 @@ import qualified Propellor.Property.Journald as Journald
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
 import qualified Propellor.Property.Laptop as Laptop
 import qualified Propellor.Property.LightDM as LightDM
+import qualified Propellor.Property.Debootstrap as Debootstrap
 import qualified Propellor.Property.HostingProvider.Linode as Linode
 import qualified Propellor.Property.SiteSpecific.GitHome as GitHome
 import qualified Propellor.Property.SiteSpecific.GitAnnexBuilder as GitAnnexBuilder
@@ -109,16 +110,16 @@ orca = host "orca.kitenet.net" $ props
 
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_64 Nothing (Cron.Times "15 * * * *") "2h")
+		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_32 Nothing (Cron.Times "30 * * * *") "2h")
+		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") X86_32 (Just "ancient") (Cron.Times "45 * * * *") "2h")
+		(Stable "jessie") X86_32 mempty (Just "ancient") (Cron.Times "45 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Testing ARM64 Nothing (Cron.Times "1 * * * *") "4h")
+		Testing ARM64 Debootstrap.UseOldGpgKeyring Nothing (Cron.Times "1 * * * *") "4h")
 
 house :: Host
 house = host "house.lan" $ props
@@ -164,7 +165,7 @@ house = host "house.lan" $ props
   where
 	autobuilder = Systemd.nspawned $ GitAnnexBuilder.autoBuilderContainer
 		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
-		Testing ARMEL Nothing (Cron.Times "15 15 * * *") "10h"
+		Testing ARMEL mempty Nothing (Cron.Times "15 15 * * *") "10h"
 
 -- This is not a complete description of kite, since it's a
 -- multiuser system with eg, user passwords that are not deployed
@@ -298,13 +299,13 @@ kite = host "kite.kitenet.net" $ props
 	
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_64 Nothing (Cron.Times "15 * * * *") "2h")
+		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_32 Nothing (Cron.Times "30 * * * *") "2h")
+		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") X86_32 (Just "ancient") (Cron.Times "45 * * * *") "2h")
+		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring (Just "ancient") (Cron.Times "45 * * * *") "2h")
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props

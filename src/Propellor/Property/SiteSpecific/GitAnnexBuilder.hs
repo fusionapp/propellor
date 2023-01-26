@@ -105,9 +105,9 @@ cabalDeps = flagFile go cabalupdated
 			`assume` MadeChange
 		cabalupdated = homedir </> ".cabal" </> "packages" </> "hackage.haskell.org" </> "00-index.cache"
 
-autoBuilderContainer :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> Flavor -> Times -> TimeOut -> Systemd.Container
-autoBuilderContainer mkprop suite arch flavor crontime timeout =
-	Systemd.container name $ \d -> Chroot.debootstrapped mempty d $ props
+autoBuilderContainer :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> DebootstrapParam -> Flavor -> Times -> TimeOut -> Systemd.Container
+autoBuilderContainer mkprop suite arch debootstrapparam flavor crontime timeout =
+	Systemd.container name $ \d -> Chroot.debootstrapped debootstrapparam d $ props
 		& mkprop suite arch flavor
 		& autobuilder (architectureToDebianArchString arch) crontime timeout
   where
