@@ -172,11 +172,9 @@ stackInstalled = withOS "stack installed" $ \w o ->
 				_ -> doNothing
 	  where
 		url = case arch of
-			-- There is no i386 build anymore, but assuming the
-			-- host computer is really 64 bit (likely), the
-			-- static amd64 build will work.
-			X86_32 -> "https://github.com/commercialhaskell/stack/releases/download/v2.9.3/stack-2.9.3-linux-x86_64-static.tar.gz"
-			ARMEL -> "https://github.com/commercialhaskell/stack/releases/download/v1.7.1/stack-1.7.1-linux-arm.tar.gz"
+			X86_64 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-x86_64.tar.gz"
+			X86_32 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-i386.tar.gz"
+			ARMEL -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-arm.tar.gz"
 			-- Probably not available.
 			a -> "https://www.stackage.org/stack/linux-" ++ architectureToDebianArchString a
 	binstack = "/usr/bin/stack"
