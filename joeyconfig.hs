@@ -295,6 +295,16 @@ kite = host "kite.kitenet.net" $ props
 	& Apache.httpsVirtualHost "letsencrypt.joeyh.name" "/var/www/html"
 		(LetsEncrypt.AgreeTOS (Just "id@joeyh.name"))
 	& alias "letsencrypt.joeyh.name"
+	
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		Unstable X86_64 Nothing (Cron.Times "15 * * * *") "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		Unstable X86_32 Nothing (Cron.Times "30 * * * *") "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.stackAutoBuilder
+		(Stable "jessie") X86_32 (Just "ancient") (Cron.Times "45 * * * *") "2h")
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
