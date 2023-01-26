@@ -10,6 +10,7 @@ import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Chroot as Chroot
 import Propellor.Property.Cron (Times)
+import Propellor.Property.Debootstrap
 
 builduser :: UserName
 builduser = "builder"
@@ -105,9 +106,9 @@ cabalDeps = flagFile go cabalupdated
 			`assume` MadeChange
 		cabalupdated = homedir </> ".cabal" </> "packages" </> "hackage.haskell.org" </> "00-index.cache"
 
-autoBuilderContainer :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> DebootstrapParam -> Flavor -> Times -> TimeOut -> Systemd.Container
-autoBuilderContainer mkprop suite arch debootstrapparam flavor crontime timeout =
-	Systemd.container name $ \d -> Chroot.debootstrapped debootstrapparam d $ props
+autoBuilderContainer :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> DebootstrapConfig -> Flavor -> Times -> TimeOut -> Systemd.Container
+autoBuilderContainer mkprop suite arch debootstrapconfig flavor crontime timeout =
+	Systemd.container name $ \d -> Chroot.debootstrapped debootstrapconfig d $ props
 		& mkprop suite arch flavor
 		& autobuilder (architectureToDebianArchString arch) crontime timeout
   where
