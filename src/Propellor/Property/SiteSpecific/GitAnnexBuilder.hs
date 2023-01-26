@@ -132,7 +132,10 @@ stackAutoBuilder suite arch flavor =
 	propertyList "git-annex autobuilder using stack" $ props
 		& osDebian suite arch
 		& buildDepsNoHaskellLibs
-		& Apt.stdSourcesList
+		-- For some reason security.debian.org is very slow for
+		-- ancient versions of debian stable used with this. So
+		-- disable for now.
+		-- & Apt.stdSourcesList
 		& Apt.unattendedUpgrades
 		& Apt.cacheCleaned
 		& User.accountFor (User builduser)
