@@ -28,6 +28,7 @@ import qualified Propellor.Property.Borg as Borg
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Journald as Journald
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
+import qualified Propellor.Property.FlashKernel as FlashKernel
 import qualified Propellor.Property.Laptop as Laptop
 import qualified Propellor.Property.LightDM as LightDM
 import qualified Propellor.Property.Debootstrap as Debootstrap
@@ -129,6 +130,10 @@ house = host "house.lan" $ props
 	& Apt.removed ["rsyslog"]
 	
 	& cubietech_Cubietruck
+	-- fsck when needed on boot
+	& "/etc/default/flash-kernel"
+		`File.containsLine` "LINUX_KERNEL_CMDLINE=\"fsck.repair=yes\""
+		`onChange` FlashKernel.flashKernel
 	& hasPartition
 		( partition EXT3
 			`mountedAt` "/"
