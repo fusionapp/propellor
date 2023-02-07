@@ -1,6 +1,7 @@
 Hi, 
 It's been a while since I have used propellor and getting back to it feels good!
 I am encountering an issue though, when I set a GH remote in my local repository: Running propellor gives me the following message
+
 ```
 Up to date
 Propellor build ... done
