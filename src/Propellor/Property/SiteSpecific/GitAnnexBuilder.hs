@@ -159,6 +159,7 @@ stackInstalled = withOS "stack installed" $ \w o ->
 	manualinstall :: Architecture -> Property Linux
 	manualinstall arch = tightenTargets $ check (not <$> doesFileExist binstack) $
 		propertyList "stack installed from upstream tarball" $ props
+			& Apt.installed ["wget"]
 			& cmdProperty "wget" [url, "-O", tmptar]
 				`assume` MadeChange
 			& File.dirExists tmpdir
