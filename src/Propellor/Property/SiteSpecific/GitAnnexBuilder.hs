@@ -156,7 +156,7 @@ stackInstalled = withOS "stack installed" $ \w o ->
 		_ -> ensureProperty w $ Apt.installed ["haskell-stack"]
   where
 	-- Warning: Using a binary downloaded w/o validation.
-	manualinstall :: Architecture -> Property Linux
+	manualinstall :: Architecture -> Property DebianLike
 	manualinstall arch = tightenTargets $ check (not <$> doesFileExist binstack) $
 		propertyList "stack installed from upstream tarball" $ props
 			& Apt.installed ["wget"]
