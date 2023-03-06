@@ -291,7 +291,7 @@ kite = host "kite.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "stretch") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "4h")
