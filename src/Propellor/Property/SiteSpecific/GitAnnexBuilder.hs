@@ -151,6 +151,8 @@ stackInstalled = withOS "stack installed" $ \w o ->
 			ensureProperty w $ manualinstall arch
 		(Just (System (Debian Linux (Stable "stretch")) arch)) ->
 			ensureProperty w $ manualinstall arch
+		(Just (System (Debian Linux (Stable "buster")) arch)) ->
+			ensureProperty w $ manualinstall arch
 		_ -> ensureProperty w $ Apt.installed ["haskell-stack"]
   where
 	-- Warning: Using a binary downloaded w/o validation.
