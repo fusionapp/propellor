@@ -47,7 +47,6 @@ hosts =                 --                  (o)  `
 	[ darkstar
 	, dragon
 	, oyster
-	, orca
 	, house
 	, kite
 	, beaver
@@ -98,34 +97,6 @@ oyster = host "oyster.kitenet.net" $ props
 
 	& User.hasPassword (User "root")
 	& Apt.unattendedUpgrades
-
-orca :: Host
-orca = host "orca.kitenet.net" $ props
-	& standardSystem Unstable X86_64 [ "Main git-annex build box." ]
-	& ipv4 "138.38.108.179"
-
-	& Apt.unattendedUpgrades
-	& Postfix.satellite
-	& Apt.serviceInstalledRunning "ntp"
-	& Systemd.persistentJournal
-
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring
-		(Just "ancient") (Cron.Times "45 * * * *") "2h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.stackAutoBuilder
-		(Stable "stretch") ARM64 mempty
-		(Just "ancient") (Cron.Times "20 * * * *") "4h")
 
 house :: Host
 house = host "house.lan" $ props
