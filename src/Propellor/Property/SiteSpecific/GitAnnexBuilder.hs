@@ -175,6 +175,7 @@ stackInstalled = withOS "stack installed" $ \w o ->
 			X86_64 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-x86_64.tar.gz"
 			X86_32 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-i386.tar.gz"
 			ARMEL -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-arm.tar.gz"
+			ARM64 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-aarch64.tar.gz"
 			-- Probably not available.
 			a -> "https://www.stackage.org/stack/linux-" ++ architectureToDebianArchString a
 	binstack = "/usr/bin/stack"

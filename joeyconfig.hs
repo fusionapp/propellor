@@ -122,6 +122,10 @@ orca = host "orca.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.stackAutoBuilder
+		(Stable "jessie") ARM64 Debootstrap.UseOldGpgKeyring
+		(Just "ancient") (Cron.Times "20 * * * *") "4h")
 
 house :: Host
 house = host "house.lan" $ props
