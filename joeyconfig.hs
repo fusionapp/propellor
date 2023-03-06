@@ -124,7 +124,7 @@ orca = host "orca.kitenet.net" $ props
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
-		(Stable "stretch") ARM64 Debootstrap.UseOldGpgKeyring
+		(Stable "stretch") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "4h")
 
 house :: Host
@@ -322,7 +322,7 @@ kite = host "kite.kitenet.net" $ props
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
-		(Stable "stretch") ARM64 Debootstrap.UseOldGpgKeyring
+		(Stable "stretch") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "4h")
 
 beaver :: Host
