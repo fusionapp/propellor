@@ -298,7 +298,7 @@ kite = host "kite.kitenet.net" $ props
 		(Just "ancient") (Cron.Times "20 * * * *") "4h")
 
 sparrow :: Host
-sparrow = host "kite.kitenet.net" $ props
+sparrow = host "sparrow.kitenet.net" $ props
 	& standardSystemUnhardened Testing ARM64 [ "Welcome to sparrow!" ]
 	& ipv4 "128.140.52.168"
 	& ipv6 "2a01:4f8:c17:ed3a::1"
