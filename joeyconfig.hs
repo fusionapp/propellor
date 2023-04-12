@@ -49,6 +49,7 @@ hosts =                 --                  (o)  `
 	, oyster
 	, house
 	, kite
+	, sparrow
 	, beaver
 	, sow
 	, mouse
@@ -295,6 +296,13 @@ kite = host "kite.kitenet.net" $ props
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "4h")
+
+sparrow :: Host
+sparrow = host "kite.kitenet.net" $ props
+	& standardSystemUnhardened Testing ARM64 [ "Welcome to sparrow!" ]
+	& ipv4 "128.140.52.168"
+	& ipv6 "2a01:4f8:c17:ed3a::1"
+	& Apt.installed ["ssh"]
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
