@@ -303,6 +303,15 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& ipv4 "128.140.52.168"
 	& ipv6 "2a01:4f8:c17:ed3a::1"
 	& Apt.installed ["ssh"]
+	& Apt.installed [ "git-annex", "myrepos", "build-essential", "make"]
+
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.stackAutoBuilder
+		(Stable "bullseye") ARM64 mempty
+		(Just "ancient") (Cron.Times "20 * * * *") "4h")
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
