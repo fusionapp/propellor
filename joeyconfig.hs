@@ -305,7 +305,6 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Apt.installed ["ssh"]
 	& Apt.installed [ "git-annex", "myrepos", "build-essential", "make"]
 
-	-- This one OOMS despite 7 gb ram. qemu problem?
 	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
@@ -325,6 +324,8 @@ sparrow = host "sparrow.kitenet.net" $ props
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "2h")
+	-- In case compiler needs more than available ram
+	& Apt.serviceInstalledRunning "swapspace"
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
