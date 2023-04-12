@@ -2,6 +2,7 @@ propellor (5.16) UNRELEASED; urgency=medium
 
   * Debootstrap: Added UseOldGpgKeyring constructor to DebootstrapConfig,
     which allows bootstrapping ancient stable releases of Debian.
+  * Qemu: Install binfmt-support along with qemu-user-static.
 
  -- Joey Hess <id@joeyh.name>  Thu, 26 Jan 2023 12:22:41 -0400
 
