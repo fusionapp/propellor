@@ -318,6 +318,8 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "2h")
+	-- For some reason this container does not work on arm64 host but it
+	-- does work on amd64 host. Weird!
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
