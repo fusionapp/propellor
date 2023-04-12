@@ -305,7 +305,7 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Apt.installed ["ssh"]
 	& Apt.installed [ "git-annex", "myrepos", "build-essential", "make"]
 
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
 	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
