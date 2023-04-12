@@ -307,11 +307,11 @@ sparrow = host "sparrow.kitenet.net" $ props
 
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
+		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
-		(Just "ancient") (Cron.Times "20 * * * *") "4h")
+		(Just "ancient") (Cron.Times "20 * * * *") "2h")
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props

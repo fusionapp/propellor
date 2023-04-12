@@ -159,6 +159,7 @@ stackInstalled = withOS "stack installed" $ \w o ->
 	manualinstall :: Architecture -> Property DebianLike
 	manualinstall arch = tightenTargets $ check (not <$> doesFileExist binstack) $
 		propertyList "stack installed from upstream tarball" $ props
+			& Apt.installed ["libnuma1"]
 			& Apt.installed ["wget"]
 			& cmdProperty "wget" [url, "-O", tmptar]
 				`assume` MadeChange
