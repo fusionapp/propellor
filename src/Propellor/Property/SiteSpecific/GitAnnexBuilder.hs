@@ -143,6 +143,7 @@ stackAutoBuilder suite arch flavor =
 		& stackInstalled
 		-- Workaround https://github.com/commercialhaskell/stack/issues/2093
 		& Apt.installed ["libtinfo-dev"]
+		& Apt.installed ["libnuma1"]
 
 stackInstalled :: Property DebianLike
 stackInstalled = withOS "stack installed" $ \w o ->
@@ -159,7 +160,6 @@ stackInstalled = withOS "stack installed" $ \w o ->
 	manualinstall :: Architecture -> Property DebianLike
 	manualinstall arch = tightenTargets $ check (not <$> doesFileExist binstack) $
 		propertyList "stack installed from upstream tarball" $ props
-			& Apt.installed ["libnuma1"]
 			& Apt.installed ["wget"]
 			& cmdProperty "wget" [url, "-O", tmptar]
 				`assume` MadeChange

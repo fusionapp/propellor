@@ -307,6 +307,16 @@ sparrow = host "sparrow.kitenet.net" $ props
 
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
+		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
+		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.stackAutoBuilder
+		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring
+		(Just "ancient") (Cron.Times "45 * * * *") "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
