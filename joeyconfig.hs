@@ -140,10 +140,8 @@ house = host "house.lan" $ props
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
 
-	& check (not <$> hasContainerCapability Systemd.FilesystemContained) 
-		(setupRevertableProperty autobuilder)
-	-- In case compiler needs more than available ram
-	& Apt.serviceInstalledRunning "swapspace"
+	! autobuilder
+	& Apt.removed ["swapspace"]
   where
 	autobuilder = Systemd.nspawned $ GitAnnexBuilder.autoBuilderContainer
 		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
@@ -282,18 +280,18 @@ kite = host "kite.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "jessie") X86_32 
 		(Debootstrap.UseOldGpgKeyring Debootstrap.:+ Debootstrap.DebootstrapMirror "http://archive.debian.org/debian/")
 		(Just "ancient") (Cron.Times "45 * * * *") "2h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
-	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "4h")
