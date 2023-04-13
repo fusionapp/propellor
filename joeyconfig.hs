@@ -300,7 +300,7 @@ kite = host "kite.kitenet.net" $ props
 
 sparrow :: Host
 sparrow = host "sparrow.kitenet.net" $ props
-	& standardSystemUnhardened Testing ARM64 [ "Welcome to sparrow!" ]
+	& standardSystem Testing ARM64 [ "Welcome to sparrow!" ]
 	& ipv4 "128.140.52.168"
 	& ipv6 "2a01:4f8:c17:ed3a::1"
 	& Apt.installed ["ssh"]
@@ -327,6 +327,9 @@ sparrow = host "sparrow.kitenet.net" $ props
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "2h")
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
+		Testing ARMEL mempty Nothing (Cron.Times "15 15 * * *") "2h")
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
