@@ -304,6 +304,8 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& ipv6 "2a01:4f8:c17:ed3a::1"
 	& Apt.installed ["ssh"]
 	& Apt.installed [ "git-annex", "myrepos", "build-essential", "make"]
+	-- In case compiler needs more than available ram
+	& Apt.serviceInstalledRunning "swapspace"
 
 	-- qemu emulation does not work well enough to compile
 	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
@@ -312,7 +314,7 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
+	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "jessie") X86_32 Debootstrap.UseOldGpgKeyring
 		(Just "ancient") (Cron.Times "45 * * * *") "2h")
@@ -325,8 +327,6 @@ sparrow = host "sparrow.kitenet.net" $ props
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "2h")
-	-- In case compiler needs more than available ram
-	& Apt.serviceInstalledRunning "swapspace"
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
