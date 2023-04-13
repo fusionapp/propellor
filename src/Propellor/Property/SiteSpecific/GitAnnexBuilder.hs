@@ -143,7 +143,7 @@ stackAutoBuilder suite arch flavor =
 		& stackInstalled
 		-- Workaround https://github.com/commercialhaskell/stack/issues/2093
 		& Apt.installed ["libtinfo-dev"]
-		& Apt.installed ["libnuma1"]
+		& Apt.installed ["libnuma1", "libnuma-dev", "zlib1g-dev"]
 
 stackInstalled :: Property DebianLike
 stackInstalled = withOS "stack installed" $ \w o ->

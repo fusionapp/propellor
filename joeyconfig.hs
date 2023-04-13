@@ -311,20 +311,18 @@ sparrow = host "sparrow.kitenet.net" $ props
 	-- qemu emulation does not work well enough to compile
 	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
+		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
+		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "jessie") X86_32 
 		(Debootstrap.UseOldGpgKeyring Debootstrap.:+ Debootstrap.DebootstrapMirror "http://archive.debian.org/debian/")
-		(Just "ancient") (Cron.Times "45 * * * *") "2h")
+		(Just "ancient") (Cron.Times "45 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "2h")
-	-- For some reason this container does not work on arm64 host but it
-	-- does work on amd64 host. Weird!
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
