@@ -327,7 +327,7 @@ sparrow = host "sparrow.kitenet.net" $ props
 		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
 		Testing ARMEL mempty Nothing (Cron.Times "15 15 * * *") "2h")
 	
-	! Systemd.nspawned ancientKitenet
+	& Systemd.nspawned ancientKitenet
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
