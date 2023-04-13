@@ -303,8 +303,6 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Apt.installed [ "git-annex", "myrepos", "build-essential", "make"]
 	-- In case compiler needs more than available ram
 	& Apt.serviceInstalledRunning "swapspace"
-	
-	& Systemd.nspawned ancientKitenet
 
 	-- qemu emulation does not work well enough to compile
 	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
@@ -328,6 +326,8 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
 		Testing ARMEL mempty Nothing (Cron.Times "15 15 * * *") "2h")
+	
+	! Systemd.nspawned ancientKitenet
 
 beaver :: Host
 beaver = host "beaver.kitenet.net" $ props
@@ -404,7 +404,7 @@ pell = host "pell.branchable.com" $ props
 -- Exhibit: kite's 90's website on port 1994.
 ancientKitenet :: Systemd.Container
 ancientKitenet = Systemd.debContainer "ancient-kitenet" $ props
-	& standardContainer (Stable "buster")
+	& standardContainer (Stable "buster") ARM64
 	& alias hn
 	& Git.cloned (User "root") "git://kitenet-net.branchable.com/" "/var/www/html"
 		(Just "remotes/origin/old-kitenet.net")
@@ -448,9 +448,9 @@ standardSystemUnhardened suite arch motd = propertyList "standard system" $ prop
 	& JoeySites.noExim
 
 -- This is my standard container setup, Featuring automatic upgrades.
-standardContainer :: DebianSuite -> Property (HasInfo + Debian)
-standardContainer suite = propertyList "standard container" $ props
-	& osDebian suite X86_64
+standardContainer :: DebianSuite -> Architecture -> Property (HasInfo + Debian)
+standardContainer suite arch = propertyList "standard container" $ props
+	& osDebian suite arch
 	-- Do not want to run mail daemon inside a random container..
 	& JoeySites.noExim
 	& Apt.stdSourcesList `onChange` Apt.upgrade
