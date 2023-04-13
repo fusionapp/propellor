@@ -140,13 +140,6 @@ house = host "house.lan" $ props
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
 
-	! autobuilder
-	& Apt.removed ["swapspace"]
-  where
-	autobuilder = Systemd.nspawned $ GitAnnexBuilder.autoBuilderContainer
-		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
-		Testing ARMEL mempty Nothing (Cron.Times "15 15 * * *") "10h"
-
 -- This is not a complete description of kite, since it's a
 -- multiuser system with eg, user passwords that are not deployed
 -- with propellor.
@@ -168,7 +161,6 @@ kite = host "kite.kitenet.net" $ props
 
 	& Network.preserveStatic "eth0" `requires` Network.cleanInterfacesFile
 	& Apt.installed ["linux-image-amd64"]
-	& Apt.serviceInstalledRunning "swapspace"
 	& Linode.serialGrub
 	& Linode.locateEnabled
 	& Apt.unattendedUpgrades
@@ -278,21 +270,8 @@ kite = host "kite.kitenet.net" $ props
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.standardAutoBuilder
 		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "2h")
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.stackAutoBuilder
-		(Stable "jessie") X86_32 
-		(Debootstrap.UseOldGpgKeyring Debootstrap.:+ Debootstrap.DebootstrapMirror "http://archive.debian.org/debian/")
-		(Just "ancient") (Cron.Times "45 * * * *") "2h")
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "4h")
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.stackAutoBuilder
-		(Stable "bullseye") ARM64 mempty
-		(Just "ancient") (Cron.Times "20 * * * *") "4h")
+	& Apt.serviceInstalledRunning "swapspace"
+	! Systemd.nspawned ancientKitenet
 
 sparrow :: Host
 sparrow = host "sparrow.kitenet.net" $ props
