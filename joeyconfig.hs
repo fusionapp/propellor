@@ -239,8 +239,6 @@ kite = host "kite.kitenet.net" $ props
 	& alias "kgb.kitenet.net"
 	& JoeySites.kgbServer
 	
-	& Systemd.nspawned ancientKitenet
-	
 	& alias "podcatcher.kitenet.net"
 	& JoeySites.podcatcher
 
@@ -305,6 +303,8 @@ sparrow = host "sparrow.kitenet.net" $ props
 	& Apt.installed [ "git-annex", "myrepos", "build-essential", "make"]
 	-- In case compiler needs more than available ram
 	& Apt.serviceInstalledRunning "swapspace"
+	
+	& Systemd.nspawned ancientKitenet
 
 	-- qemu emulation does not work well enough to compile
 	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
