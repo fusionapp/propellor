@@ -268,10 +268,9 @@ kite = host "kite.kitenet.net" $ props
 	& alias "letsencrypt.joeyh.name"
 	
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
+		(GitAnnexBuilder.standardAutoBuilder True)
 		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "2h")
 	& Apt.serviceInstalledRunning "swapspace"
-	! Systemd.nspawned ancientKitenet
 
 sparrow :: Host
 sparrow = host "sparrow.kitenet.net" $ props
@@ -283,12 +282,10 @@ sparrow = host "sparrow.kitenet.net" $ props
 	-- In case compiler needs more than available ram
 	& Apt.serviceInstalledRunning "swapspace"
 
-	-- qemu emulation does not work well enough to compile
-	! Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
-		Unstable X86_64 mempty Nothing (Cron.Times "15 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
+		-- qemu hangs running unattended-upgrades on i386
+		-- so disable installing that
+		(GitAnnexBuilder.standardAutoBuilder False)
 		Unstable X86_32 mempty Nothing (Cron.Times "30 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
@@ -296,14 +293,14 @@ sparrow = host "sparrow.kitenet.net" $ props
 		(Debootstrap.UseOldGpgKeyring Debootstrap.:+ Debootstrap.DebootstrapMirror "http://archive.debian.org/debian/")
 		(Just "ancient") (Cron.Times "45 * * * *") "4h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		GitAnnexBuilder.standardAutoBuilder
+		(GitAnnexBuilder.standardAutoBuilder True)
 		Testing ARM64 mempty Nothing (Cron.Times "1 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
 		GitAnnexBuilder.stackAutoBuilder
 		(Stable "bullseye") ARM64 mempty
 		(Just "ancient") (Cron.Times "20 * * * *") "2h")
 	& Systemd.nspawned (GitAnnexBuilder.autoBuilderContainer
-		(GitAnnexBuilder.armAutoBuilder GitAnnexBuilder.standardAutoBuilder)
+		(GitAnnexBuilder.armAutoBuilder (GitAnnexBuilder.standardAutoBuilder True))
 		Testing ARMEL mempty Nothing (Cron.Times "15 15 * * *") "2h")
 	
 	& Systemd.nspawned ancientKitenet

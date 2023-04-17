@@ -116,13 +116,13 @@ autoBuilderContainer mkprop suite arch debootstrapconfig flavor crontime timeout
 
 type Flavor = Maybe String
 
-standardAutoBuilder :: DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
-standardAutoBuilder suite arch flavor =
+standardAutoBuilder :: Bool -> DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
+standardAutoBuilder unattendedupgrades suite arch flavor =
 	propertyList "standard git-annex autobuilder" $ props
 		& osDebian suite arch
 		& Apt.stdSourcesList
-		& Apt.unattendedUpgrades
 		& Apt.cacheCleaned
+		& (if unattendedupgrades then Apt.unattendedUpgrades else mempty)
 		& User.accountFor (User builduser)
 		& tree (architectureToDebianArchString arch) flavor
 		& buildDepsApt
