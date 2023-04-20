@@ -878,7 +878,8 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		)
 
 homerouterWifiInterface :: String
-homerouterWifiInterface = "wlx00c0ca82eb78"
+homerouterWifiInterface = "wlx9cefd5fcd6f3"
+-- "wlx00c0ca82eb78" is good old thinkpenguin
 
 homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx00c0cab064eb"
