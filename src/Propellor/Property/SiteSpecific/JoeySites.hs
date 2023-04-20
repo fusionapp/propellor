@@ -886,7 +886,7 @@ homerouterWifiInterfaceOld = "wlx00c0cab064eb"
 -- Connect to the starlink router with its ethernet adapter.
 connectStarlinkRouter :: Property DebianLike
 connectStarlinkRouter = propertyList "connected via starlink router" $ props
-	& Network.dhcp "eth0"
+	& Network.dhcp "end0"
 		`requires` Network.cleanInterfacesFile
 
 -- My home router, running hostapd and dnsmasq.
@@ -916,7 +916,7 @@ homeRouter = propertyList "home router" $ props
 		[ "domain-needed"
 		, "bogus-priv"
 		, "interface=" ++ homerouterWifiInterface
-		, "interface=eth0"
+		, "interface=end0"
 		, "domain=lan"
 		-- lease time is short because the house
 		-- controller wants to know when clients disconnect
