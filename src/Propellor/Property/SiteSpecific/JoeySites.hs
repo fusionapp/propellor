@@ -884,9 +884,13 @@ homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 
 -- Connect to the starlink router with its ethernet adapter.
+--
+-- Static route because with dhcp it sometimes fails to get an address from
+-- starlink.
 connectStarlinkRouter :: Property DebianLike
 connectStarlinkRouter = propertyList "connected via starlink router" $ props
-	& Network.dhcp "end0"
+	& Network.static "end0" (IPv4 "192.168.1.62")
+		(Just (Network.Gateway (IPv4 "192.168.1.1")))
 		`requires` Network.cleanInterfacesFile
 
 -- My home router, running hostapd and dnsmasq.
