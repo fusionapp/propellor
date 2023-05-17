@@ -877,11 +877,11 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 			createSymbolicLink d "/var/www/html"
 		)
 
-homerouterWifiInterfaceOld :: String
-homerouterWifiInterfaceOld = "wlx00c0ca82eb78"
-
 homerouterWifiInterface :: String
-homerouterWifiInterface = "wlx00c0cab22089" -- ALFA
+homerouterWifiInterface = "wlx00c0ca82eb78"
+
+homerouterWifiInterfaceOld :: String
+homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 
 -- Connect to the starlink router with its ethernet adapter.
 --
