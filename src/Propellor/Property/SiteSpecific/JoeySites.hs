@@ -933,8 +933,9 @@ homeRouter = propertyList "home router" $ props
 		-- controller wants to know when clients disconnect
 		, "dhcp-range=10.1.1.100,10.1.1.150,10m"
 		, "no-hosts"
-		, "address=/honeybee.kitenet.net/10.1.1.1"
 		, "address=/house.lan/10.1.1.1"
+		-- allow accessing starlink dish when it's not online yet
+		, "address=/dishy.starlink.com/192.168.100.1"
 		]
 		`onChange` Service.restarted "dnsmasq"
 	-- Avoid DHCPNAK of lease obtained at boot, after NTP slews clock
