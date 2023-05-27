@@ -249,22 +249,23 @@ podcatcher = Cron.niceJob "podcatcher run hourly" (Cron.Times "55 * * * *")
 	`requires` Apt.installed ["git-annex", "myrepos"]
 
 spamdEnabled :: Property DebianLike
-spamdEnabled = tightenTargets $ 
-	cmdProperty "update-rc.d" ["spamassassin", "enable"]
-		`assume` MadeChange
+spamdEnabled = Apt.serviceInstalledRunning "spamd"
 
 spamassassinConfigured :: Property DebianLike
 spamassassinConfigured = propertyList "spamassassin configured" $ props
-	& Apt.serviceInstalledRunning "spamassassin"
-	& "/etc/default/spamassassin" `File.containsLines`
+	& spamdEnabled
+	& "/etc/default/spamd" `File.containsLines`
 		[ "# Propellor deployed"
 		, "OPTIONS=\"--create-prefs --max-children 5 --helper-home-dir\""
-		, "CRON=1"
 		, "NICE=\"--nicelevel 15\""
-		]
+		] 
 		`describe` "spamd configured"
-		`onChange` spamdEnabled
-		`onChange` Service.restarted "spamassassin"
+		`onChange` Service.restarted "spamd"
+	& "/etc/default/spamassassin" `File.containsLines`
+		[ "# Propellor deployed"
+		, "CRON=1"
+		]
+		`describe` "spamassassin configured"
 		`requires` Apt.serviceInstalledRunning "cron"
 
 kiteMailServer :: Property (HasInfo + DebianLike)
@@ -882,6 +883,12 @@ homerouterWifiInterface = "wlx00c0ca82eb78"
 
 homerouterWifiInterfaceOld :: String
 homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
+
+-- Connect to the starlink dish directly (no starlink router)
+connectStarlinkDish :: Property DebianLike
+connectStarlinkDish = propertyList "connected via starlink dish" $ props
+	& Network.dhcp "end0"
+		`requires` Network.cleanInterfacesFile
 
 -- Connect to the starlink router with its ethernet adapter.
 --
