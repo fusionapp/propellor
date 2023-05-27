@@ -887,6 +887,12 @@ homerouterWifiInterfaceOld = "wlx9cefd5fcd6f3"
 -- Connect to the starlink dish directly (no starlink router)
 connectStarlinkDish :: Property DebianLike
 connectStarlinkDish = propertyList "connected via starlink dish" $ props
+	-- Use dhcpcd for ipv6 prefix delegation to the wifi interface.
+	& Apt.installed ["dhcpcd"]
+	& "/etc/dhcpcd.conf" `File.containsLine`
+		("ia_pd 1 " ++ homerouterWifiInterface)
+	& "/etc/dhcpcd.conf" `File.lacksLine`
+		("ia_pd 1 " ++ homerouterWifiInterfaceOld)
 	& Network.dhcp "end0"
 		`requires` Network.cleanInterfacesFile
 
@@ -927,7 +933,6 @@ homeRouter = propertyList "home router" $ props
 		[ "domain-needed"
 		, "bogus-priv"
 		, "interface=" ++ homerouterWifiInterface
-		, "interface=end0"
 		, "domain=lan"
 		-- lease time is short because the house
 		-- controller wants to know when clients disconnect
@@ -939,10 +944,26 @@ homeRouter = propertyList "home router" $ props
 		]
 		`onChange` Service.restarted "dnsmasq"
 	-- Avoid DHCPNAK of lease obtained at boot, after NTP slews clock
-	-- forward too far, causing that least to not be valid.
+	-- forward too far, causing that lease to not be valid.
 	& "/etc/default/dnsmasq" `File.containsLine` "DNSMASQ_OPTS=\"--dhcp-authoritative\""
 		`onChange` Service.restarted "dnsmasq"
 	& ipmasq homerouterWifiInterface
+	& Apt.installed ["radvd"]
+	-- This needs ipv6 prefix delegation to the wifi interface to be
+	-- enabled.
+	& File.hasContent "/etc/radvd.conf"
+		[ "interface " ++ homerouterWifiInterface ++ " {"
+		, "  AdvSendAdvert on;"
+		, "  MinRtrAdvInterval 3;"
+		, "  MaxRtrAdvInterval 10;"
+		, "  prefix ::/64 {"
+		, "    AdvOnLink on;"
+		, "    AdvAutonomous on;"
+		, "    AdvRouterAddr on;"
+		, "  };"
+		, "};"
+		]
+		`onChange` Service.restarted "radvd"
 
 -- | Enable IP masqerading, on whatever other interfaces come up, besides the
 -- provided intif.
