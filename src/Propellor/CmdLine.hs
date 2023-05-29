@@ -6,7 +6,7 @@ module Propellor.CmdLine (
 import System.Environment (getArgs)
 import Data.List
 import System.Exit
-import System.PosixCompat
+import System.Posix.User
 import Network.Socket
 
 import Propellor.Base
