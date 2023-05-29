@@ -11,9 +11,8 @@ module Propellor.Spin (
 
 import Data.List
 import System.Exit
-import System.PosixCompat
+import System.Posix
 import System.Posix.IO
-import System.Posix.Directory
 import Control.Concurrent.Async
 import qualified Data.ByteString as B
 import qualified Data.Set as S
