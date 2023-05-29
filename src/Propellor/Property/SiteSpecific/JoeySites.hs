@@ -889,6 +889,11 @@ connectStarlinkDish :: Property DebianLike
 connectStarlinkDish = propertyList "connected via starlink dish" $ props
 	-- Use dhcpcd for ipv6 prefix delegation to the wifi interface.
 	& Apt.installed ["dhcpcd"]
+	-- dhcpcd is run by ifup on boot. When the daemon was enabled,
+	-- that somehow prevented prefix delegation from happening,
+	-- so disable the daemon from being run by systemd.
+	& Systemd.stopped "dhcpcd"
+	& Systemd.masked "dhcpcd"
 	& "/etc/dhcpcd.conf" `File.containsLine`
 		("ia_pd 1 " ++ homerouterWifiInterface)
 	& "/etc/dhcpcd.conf" `File.lacksLine`
