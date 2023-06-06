@@ -755,13 +755,6 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		, "interval = 1"
 		]
 		`onChange` Service.reloaded "watchdog"
-	-- Hardcode one of the pool server IPs because ntp only retries
-	-- DNS resolution after an hour when it's down initially due to
-	-- starlink not being up.
-	& "/etc/ntp.conf" `File.containsLines`
-		[ "server 50.205.244.20"
-		]
-		`onChange` Service.reloaded "ntpsec"
 	-- Comes after so it does not set relayhost but uses the setting 
 	& User.hasGroup user (Group "dialout")
 	& Group.exists (Group "gpio") Nothing
