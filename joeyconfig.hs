@@ -48,6 +48,7 @@ hosts =                 --                  (o)  `
 	, dragon
 	, oyster
 	, house
+	, net
 	, kite
 	, sparrow
 	, beaver
@@ -101,8 +102,7 @@ oyster = host "oyster.kitenet.net" $ props
 
 house :: Host
 house = host "house.lan" $ props
-	& standardSystem Testing ARMHF
-		[ "Home router and arm git-annex build box." ]
+	& standardSystem Testing ARMHF [ "House mail computer." ]
 	& Apt.removed ["rsyslog"]
 	
 	& cubietech_Cubietruck
@@ -139,6 +139,26 @@ house = host "house.lan" $ props
 	-- Currently manually building the xr_usb_serial module.
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
+
+net :: Host
+net = host "net.lan" $ props
+	& standardSystem Testing ARMHF [ "Wifi router." ]
+	& Apt.removed ["rsyslog"]
+	
+	& Apt.installed ["firmware-misc-nonfree"]
+	& Apt.serviceInstalledRunning "systemd-timesyncd" -- no hardware clock
+	& Ssh.hostKeys hostContext
+		[ (SshEd25519, "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBG19v7K59SzFp/OntM9iyhlKOj2pShFSPJeqR1aiYhPF2NqztcmsY6WvIDqh6jmaISnyV1IqZZ60zvGTVRoOyMY=")
+		]
+	-- & Ssh.userKeys (User "joey") hostContext
+	--	[ (SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYgEgsDmN26goPBGPN0HIvtkZfxlc996nPfBPDWxGuh")
+	--	]
+
+	-- & JoeySites.connectStarlinkDish
+	-- & JoeySites.homeRouter
+	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
+	& Postfix.satellite
+
 
 -- This is not a complete description of kite, since it's a
 -- multiuser system with eg, user passwords that are not deployed
