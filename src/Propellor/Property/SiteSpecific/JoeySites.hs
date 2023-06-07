@@ -1242,12 +1242,23 @@ data HostapdConfig = HostapdConfig [String]
 hostapd2GhzConfig :: HostapdConfig
 hostapd2GhzConfig = HostapdConfig
 	[ "hw_mode=g"
-	, "channel=10"
+	, "channel=5"
 	, "country_code=US"
 	, "ieee80211d=1"
 	, "ieee80211n=1"
 	, "wmm_enabled=1"
 	]
+
+-- For wifi adapters such as the Alfa AWUS036ACHM
+--
+-- Note that for maximum speed, this needs channel 5 or 6.
+-- This should make it be capable of 150 Mb/s.
+hostapd2GhzConfig_mt76 :: HostapdConfig
+hostapd2GhzConfig_mt76 = HostapdConfig $ c ++ 
+	[ "ht_capab=[HT40+][HT40-][GF][SHORT-GI-20][SHORT-GI-40]"
+	]
+  where
+	HostapdConfig c = hostapd2GhzConfig
 
 hostapd5GhzConfig :: HostapdConfig
 hostapd5GhzConfig = HostapdConfig

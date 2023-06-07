@@ -164,6 +164,7 @@ sky = host "sky.lan" $ props
 	
 	& Apt.installed ["raspi-firmware", "firmware-misc-nonfree"]
 	& Apt.serviceInstalledRunning "systemd-timesyncd" -- no hardware clock
+
 	& Ssh.hostKeys hostContext
 		[ (SshEcdsa, "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBG19v7K59SzFp/OntM9iyhlKOj2pShFSPJeqR1aiYhPF2NqztcmsY6WvIDqh6jmaISnyV1IqZZ60zvGTVRoOyMY=")
 		]
@@ -172,7 +173,7 @@ sky = host "sky.lan" $ props
 		]
 
 	& JoeySites.connectStarlinkDish ifs
-	& JoeySites.homeRouter ifs "hollow" JoeySites.hostapd2GhzConfig
+	& JoeySites.homeRouter ifs "hollow" JoeySites.hostapd2GhzConfig_mt76
 	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap", "net-tools"]
 	& Postfix.satellite
   where
