@@ -132,8 +132,13 @@ house = host "house.lan" $ props
 		hosts
 		(Context "house.joeyh.name")
 		(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMAmVYddg/RgCbIj+cLcEiddeFXaYFnbEJ3uGj9G/EyV joey@honeybee")
-	& JoeySites.connectStarlinkDish ifs
-	& JoeySites.homeRouter ifs "house" JoeySites.hostapd2GhzConfig
+	-- & JoeySites.connectStarlinkDish ifs
+	-- & JoeySites.homeRouter ifs "house" JoeySites.hostapd2GhzConfig
+	& Network.static' "wlx00c0ca82eb78" (IPv4 "10.1.1.2")
+		(Just (Network.Gateway (IPv4 "10.1.1.1")))
+		[("wireless-essid", "hollow"), ("wireless-mode", "managed")]
+		`requires` Network.cleanInterfacesFile
+		`requires` Apt.installed ["wireless-tools"]
 	& JoeySites.homeNAS
 	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	-- Currently manually building the xr_usb_serial module.
