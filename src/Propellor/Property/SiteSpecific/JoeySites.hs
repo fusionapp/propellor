@@ -1245,7 +1245,10 @@ data HostapdConfig = HostapdConfig [String]
 hostapd2GhzConfig :: HostapdConfig
 hostapd2GhzConfig = HostapdConfig
 	[ "hw_mode=g"
-	, "channel=8"
+	, "channel=10"
+	, "ieee80211d=1"
+	, "ieee80211n=1"
+	, "wmm_enabled=1"
 	]
 
 hostapd5GhzConfig :: HostapdConfig
