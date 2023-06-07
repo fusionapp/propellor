@@ -963,6 +963,7 @@ homeRouter ifs wifinetworkname (HostapdConfig hostapdconfig) = propertyList "hom
 		, "};"
 		]
 		`onChange` Service.restarted "radvd"
+	& "/etc/sysctl.conf" `File.containsLine` "net.ipv6.conf.all.forwarding=1"
 
 -- | Enable IP masqerading, on whatever other interfaces come up, besides the
 -- provided intif.
