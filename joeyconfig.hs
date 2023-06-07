@@ -48,7 +48,7 @@ hosts =                 --                  (o)  `
 	, dragon
 	, oyster
 	, house
-	, net
+	, sky
 	, kite
 	, sparrow
 	, beaver
@@ -132,16 +132,22 @@ house = host "house.lan" $ props
 		hosts
 		(Context "house.joeyh.name")
 		(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMAmVYddg/RgCbIj+cLcEiddeFXaYFnbEJ3uGj9G/EyV joey@honeybee")
-	& JoeySites.connectStarlinkDish
-	& JoeySites.homeRouter
+	& JoeySites.connectStarlinkDish ifs
+	& JoeySites.homeRouter ifs "house" JoeySites.hostapd2GhzConfig
 	& JoeySites.homeNAS
 	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	-- Currently manually building the xr_usb_serial module.
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
+  where
+	ifs = JoeySites.Interfaces
+		{ JoeySites.ethernetInterface = "end0"
+		, JoeySites.wifiInterface = "wlx00c0ca82eb78"
+		, JoeySites.wifiInterfaceOld = "wlx9cefd5fcd6f3"
+		}
 
-net :: Host
-net = host "net.lan" $ props
+sky :: Host
+sky = host "sky.lan" $ props
 	& standardSystem Testing ARMHF [ "Wifi router." ]
 	& Apt.removed ["rsyslog"]
 	
@@ -150,15 +156,20 @@ net = host "net.lan" $ props
 	& Ssh.hostKeys hostContext
 		[ (SshEd25519, "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBG19v7K59SzFp/OntM9iyhlKOj2pShFSPJeqR1aiYhPF2NqztcmsY6WvIDqh6jmaISnyV1IqZZ60zvGTVRoOyMY=")
 		]
-	-- & Ssh.userKeys (User "joey") hostContext
-	--	[ (SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYgEgsDmN26goPBGPN0HIvtkZfxlc996nPfBPDWxGuh")
-	--	]
+	& Ssh.userKeys (User "joey") hostContext
+		[ (SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOmwEfM5qTjA7xuJgygEgHfa1Y/WrRBpu7xBY8D82ul+")
+		]
 
-	-- & JoeySites.connectStarlinkDish
-	-- & JoeySites.homeRouter
+	& JoeySites.connectStarlinkDish ifs
+	& JoeySites.homeRouter ifs "hollow" JoeySites.hostapd5GhzConfig
 	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	& Postfix.satellite
-
+  where
+	ifs = JoeySites.Interfaces
+		{ JoeySites.ethernetInterface = "eth0"
+		, JoeySites.wifiInterface = "wlan0"
+		, JoeySites.wifiInterfaceOld = "wlan1"
+		}
 
 -- This is not a complete description of kite, since it's a
 -- multiuser system with eg, user passwords that are not deployed
