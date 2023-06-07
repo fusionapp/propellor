@@ -936,7 +936,7 @@ homeRouter ifs wifinetworkname (HostapdConfig hostapdconfig) = propertyList "hom
 		-- controller wants to know when clients disconnect
 		, "dhcp-range=10.1.1.100,10.1.1.150,10m"
 		, "no-hosts"
-		, "address=/net.lan/10.1.1.1"
+		, "address=/sky.lan/10.1.1.1"
 		, "address=/house.lan/10.1.1.2"
 		-- allow accessing starlink dish when it's not online yet
 		, "address=/dishy.starlink.com/192.168.100.1"

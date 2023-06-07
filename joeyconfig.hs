@@ -162,7 +162,7 @@ sky = host "sky.lan" $ props
 
 	& JoeySites.connectStarlinkDish ifs
 	& JoeySites.homeRouter ifs "hollow" JoeySites.hostapd5GhzConfig
-	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
+	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap", "net-tools"]
 	& Postfix.satellite
   where
 	ifs = JoeySites.Interfaces
