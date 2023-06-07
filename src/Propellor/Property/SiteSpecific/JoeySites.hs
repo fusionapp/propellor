@@ -755,8 +755,6 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		, "interval = 1"
 		]
 		`onChange` Service.reloaded "watchdog"
-	-- Comes after so it does not set relayhost but uses the setting 
-	& User.hasGroup user (Group "dialout")
 	& Group.exists (Group "gpio") Nothing
 	& User.hasGroup user (Group "gpio")
 	& Apt.installed ["i2c-tools"]
@@ -770,7 +768,6 @@ house user hosts ctx sshkey = propertyList "home automation" $ props
 		`requires` File.dirExists (takeDirectory sshkeyfile)
 		`requires` Ssh.knownHost hosts "kitenet.net" user
 	& File.hasPrivContentExposed "/etc/darksky-forecast-url" anyContext
-	& File.containsLine "/etc/dhcp/dhclient.conf" "send host-name = \"house\";"
   where
 	d = "/home/joey/house"
 	sshkeyfile = d </> ".ssh/key"
@@ -1246,6 +1243,7 @@ hostapd2GhzConfig :: HostapdConfig
 hostapd2GhzConfig = HostapdConfig
 	[ "hw_mode=g"
 	, "channel=10"
+	, "country_code=US"
 	, "ieee80211d=1"
 	, "ieee80211n=1"
 	, "wmm_enabled=1"
