@@ -132,24 +132,30 @@ house = host "house.lan" $ props
 		hosts
 		(Context "house.joeyh.name")
 		(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMAmVYddg/RgCbIj+cLcEiddeFXaYFnbEJ3uGj9G/EyV joey@honeybee")
-	-- & JoeySites.connectStarlinkDish ifs
-	-- & JoeySites.homeRouter ifs "house" JoeySites.hostapd2GhzConfig
-	& Network.static' "wlx00c0ca82eb78" (IPv4 "10.1.1.2")
-		(Just (Network.Gateway (IPv4 "10.1.1.1")))
-		[("wireless-essid", "hollow"), ("wireless-mode", "managed")]
-		`requires` Network.cleanInterfacesFile
-		`requires` Apt.installed ["wireless-tools"]
+	
+	-- Use iwd to connect to wifi on whatever usb wifi is connected.
+	& Apt.installed ["iwd"]
+	& File.hasContent "/var/lib/iwd/.known_network.freq"
+		[ "[7085c93b-9e5f-5cdb-a13d-bf72db7c3adf]"
+		, "name=/var/lib/iwd//hollow.open"
+		, "list= 2457"
+		]
+	& File.hasContent "/var/lib/iwd/hollow.open"
+		[ "[IPv4]"
+		, "Address=10.1.1.2"
+		, "Netmask=255.255.255.0"
+		, "Gateway=10.1.1.1"
+		, "Broadcast=10.1.1.255"
+		, "DNS=10.1.1.1"
+		]
+	& Systemd.enabled "iwd"
+	& "/etc/resolv.conf" `File.containsLine` "search lan"
+
 	& JoeySites.homeNAS
 	& Apt.installed ["mtr-tiny", "iftop", "screen", "nmap"]
 	-- Currently manually building the xr_usb_serial module.
 	& Apt.installed ["linux-headers-armmp-lpae"]
 	& Postfix.satellite
-  where
-	ifs = JoeySites.Interfaces
-		{ JoeySites.ethernetInterface = "end0"
-		, JoeySites.wifiInterface = "wlx00c0ca82eb78"
-		, JoeySites.wifiInterfaceOld = "wlx9cefd5fcd6f3"
-		}
 
 sky :: Host
 sky = host "sky.lan" $ props
