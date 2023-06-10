@@ -1,5 +1,7 @@
 propellor (5.16) UNRELEASED; urgency=medium
 
+  * Apt: Enable the non-free-firmware section, when used with Debian
+    bookworm or newer.
   * Debootstrap: Added UseOldGpgKeyring constructor to DebootstrapConfig,
     which allows bootstrapping ancient stable releases of Debian.
   * Qemu: Install binfmt-support along with qemu-user-static.
