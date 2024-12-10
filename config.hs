@@ -42,6 +42,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.dirExists "/srv/certs/private"
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
+          & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
