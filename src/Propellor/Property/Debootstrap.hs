@@ -15,7 +15,6 @@ import qualified Propellor.Property.Apt as Apt
 import Propellor.Property.Chroot.Util
 import Propellor.Property.Qemu
 import Utility.Path
-import Utility.FileMode
 
 import Data.List
 import Data.Char
@@ -33,6 +32,11 @@ data DebootstrapConfig
 	| BuilddD
 	| DebootstrapParam String
 	| UseEmulation
+	| DebootstrapProxy Url
+	| DebootstrapMirror Url
+	| UseOldGpgKeyring
+	-- ^ Debootstrap using the keyring of old and removed gpg keys.
+	-- This is needed to debootstrap ancient stable releases of Debian.
 	| DebootstrapConfig :+ DebootstrapConfig
 	deriving (Show)
 
@@ -49,12 +53,25 @@ toParams MinBase = [Param "--variant=minbase"]
 toParams BuilddD = [Param "--variant=buildd"]
 toParams (DebootstrapParam p) = [Param p]
 toParams UseEmulation = []
+toParams (DebootstrapProxy _) = []
+toParams (DebootstrapMirror _) = []
+toParams UseOldGpgKeyring = [Param "--keyring=/usr/share/keyrings/debian-archive-removed-keys.gpg"]
 toParams (c1 :+ c2) = toParams c1 <> toParams c2
 
 useEmulation :: DebootstrapConfig -> Bool
 useEmulation UseEmulation = True
 useEmulation (a :+ b) = useEmulation a || useEmulation b
 useEmulation _ = False
+
+debootstrapProxy :: DebootstrapConfig -> Maybe Url
+debootstrapProxy (DebootstrapProxy u) = Just u
+debootstrapProxy (a :+ b) = debootstrapProxy a <|> debootstrapProxy b
+debootstrapProxy _ = Nothing
+
+debootstrapMirror :: DebootstrapConfig -> Maybe Url
+debootstrapMirror (DebootstrapMirror u) = Just u
+debootstrapMirror (a :+ b) = debootstrapMirror a <|> debootstrapMirror b
+debootstrapMirror _ = Nothing
 
 -- | Builds a chroot in the given directory using debootstrap.
 --
@@ -64,10 +81,6 @@ useEmulation _ = False
 -- When the System is architecture that the kernel does not support,
 -- it can still be bootstrapped using emulation. This is determined
 -- by checking `supportsArch`, or can be configured with `UseEmulation`.
---
--- When emulation is used, the chroot will have an additional binary 
--- installed in it. To get a completelty clean chroot (eg for producing a
--- bootable disk image), use the `removeHostEmulationBinary` property.
 built :: FilePath -> System -> DebootstrapConfig -> Property Linux
 built target system@(System _ targetarch) config =
 	withOS ("debootstrapped " ++ target) go
@@ -100,11 +113,13 @@ built' installprop target system@(System _ arch) config =
 			[ Param $ "--arch=" ++ architectureToDebianArchString arch
 			, Param suite
 			, Param target
-			]
-		cmd <- if useEmulation config
-			then pure "qemu-debootstrap"
-			else fromMaybe "debootstrap" <$> programPath
-		de <- standardPathEnv
+			] ++ case debootstrapMirror config of
+				Just u -> [Param u]
+				Nothing -> []
+		cmd <- fromMaybe "debootstrap" <$> programPath
+		de <- case debootstrapProxy config of
+			Just u -> addEntry "http_proxy" u <$> standardPathEnv
+			Nothing -> standardPathEnv
 		ifM (boolSystemEnv cmd params (Just de))
 			( return MadeChange
 			, return FailedChange

@@ -1,8 +1,284 @@
-propellor (5.4.2) UNRELEASED; urgency=medium
+propellor (5.17) unstable; urgency=medium
+
+  * Apt: Enable the non-free-firmware section, when used with Debian
+    bookworm or newer.
+
+ -- Joey Hess <id@joeyh.name>  Sat, 10 Jun 2023 09:49:05 -0400
+
+propellor (5.16) unstable; urgency=medium
+
+  * Debootstrap: Added UseOldGpgKeyring constructor to DebootstrapConfig,
+    which allows bootstrapping ancient stable releases of Debian.
+  * Qemu: Install binfmt-support along with qemu-user-static.
+  * Fix build with unix-2.8.0.0 and with unix-compat-0.7.
+
+ -- Joey Hess <id@joeyh.name>  Mon, 29 May 2023 11:24:25 -0400
+
+propellor (5.15) unstable; urgency=medium
+
+  * Improve propellor's MetaTypes implementation to avoid an expontential
+    blowup when several MetaTypes fail to unify. This should result in less
+    memory use by ghc when there's a type error.
+  * Avoid OOM when built by ghc 9.2.
+  * Thanks to the ghc developers for their assistance, particularly spj
+    and Sam Derbyshire.
+  * Remove workaround to ghc using a lot of memory displaying an error
+    message about a property of a host having the wrong number of
+    arguments. This brings back clear error messages in such situations.
+
+ -- Joey Hess <id@joeyh.name>  Tue, 15 Nov 2022 15:34:11 -0400
+
+propellor (5.14) unstable; urgency=medium
+
+  * Removed Propellor.Property.OpenID module, since the simpleid package
+    got removed from Debian.
+  * Renamed Linode.mlocateEnabled to Linode.locateEnabled, and made it also
+    make sure plocate is enabled, if it's installed rather than mlocate.
+    (API change)
+  * Debootstrap.built: Stop using the deprecated qemu-debootstrap
+    for bootstrapping foreign architectures. It is not needed since qemu
+    2.12, which, at least on Debian, enabled the 
+    binfmt-support --fix-binary option.
+  * Qemu.removeHostEmulationBinary: Removed this property, which is no
+    longer necessary since qemu-debootstrap is not used.
+    (API change)
+  * Flashkernel.installed: Deal with a behavior change in flash-kernel,
+    which will fail to install if is not configured first.
+  * Systemd.resolvConfed is no longer enabled by default in systemd
+    containers. It is probably not necessary on current systems the way it
+    was back in 2014, and this avoids a problem where the host's
+    /etc/resolv.conf gets overwritten when systemd is managing the
+    container's /etc/resolv.conf. 
+  * Borg: To support borg 1.2, run borg compact to free up space after pruning.
+  * Add lower bounds on async and split.
+    Thanks, Simon Jakobi
+  * propellor.cabal: Deduplicate exposed modules, which fixes a build
+    problem with recent cabal versions.
+    Thanks, Simon Jakobi
+
+ -- Joey Hess <id@joeyh.name>  Sat, 15 Oct 2022 14:40:31 -0400
+
+propellor (5.13) unstable; urgency=medium
+
+  * Network: Added support for network interfaces with several address
+    stanzas, eg ipv4 and ipv6.
+    Thanks, Nicolas Schodet
+  * Sudo.enabledFor: Deal with new @includedir syntax in sudoers file.
+  * Apt.securityUpdates: Stop generating testing-security lines, as
+    testing-security is unused per debian documentation.
+  * Utility.HumanNumber: Fix rounding bug that could result in
+    sometimes quite wrong values, eg "1.1 GB" when the input value was a
+    few bytes less than 2 GB. Properties in Ccache and Journald that
+    used it to generate config files were affected by this bug.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 30 Jul 2021 10:02:19 -0400
+
+propellor (5.12) unstable; urgency=medium
+
+  * Worked around a situation where ghc uses insane amounts of memory
+    displaying an error message about a property of a host having the
+    wrong number of arguments.
+  * Added libghc-type-errors-dev to debian/control recommends, and
+    install it if available when bootstrapping propellor.
+  * Borg: add UseUmask to BorgRepoOpt.
+    Thanks, Nicolas Schodet
+  * Borg: use "{now}" instead of $(date ...)
+    Thanks, Nicolas Schodet
+  * Makefile: Deal with cabal change that made sdist
+    not output tarball to stdout.
+    Thanks, Sean Whitton
+
+ -- Joey Hess <id@joeyh.name>  Mon, 14 Sep 2020 12:06:46 -0400
+
+propellor (5.11) unstable; urgency=medium
+
+  * Fix display of concurrent output from processes when using
+    Propellor.Property.Conductor.
+    (Reversion introduced in version 5.5.0.)
+  * Support bootstrapping to hosts using cabal 3.x, with new-dist directory.
+  * Makefile: Fix build with cabal 3.x.
+  * Borg.restored: Fix restoration, which has apparently never worked,
+    at least back to borg 1.0.9.
+    Thanks, Nicolas Schodet.
+  * Borg.init: Added the now required encryption type parameter.
+    Thanks, Nicolas Schodet.
+    (API change)
+
+ -- Joey Hess <id@joeyh.name>  Fri, 14 Aug 2020 16:02:14 -0400
+
+propellor (5.10.2) unstable; urgency=medium
+
+  * Fix build with ghc 8.6.3.
+    Thanks, Robin Munn
+  * Bootstrap: Fix typo in Arch Linux dependencies.
+    Thanks, Robin Munn
+  * Bootstrap: Add haskell-type-errors package on Arch Linux.
+    Thanks, Robin Munn
+  * Apt.buildDepIn: Run build-dep command in a temporary directory,
+    since it may sometimes not clean up all the files it creates.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 01 May 2020 16:47:31 -0400
+
+propellor (5.10.1) unstable; urgency=medium
+
+  [ Joey Hess ]
+  * Localdir.hasOriginUrl: Depend on Git.installed.
+  * Localdir.hasOriginUrl: Type changed from UnixLike to DebianLike
+    because Git.installed is not implemented for other unixes.
+    (API change)
+  * Changed the ChrootBootstrapper type class's buildchroot method
+    to take a Info parameter, instead of Maybe System.
+    (The System can be extracted from the Info.)
+    (API change)
+
+  [ Sean Whitton ]
+  * Chroot.{de,}bootstrapped uses the chroot's configured apt proxy and
+    mirror, if these exist, when debootstrapping the chroot.
+  * Rename Sbuild.useHostProxy -> Chroot.useHostProxy. (API change)
+
+ -- Joey Hess <id@joeyh.name>  Fri, 15 Nov 2019 13:26:19 -0400
+
+propellor (5.9.1) unstable; urgency=medium
+
+  * Apt: Debian has changed the name of the suite for testing security updates
+    from testing to testing-security.
+  * Apt: Also the suite for stable releases from bullseye on will be
+    suffixed with "-security".
+  * Apt.update: Pass --allow-releaseinfo-change when updating Unstable
+    or Testing, so that code name changes that happen in those suites
+    during a stable release don't prevent updating the rolling suites.
+  * Systemd.machined: Fix a bug that caused the systemd-container package
+    to not be installed when used with Debian buster.
+
+ -- Joey Hess <id@joeyh.name>  Wed, 17 Jul 2019 15:59:29 -0400
+
+propellor (5.9.0) unstable; urgency=medium
+
+  * Added custom type error messages when Properties don't combine due to
+    conflicting MetaTypes.
+  * Added custom type error messages for ensureProperty and tightenTargets.
+  * Note that those changes made ghc 8.0.1 in a few cases unable to infer
+    types when ensureProperty or tightenTargets is used, while later ghc
+    versions had no difficulty. If this affects building your properties,
+    adding a type annotation to the code will work around the problem.
+  * Added custom type error messages displayed when type inference
+    fails when using ensureProperty and tightenTargets, that suggest
+    adding a type annotation.
+  * Use the type-errors library to detect when the type checker gets stuck
+    unable to reduce type-level operations on MetaTypes, and avoid 
+    displaying massive error messages.
+  * But, since type-errors is a new library not available in eg Debian
+    yet, added a WithTypeErrors build flag. When the library is not
+    available, cabal will automatically disable that build flag,
+    and it will build without the type-errors library.
+  * EnsurePropertyAllowed, TightenTargetsAllowed, and CheckCombinable
+    types have changed to Constraint.
+    (API change)
+  * Try harder to avoid displaying an excessive amount of type error
+    messages when many properties have been combined in a props list.
+  * Libvirt.installed: install libvirt-daemon-system
+    Thanks, David Bremner
+
+ -- Joey Hess <id@joeyh.name>  Tue, 02 Jul 2019 16:27:07 -0400
+
+propellor (5.8.0) unstable; urgency=medium
+
+  * Fix bug in File.containsShellSetting that replaced whole shell conffile
+    content with the setting if the file did not previously contain a line
+    setting the key to some value.
+  * Removed inChroot, instead use hasContainerCapability FilesystemContained.
+    (API change)
+  * Hostname: Properties that used to not do anything in a systemd or
+    docker container will now change the container's hostname,
+    since it's namespaced.
+  * Add User.ownsWithPrimaryGroup
+    Thanks, Sean Whitton
+  * Ssh.userKeys, Ssh.userKeyAt: Create .ssh directory when it does not yet
+    exist.
+  * Ssh.userKeyAt: When a relative filepath is provided, it's put inside
+    the user's .ssh directory.
+  * Fix Git.pulled always reporting a change.
+    Thanks, Sean Whitton
+
+ -- Joey Hess <id@joeyh.name>  Fri, 26 Apr 2019 08:23:29 -0400
+
+propellor (5.7.0) unstable; urgency=medium
+
+  * Sbuild.built no longer includes Apt.stdSourcesList by default,
+    in order to support non-Debian OS's. (API change)
+    To upgrade: Simply add Sbuild.osDebianStandard to all Sbuild.built
+    calls which have osDebian.
+    Thanks, Sean Whitton
+  * Propellor.Property.PropellorRepo renamed to Propellor.Property.Localdir
+    to widen its scope. (API change)
+  * Added Localdir.removed property.
+    Thanks, Sean Whitton
+  * Sbuild.built uses Localdir.removed to clean up the propellor localdir
+    after it's done running in a schroot.
+    Thanks, Sean Whitton
+  * Cron.runPropellor made revertable. (minor API change)
+    Thanks, Sean Whitton
+  * Added Cron.jobDropped.
+    Thanks, Sean Whitton
+  * Added Utility.FileMode to the modules exported by Propellor.Utilities
+    to propellor library users.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 05 Apr 2019 11:59:52 -0400
+
+propellor (5.6.1) unstable; urgency=medium
+
+  * fix Libvirt.hs haddock build
+    Thanks, Sean Whitton
+
+ -- Joey Hess <id@joeyh.name>  Sun, 20 Jan 2019 19:06:39 -0400
+
+propellor (5.6.0) unstable; urgency=medium
+
+  * withOS had a type level bug that allowed ensureProperty to be used inside
+    it with a Property that does not match the type of the withOS itself.
+    (API change)
+    The fix may cause some of your valid uses of withOS to no longer type
+    check; the best way to work around that is to use pickOS to pick between
+    several properties that are further specialized using withOS.
+    For an example of how to do that, see the source code to
+    Propellor.Property.Borg.installed
+  * Propellor.Property.Cron.runPropellor is a Property DebianLike; it was
+    incorrectly a Property UnixLike before and that wrong type was hidden by
+    the withOS bug.
+  * Some openbsd portability fixes. Thanks, rsiddharth.
+  * Added Libvirt module. Thanks, Sean Whitton.
+  * When bootstrapping on Debian, libghc-stm-dev may not be available,
+    as it's become part of ghc, so check before trying to install it.
+  * Fix build with ghc 8.6.3.
+  * Avoid exposing the constructor of OuterMetaTypesWitness, to avoid
+    the kind of mistake that led to the withOS bug.
+  * Merged Utility changes from git-annex.
+  * Fix --spin crash when ~/.ssh/ directory did not already exist.
+
+ -- Joey Hess <id@joeyh.name>  Fri, 18 Jan 2019 12:11:53 -0400
+
+propellor (5.5.0) unstable; urgency=medium
 
   * letsencrypt': Pass --expand to support expanding the list of domains
+  * Split mailname property out of Hostname.sane, since bad mailname
+    guesses can lead to ugly surprises. (API change)
+  * Removed HostingProvider.CloudatCost module as it lacks a maintainer.
+    (If anyone would like to maintain it, send a patch adding it back.)
+    (API change)
+  * Added Systemd.escapePath helper function useful when creating mount
+    units.
+  * Added Sudo.sudoersDFile property.
+  * Sudo.enabledFor: Write to /etc/sudoers.d/000users rather than to
+    /etc/sudoers. (Any old lines it wrote to /etc/sudoers will be removed.)
+    This fixes a potential ordering problem; the property used to append
+    the line to /etc/sudoers, but that would override more specific lines
+    in the include directory.
+  * Borg: Added UsesEnvVar.
+  * Added DiskImage.noBootloader, useful for eg, direct booting with
+    qemu. Thanks, David Bremner.
+  * Added Apt.backportInstalledMin.
 
- -- Joey Hess <id@joeyh.name>  Thu, 09 Aug 2018 10:54:41 -0400
+ -- Joey Hess <id@joeyh.name>  Sat, 20 Oct 2018 21:00:27 -0400
 
 propellor (5.4.1) unstable; urgency=medium
 

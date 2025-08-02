@@ -5,31 +5,13 @@ import qualified Propellor.Property.Apt as Apt
 
 -- | Installs qemu user mode emulation binaries, built statically,
 -- which allow foreign binaries to run directly.
---
--- Note that this is not necessary after qemu 2.12~rc3+dfsg-1.
--- See http://bugs.debian.org/868030
--- It's currently always done to support older versions, but
--- could be skipped with the newer version.
 foreignBinariesEmulated :: RevertableProperty Linux Linux
 foreignBinariesEmulated = (setup <!> cleanup)
 	`describe` "foreign binary emulation"
   where
 	setup = Apt.installed p `pickOS` unsupportedOS
 	cleanup = Apt.removed p `pickOS` unsupportedOS
-	p = ["qemu-user-static"]
-
--- | Removes qemu user mode emulation binary for the host CPU.
--- This binary is copied into a chroot by qemu-debootstrap, and is not
--- part of any package.
---
--- Note that removing the binary will prevent using the chroot on the host
--- system.
---
--- The FilePath is the path to the top of the chroot.
-removeHostEmulationBinary :: FilePath -> Property Linux
-removeHostEmulationBinary top = tightenTargets $ 
-	scriptProperty ["rm -f " ++ top ++ "/usr/bin/qemu-*-static"]
-		`assume` MadeChange
+	p = ["qemu-user-static", "binfmt-support"]
 
 -- | Check if the given System supports an Architecture.
 --

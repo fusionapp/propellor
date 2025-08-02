@@ -13,6 +13,7 @@ module Propellor.Property.Systemd (
 	networkd,
 	journald,
 	logind,
+	escapePath,
 	-- * Configuration
 	installed,
 	Option,
@@ -54,11 +55,12 @@ import qualified Propellor.Property.Chroot as Chroot
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.File as File
 import Propellor.Property.Systemd.Core
-import Utility.FileMode
 import Utility.Split
 
 import Data.List
+import Data.Char
 import qualified Data.Map as M
+import Text.Printf
 
 type ServiceName = String
 
@@ -201,13 +203,18 @@ killUserProcesses = set "yes" <!> set "no"
 
 -- | Ensures machined and machinectl are installed
 machined :: Property Linux
-machined = withOS "machined installed" $ \w o ->
-	case o of
-		-- Split into separate debian package since systemd 225.
-		(Just (System (Debian _ suite) _))
-			| not (isStable suite) || suite == (Stable "stretch") ->
-				ensureProperty w $ Apt.installed ["systemd-container"]
-		_ -> noChange
+machined = installeddebian `pickOS` assumeinstalled
+  where
+	installeddebian :: Property DebianLike
+	installeddebian = withOS "machined installed" $ \w o ->
+		case o of
+			-- Split into separate debian package since systemd 225.
+			(Just (System (Debian _ suite) _))
+				| not (isStable suite) || suite /= (Stable "jessie") ->
+					ensureProperty w $ Apt.installed ["systemd-container"]
+			_ -> noChange
+	assumeinstalled :: Property Linux
+	assumeinstalled = doNothing
 
 -- | Defines a container with a given machine name,
 -- and how to create its chroot if not already present.
@@ -224,7 +231,6 @@ container :: MachineName -> (FilePath -> Chroot.Chroot) -> Container
 container name mkchroot =
 	let c = Container name chroot h
 	in setContainerProps c $ containerProps c
-		&^ resolvConfed
 		&^ linkJournal
   where
 	chroot = mkchroot (containerDir name)
@@ -271,15 +277,20 @@ nspawned c@(Container name (Chroot.Chroot loc builder _ _) h) =
 	-- Chroot provisioning is run in systemd-only mode,
 	-- which sets up the chroot and ensures systemd and dbus are
 	-- installed, but does not handle the other properties.
-	chrootprovisioned = Chroot.provisioned' chroot True
+	chrootprovisioned = Chroot.provisioned' chroot True [FilesystemContained]
 
 	-- Use nsenter to enter container and and run propellor to
 	-- finish provisioning.
 	containerprovisioned :: RevertableProperty Linux Linux
 	containerprovisioned =
-		tightenTargets (Chroot.propellChroot chroot (enterContainerProcess c) False)
+		tightenTargets (Chroot.propellChroot chroot (enterContainerProcess c) False containercaps)
 			<!>
 		doNothing
+
+	containercaps = 
+		[ FilesystemContained
+		, HostnameContained
+		]
 
 	chroot = Chroot.Chroot loc builder Chroot.propagateChrootInfo h
 
@@ -379,6 +390,7 @@ mungename = replace "/" "_"
 containerCfg :: String -> RevertableProperty (HasInfo + Linux) (HasInfo + Linux)
 containerCfg p = RevertableProperty (mk True) (mk False)
   where
+	mk :: Bool -> Property (HasInfo + Linux)
 	mk b = tightenTargets $
 		pureInfoProperty desc $
 			mempty { _chrootCfg = SystemdNspawnCfg [(p', b)] }
@@ -390,7 +402,10 @@ containerCfg p = RevertableProperty (mk True) (mk False)
 
 -- | Bind mounts </etc/resolv.conf> from the host into the container.
 --
--- This property is enabled by default. Revert it to disable it.
+-- This is not necessary when systemd configures the container's
+-- resolv.conf on its own. This used to be enabled by default, but when
+-- systemd did also configure the container's resolv.conf, that could
+-- modify the host's resolv.conf.
 resolvConfed :: RevertableProperty (HasInfo + Linux) (HasInfo + Linux)
 resolvConfed = containerCfg "bind=/etc/resolv.conf"
 
@@ -459,3 +474,15 @@ bind p = containerCfg $ "--bind=" ++ toBind p
 -- | Read-only mind mount.
 bindRo :: Bindable p => p -> RevertableProperty (HasInfo + Linux) (HasInfo + Linux)
 bindRo p = containerCfg $ "--bind-ro=" ++ toBind p
+
+-- | Escapes a path for inclusion in a systemd unit name,
+-- the same as systemd-escape does.
+escapePath :: FilePath -> String
+escapePath = concatMap escape 
+	. dropWhile (== '/')
+	. reverse . dropWhile (== '/') . reverse
+  where
+	escape '/' = "-"
+	escape c
+		| ((isAscii c && isAlphaNum c) || c == '_') = [c]
+		| otherwise = '\\' : 'x' : printf "%x" c

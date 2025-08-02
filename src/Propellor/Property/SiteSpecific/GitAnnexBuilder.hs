@@ -10,6 +10,7 @@ import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Chroot as Chroot
 import Propellor.Property.Cron (Times)
+import Propellor.Property.Debootstrap
 
 builduser :: UserName
 builduser = "builder"
@@ -105,9 +106,9 @@ cabalDeps = flagFile go cabalupdated
 			`assume` MadeChange
 		cabalupdated = homedir </> ".cabal" </> "packages" </> "hackage.haskell.org" </> "00-index.cache"
 
-autoBuilderContainer :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> Flavor -> Times -> TimeOut -> Systemd.Container
-autoBuilderContainer mkprop suite arch flavor crontime timeout =
-	Systemd.container name $ \d -> Chroot.debootstrapped mempty d $ props
+autoBuilderContainer :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> DebootstrapConfig -> Flavor -> Times -> TimeOut -> Systemd.Container
+autoBuilderContainer mkprop suite arch debootstrapconfig flavor crontime timeout =
+	Systemd.container name $ \d -> Chroot.debootstrapped debootstrapconfig d $ props
 		& mkprop suite arch flavor
 		& autobuilder (architectureToDebianArchString arch) crontime timeout
   where
@@ -115,23 +116,26 @@ autoBuilderContainer mkprop suite arch flavor crontime timeout =
 
 type Flavor = Maybe String
 
-standardAutoBuilder :: DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
-standardAutoBuilder suite arch flavor =
+standardAutoBuilder :: Bool -> DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
+standardAutoBuilder unattendedupgrades suite arch flavor =
 	propertyList "standard git-annex autobuilder" $ props
 		& osDebian suite arch
 		& Apt.stdSourcesList
-		& Apt.unattendedUpgrades
 		& Apt.cacheCleaned
-		& buildDepsApt
+		& (if unattendedupgrades then Apt.unattendedUpgrades else mempty)
 		& User.accountFor (User builduser)
 		& tree (architectureToDebianArchString arch) flavor
+		& buildDepsApt
 
 stackAutoBuilder :: DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
 stackAutoBuilder suite arch flavor =
 	propertyList "git-annex autobuilder using stack" $ props
 		& osDebian suite arch
 		& buildDepsNoHaskellLibs
-		& Apt.stdSourcesList
+		-- For some reason security.debian.org is very slow for
+		-- ancient versions of debian stable used with this. So
+		-- disable for now.
+		-- & Apt.stdSourcesList
 		& Apt.unattendedUpgrades
 		& Apt.cacheCleaned
 		& User.accountFor (User builduser)
@@ -139,19 +143,25 @@ stackAutoBuilder suite arch flavor =
 		& stackInstalled
 		-- Workaround https://github.com/commercialhaskell/stack/issues/2093
 		& Apt.installed ["libtinfo-dev"]
+		& Apt.installed ["libnuma1", "libnuma-dev", "zlib1g-dev"]
 
-stackInstalled :: Property Linux
+stackInstalled :: Property DebianLike
 stackInstalled = withOS "stack installed" $ \w o ->
 	case o of
 		(Just (System (Debian Linux (Stable "jessie")) arch)) ->
 			ensureProperty w $ manualinstall arch
+		(Just (System (Debian Linux (Stable "stretch")) arch)) ->
+			ensureProperty w $ manualinstall arch
+		(Just (System (Debian Linux (Stable "buster")) arch)) ->
+			ensureProperty w $ manualinstall arch
 		_ -> ensureProperty w $ Apt.installed ["haskell-stack"]
   where
 	-- Warning: Using a binary downloaded w/o validation.
-	manualinstall :: Architecture -> Property Linux
+	manualinstall :: Architecture -> Property DebianLike
 	manualinstall arch = tightenTargets $ check (not <$> doesFileExist binstack) $
 		propertyList "stack installed from upstream tarball" $ props
-			& cmdProperty "wget" ["https://www.stackage.org/stack/linux-" ++ archname, "-O", tmptar]
+			& Apt.installed ["wget"]
+			& cmdProperty "wget" [url, "-O", tmptar]
 				`assume` MadeChange
 			& File.dirExists tmpdir
 			& cmdProperty "tar" ["xf", tmptar, "-C", tmpdir, "--strip-components=1"]
@@ -160,62 +170,35 @@ stackInstalled = withOS "stack installed" $ \w o ->
 				`assume` MadeChange
 			& cmdProperty "rm" ["-rf", tmpdir, tmptar]
 				`assume` MadeChange
+			& case arch of
+				ARMEL -> setupRevertableProperty $
+					"/lib/ld-linux-armhf.so.3"
+					`File.isSymlinkedTo`
+					File.LinkTarget "/lib/ld-linux.so.3"
+				_ -> doNothing
 	  where
-	  	-- See https://www.stackage.org/stack/ for the list of
-		-- binaries.
-		archname = case arch of
-			X86_32 -> "i386"
-			X86_64 -> "x86_64"
-			ARMHF -> "arm"
+		url = case arch of
+			X86_64 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-x86_64.tar.gz"
+			X86_32 -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-i386.tar.gz"
+			ARMEL -> "https://github.com/commercialhaskell/stack/releases/download/v1.9.3/stack-1.9.3-linux-arm.tar.gz"
+			-- Newer version because older version did not
+			-- support installing ghc on arm64
+			ARM64 -> "https://github.com/commercialhaskell/stack/releases/download/v2.1.3/stack-2.1.3-linux-aarch64.tar.gz"
 			-- Probably not available.
-			a -> architectureToDebianArchString a
+			a -> "https://www.stackage.org/stack/linux-" ++ architectureToDebianArchString a
 	binstack = "/usr/bin/stack"
 	tmptar = "/root/stack.tar.gz"
 	tmpdir = "/root/stack"
 
-armAutoBuilder :: DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
-armAutoBuilder suite arch flavor =
+armAutoBuilder :: (DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)) -> DebianSuite -> Architecture -> Flavor -> Property (HasInfo + Debian)
+armAutoBuilder baseautobuilder suite arch flavor =
 	propertyList "arm git-annex autobuilder" $ props
-		& standardAutoBuilder suite arch flavor
-		& buildDepsApt
+		& baseautobuilder suite arch flavor
 		-- Works around ghc crash with parallel builds on arm.
+		& File.dirExists (homedir </> ".cabal")
+		& File.ownerGroup (homedir </> ".cabal") (User "builder") (Group "builder")
 		& (homedir </> ".cabal" </> "config")
-			`File.lacksLine` "jobs: $ncpus"
+			`File.containsLine` "jobs: 1"
+		& File.ownerGroup (homedir </> ".cabal" </> "config") (User "builder") (Group "builder")
 		-- Work around https://github.com/systemd/systemd/issues/7135
 		& Systemd.containerCfg "--system-call-filter=set_tls"
-
-androidAutoBuilderContainer :: Times -> TimeOut -> Systemd.Container
-androidAutoBuilderContainer crontimes timeout =
-	androidAutoBuilderContainer' "android-git-annex-builder"
-		(tree "android" Nothing) builddir crontimes timeout
-
--- Android is cross-built in a Debian i386 container, using the Android NDK.
-androidAutoBuilderContainer'
-	:: Systemd.MachineName
-	-> Property DebianLike
-	-> FilePath
-	-> Times
-	-> TimeOut
-	-> Systemd.Container
-androidAutoBuilderContainer' name setupgitannexdir gitannexdir crontimes timeout =
-	Systemd.container name $ \d -> bootstrap d $ props
-		& osDebian (Stable "jessie") X86_32
-		& Apt.stdSourcesList
-		& User.accountFor (User builduser)
-		& File.dirExists gitbuilderdir
-		& File.ownerGroup homedir (User builduser) (Group builduser)
-		& flagFile chrootsetup ("/chrootsetup")
-			`requires` setupgitannexdir
-		& haskellPkgsInstalled "android"
-		& Apt.unattendedUpgrades
-		& buildDepsNoHaskellLibs
-		& autobuilder "android" crontimes timeout
-  where
-	-- Use git-annex's android chroot setup script, which will install
-	-- ghc-android and the NDK, all build deps, etc, in the home
-	-- directory of the builder user.
-	chrootsetup = scriptProperty
-		[ "cd " ++ gitannexdir ++ " && ./standalone/android/buildchroot-inchroot"
-		]
-		`assume` MadeChange
-	bootstrap = Chroot.debootstrapped mempty

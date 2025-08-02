@@ -17,7 +17,9 @@ module Propellor.Property.DiskImage (
 	imageRebuiltFor,
 	imageBuiltFrom,
 	imageExists,
+	imageChrootNotPresent,
 	GrubTarget(..),
+	noBootloader,
 ) where
 
 import Propellor.Base
@@ -30,7 +32,6 @@ import qualified Propellor.Property.Service as Service
 import qualified Propellor.Property.Grub as Grub
 import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Apt as Apt
-import qualified Propellor.Property.Qemu as Qemu
 import qualified Propellor.Property.FlashKernel as FlashKernel
 import Propellor.Property.Parted
 import Propellor.Property.Fstab (SwapPartition(..), genFstab)
@@ -40,7 +41,6 @@ import Propellor.Types.Info
 import Propellor.Types.Bootloader
 import Propellor.Container
 import Utility.Path
-import Utility.FileMode
 import Utility.DataUnits
 
 import Data.List (isPrefixOf, isInfixOf, sortBy, unzip4)
@@ -199,14 +199,13 @@ imageBuilt' rebuild img mkchroot tabletype partspec =
 		`describe` desc
   where
 	desc = "built disk image " ++ describeDiskImage img
-	RawDiskImage imgfile = rawDiskImage img
 	cleanrebuild :: Property Linux
 	cleanrebuild
 		| rebuild = property desc $ do
 			liftIO $ removeChroot chrootdir
 			return MadeChange
 		| otherwise = doNothing
-	chrootdir = imgfile ++ ".chroot"
+	chrootdir = imageChroot img
 	chroot =
 		let c = propprivdataonly $ mkchroot chrootdir
 		in setContainerProps c $ containerProps c
@@ -228,6 +227,7 @@ imageBuilt' rebuild img mkchroot tabletype partspec =
 			ubootFlashKernelFinalized p
 		[FlashKernelInstalled, UbootInstalled p] -> 
 			ubootFlashKernelFinalized p
+		[NoBootloader] -> noBootloaderFinalized
 		_ -> unbootable "multiple bootloaders are installed; don't know which to use"
 
 -- | This property is automatically added to the chroot when building a
@@ -376,7 +376,7 @@ imageExists' :: RawDiskImage -> PartTable -> RevertableProperty DebianLike UnixL
 imageExists' dest@(RawDiskImage img) parttable = (setup <!> cleanup) `describe` desc
   where
 	desc = "disk image exists " ++ img
-	parttablefile = img ++ ".parttable"
+	parttablefile = imageParttableFile dest
 	setup = property' desc $ \w -> do
 		oldparttable <- liftIO $ catchDefaultIO "" $ readFileStrict parttablefile
 		res <- ensureProperty w $ imageExists dest (partTableSize parttable)
@@ -412,7 +412,6 @@ imageFinalized final img mnts mntopts devs (PartTable _ _ parts) =
 		liftIO $ allowservices top
 		ensureProperty w $ 
 			final img top devs
-				`before` Qemu.removeHostEmulationBinary top
 
 	-- Ordered lexographically by mount point, so / comes before /usr
 	-- comes before /usr/local
@@ -476,6 +475,33 @@ ubootFlashKernelFinalized :: (FilePath -> FilePath -> Property Linux) -> Finaliz
 ubootFlashKernelFinalized p img mnt loopdevs = 
 	ubootFinalized p img mnt loopdevs
 		`before` flashKernelFinalized img mnt loopdevs
+
+-- | Normally a boot loader is installed on a disk image. However,
+-- when the disk image will be booted by eg qemu booting the kernel and
+-- initrd, no boot loader is needed, and this property can be used.
+noBootloader :: Property (HasInfo + UnixLike)
+noBootloader = pureInfoProperty "no bootloader" [NoBootloader]
+
+noBootloaderFinalized :: Finalization
+noBootloaderFinalized _img _mnt _loopDevs = doNothing
+
+imageChrootNotPresent :: DiskImage d => d -> Property UnixLike
+imageChrootNotPresent img = check (doesDirectoryExist dir) $
+	property "destroy the chroot used to build the image" $ makeChange $ do
+		removeChroot dir
+		nukeFile $ imageParttableFile img
+  where
+	dir = imageChroot img
+
+imageChroot :: DiskImage d => d -> FilePath
+imageChroot img = imgfile <.> "chroot"
+  where
+	RawDiskImage imgfile = rawDiskImage img
+
+imageParttableFile :: DiskImage d => d -> FilePath
+imageParttableFile img = imgfile <.> "parttable"
+  where
+	RawDiskImage imgfile = rawDiskImage img
 
 isChild :: FilePath -> Maybe MountPoint -> Bool
 isChild mntpt (Just d)

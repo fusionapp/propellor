@@ -16,6 +16,7 @@ import qualified Propellor.Property.Cron as Cron
 import qualified Propellor.Property.Service as Service
 import qualified Propellor.Property.User as User
 import qualified Propellor.Property.Group as Group
+import qualified Propellor.Property.Sudo as Sudo
 import qualified Propellor.Property.Borg as Borg
 import qualified Propellor.Property.Apache as Apache
 import qualified Propellor.Property.Postfix as Postfix
@@ -23,176 +24,22 @@ import qualified Propellor.Property.Systemd as Systemd
 import qualified Propellor.Property.Network as Network
 import qualified Propellor.Property.Fail2Ban as Fail2Ban
 import qualified Propellor.Property.LetsEncrypt as LetsEncrypt
-import Utility.FileMode
+import qualified Propellor.Property.Mount as Mount
 import Utility.Split
 
 import Data.List
 import System.Posix.Files
 
-scrollBox :: Property (HasInfo + DebianLike)
-scrollBox = propertyList "scroll server" $ props
-	& User.accountFor (User "scroll")
-	& Git.cloned (User "scroll") "git://git.kitenet.net/scroll" (d </> "scroll") Nothing
-	& Apt.installed ["ghc", "make", "cabal-install", "libghc-vector-dev",
-		"libghc-bytestring-dev", "libghc-mtl-dev", "libghc-ncurses-dev",
-		"libghc-random-dev", "libghc-monad-loops-dev", "libghc-text-dev",
-		"libghc-ifelse-dev", "libghc-case-insensitive-dev",
-		"libghc-data-default-dev", "libghc-optparse-applicative-dev"]
-	& userScriptProperty (User "scroll")
-		[ "cd " ++ d </> "scroll"
-		, "git pull"
-		, "cabal configure"
-		, "make"
-		]
-		`assume` MadeChange
-	& s `File.hasContent`
-		[ "#!/bin/sh"
-		, "set -e"
-		, "echo Preparing to run scroll!"
-		, "cd " ++ d
-		, "mkdir -p tmp"
-		, "TMPDIR= t=$(tempfile -d tmp)"
-		, "export t"
-		, "rm -f \"$t\""
-		, "mkdir \"$t\""
-		, "cd \"$t\""
-		, "echo"
-		, "echo Note that games on this server are time-limited to 2 hours"
-		, "echo 'Need more time? Run scroll locally instead!'"
-		, "echo"
-		, "echo Press Enter to start the game."
-		, "read me"
-		, "SHELL=/bin/sh script --timing=timing -c " ++ g
-		] `onChange` (s `File.mode` (combineModes (ownerWriteMode:readModes ++ executeModes)))
-	& g `File.hasContent`
-		[ "#!/bin/sh"
-		, "if ! timeout --kill-after 1m --foreground 2h ../../scroll/scroll; then"
-		, "echo Scroll seems to have ended unexpectedly. Possibly a bug.."
-		, "else"
-		, "echo Thanks for playing scroll! https://joeyh.name/code/scroll/"
-		, "fi"
-		, "echo Your game was recorded, as ID:$(basename \"$t\")"
-		, "echo if you would like to talk about how it went, email scroll@joeyh.name"
-		, "read line"
-		] `onChange` (g `File.mode` (combineModes (ownerWriteMode:readModes ++ executeModes)))
-	-- prevent port forwarding etc by not letting scroll log in via ssh
-	& Ssh.sshdConfig `File.containsLine` ("DenyUsers scroll")
-		`onChange` Ssh.restarted
-	& User.shellSetTo (User "scroll") s
-	& User.hasPassword (User "scroll")
-	-- telnetd attracted password crackers, so disabled
-	& Apt.removed ["telnetd"]
-	& Apt.installed ["shellinabox"]
-	& File.hasContent "/etc/default/shellinabox"
-		[ "# Deployed by propellor"
-		, "SHELLINABOX_DAEMON_START=1"
-		, "SHELLINABOX_PORT=4242"
-		, "SHELLINABOX_ARGS=\"--disable-ssl --no-beep --service=:scroll:scroll:" ++ d ++ ":" ++ s ++ "\""
-		]
-		`onChange` Service.restarted "shellinabox"
-	& Service.running "shellinabox"
-  where
-	d = "/home/scroll"
-	s = d </> "login.sh"
-	g = d </> "game.sh"
-
-oldUseNetServer :: [Host] -> Property (HasInfo + DebianLike)
-oldUseNetServer hosts = propertyList "olduse.net server" $ props
-	& Apt.installed ["leafnode"]
-	& oldUseNetInstalled "oldusenet-server"
-	& oldUseNetBackup
-	& spoolsymlink
-	& "/etc/news/leafnode/config" `File.hasContent`
-		[ "# olduse.net configuration (deployed by propellor)"
-		, "expire = 1000000" -- no expiry via texpire
-		, "server = " -- no upstream server
-		, "debugmode = 1"
-		, "allowSTRANGERS = 42" -- lets anyone connect
-		, "nopost = 1" -- no new posting (just gather them)
-		]
-	& "/etc/hosts.deny" `File.lacksLine` "leafnode: ALL"
-	& Apt.serviceInstalledRunning "openbsd-inetd"
-	& File.notPresent "/etc/cron.daily/leafnode"
-	& File.notPresent "/etc/cron.d/leafnode"
-	& Cron.niceJob "oldusenet-expire" (Cron.Times "11 1 * * *") (User "news") newsspool expirecommand
-	& Cron.niceJob "oldusenet-uucp" (Cron.Times "*/5 * * * *") (User "news") "/" uucpcommand
-	& Apache.siteEnabled "nntp.olduse.net" nntpcfg
-  where
-	newsspool = "/var/spool/news"
-	datadir = "/var/spool/oldusenet"
-	expirecommand = intercalate ";"
-		[ "find \\( -path ./out.going -or -path ./interesting.groups -or -path './*/.overview' \\) -prune -or -type f -ctime +60  -print | xargs --no-run-if-empty rm"
-		, "find -type d -empty | xargs --no-run-if-empty rmdir"
-		]
-	uucpcommand = "/usr/bin/uucp " ++ datadir
-	nntpcfg = apachecfg "nntp.olduse.net"
-		[ "  DocumentRoot " ++ datadir ++ "/"
-		, "  <Directory " ++ datadir ++ "/>"
-		, "    Options Indexes FollowSymlinks"
-		, "    AllowOverride None"
-		, Apache.allowAll
-		, "  </Directory>"
-		]
-
-	spoolsymlink :: Property UnixLike
-	spoolsymlink = check (not . isSymbolicLink <$> getSymbolicLinkStatus newsspool)
-		(property "olduse.net spool in place" $ makeChange $ do
-			removeDirectoryRecursive newsspool
-			createSymbolicLink (datadir </> "news") newsspool
-		)
-
-	oldUseNetBackup :: Property (HasInfo + DebianLike)
-	oldUseNetBackup = Borg.backup datadir borgrepo 
-		(Cron.Times "33 4 * * *")
-		[]
-		[Borg.KeepDays 30]
-		`requires` Ssh.userKeyAt (Just keyfile)
-			(User "root")
-			(Context "olduse.net")
-			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD0F6L76SChMCIGmeyGhlFMUTgZ3BoTbATiOSs0A7KXQoI1LTE5ZtDzzUkrQRJVpJ640pfMR7cQZyBm8tv+kYIPp0238GrX43c1vgm0L78agDnBU7r2iNMyWIwhssK8O3ZAhp8Q4KCz1r8hP2nIiD0y1D1VWW8h4KWOS7I1XCEAjOTvFvEjTh6a9MyHrcIkv7teUUzTBRjNrsyijCFRk1+pEET54RueoOmEjQcWd/sK1tYRiMZjegRLBOus2wUWsUOvznJ2iniLONUTGAWRnEV+O7hLN6CD44osJ+wkZk8bPAumTS0zcSLckX1jpdHJicmAyeniWSd4FCqm1YE6/xDD")
-		`requires` Ssh.knownHost hosts "eubackup.kitenet.net" (User "root")
-	borgrepo = Borg.BorgRepoUsing [Borg.UseSshKey keyfile]
-		"joey@eubackup.kitenet.net:/home/joey/lib/backup/olduse.net/olduse.net.borg"
-	keyfile = "/root/.ssh/olduse.net.key"
-
-oldUseNetShellBox :: Property DebianLike
-oldUseNetShellBox = propertyList "olduse.net shellbox" $ props
-	& oldUseNetInstalled "oldusenet"
-	& Service.running "shellinabox"
-
-oldUseNetInstalled :: Apt.Package -> Property DebianLike
-oldUseNetInstalled pkg = check (not <$> Apt.isInstalled pkg) $
-	propertyList ("olduse.net " ++ pkg) $ props
-		& Apt.installed (words "build-essential devscripts debhelper git libncursesw5-dev libpcre3-dev pkg-config bison libicu-dev libidn11-dev libcanlock2-dev libuu-dev ghc libghc-ifelse-dev libghc-hxt-dev libghc-utf8-string-dev libghc-missingh-dev libghc-sha-dev haskell-stack")
-			`describe` "olduse.net build deps"
-		& scriptProperty
-			[ "rm -rf /root/tmp/oldusenet" -- idenpotency
-			, "git clone git://olduse.net/ /root/tmp/oldusenet/source"
-			, "cd /root/tmp/oldusenet/source/"
-			, "HOME=/root dpkg-buildpackage -us -uc"
-			, "dpkg -i ../" ++ pkg ++ "_*.deb || true"
-			, "apt-get -fy install" -- dependencies
-			, "rm -rf /root/tmp/oldusenet"
-			]
-			`assume` MadeChange
-			`describe` "olduse.net built"
-
-kgbServer :: Property (HasInfo + Debian)
+kgbServer :: Property (HasInfo + DebianLike)
 kgbServer = propertyList desc $ props
-	& installed
+	& Apt.serviceInstalledRunning "kgb-bot"
+	& "/etc/default/kgb-bot" `File.containsLine` "BOT_ENABLED=1"
+		`describe` "kgb bot enabled"
+		`onChange` Service.running "kgb-bot"
 	& File.hasPrivContent "/etc/kgb-bot/kgb.conf" anyContext
 		`onChange` Service.restarted "kgb-bot"
   where
 	desc = "kgb.kitenet.net setup"
-	installed :: Property Debian
-	installed = withOS desc $ \w o -> case o of
-		(Just (System (Debian _ Unstable) _)) ->
-			ensureProperty w $ propertyList desc $ props
-				& Apt.serviceInstalledRunning "kgb-bot"
-				& "/etc/default/kgb-bot" `File.containsLine` "BOT_ENABLED=1"
-					`describe` "kgb bot enabled"
-					`onChange` Service.running "kgb-bot"
-		_ -> error "kgb server needs Debian unstable (for kgb-bot 1.31+)"
 
 -- git.kitenet.net and git.joeyh.name
 gitServer :: [Host] -> Property (HasInfo + DebianLike)
@@ -204,8 +51,8 @@ gitServer hosts = propertyList "git.kitenet.net setup" $ props
 		`requires` Ssh.userKeyAt (Just sshkey)
 			(User "root")
 			(Context "git.kitenet.net")
-			(SshRsa, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDLwUUkpkI9c2Wcnv/E4v9bJ7WcpiNkToltXfzRDd1F31AYrucfSMgzu3rtDpEL+wSnQLua/taJkWUWT/pyXOAh+90K6O/YeBZmY5CK01rYDz3kSTAtwHkMqednsRjdQS6NNJsuWc1reO8a4pKtsToJ3G9VAKufCkt2b8Nhqz0yLvLYwwU/mdI8DmfX6IgXhdy9njVEG/jsQnLFXY6QEfwKbIPs9O6qo4iFJg3defXX+zVMLsh3NE1P2i2VxMjxJEQdPdy9Z1sVpkiQM+mgJuylQQ5flPK8sxhO9r4uoK/JROkjPJNYoJMlsN+QlK04ABb7JV2JwhAL/Y8ypjQ13JdT")
-		`requires` Ssh.knownHost hosts "eubackup.kitenet.net" (User "root")
+			(SshEd25519, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOvgBVYP6srImGbJ+kg1K68HeUQqxHEBQswMWSqu9WOu root@kite")
+		`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "root")
 	& Ssh.authorizedKeys (User "family") (Context "git.kitenet.net")
 	& User.accountFor (User "family")
 	& Apt.installed ["git", "rsync", "cgit"]
@@ -236,8 +83,7 @@ gitServer hosts = propertyList "git.kitenet.net setup" $ props
 	& Apache.modEnabled "cgi"
   where
 	sshkey = "/root/.ssh/git.kitenet.net.key"
-	borgrepo = Borg.BorgRepoUsing [Borg.UseSshKey sshkey]
-		"joey@eubackup.kitenet.net:/home/joey/lib/backup/git.kitenet.net/git.kitenet.net.borg"
+	borgrepo = rsyncNetBorgRepo "git.kitenet.net.borg" [Borg.UseSshKey sshkey]
 	website hn = Apache.httpsVirtualHost' hn "/srv/web/git.kitenet.net/" letos
 		[ Apache.iconDir
 		, "  <Directory /srv/web/git.kitenet.net/>"
@@ -334,17 +180,18 @@ gitAnnexDistributor = combineProperties "git-annex distributor, including rsync 
 	& endpoint "/srv/web/downloads.kitenet.net/git-annex/autobuild/windows"
 	-- git-annex distribution signing key
 	& Gpg.keyImported (Gpg.GpgKeyId "89C809CB") (User "joey")
+	-- used for building rpms
+	& Apt.installed ["rpm", "createrepo-c"]
   where
 	endpoint d = combineProperties ("endpoint " ++ d) $ props
 		& File.dirExists d
 		& File.ownerGroup d (User "joey") (Group "joey")
 
-downloads :: [Host] -> Property (HasInfo + DebianLike)
-downloads hosts = annexWebSite "/srv/git/downloads.git"
+downloads :: Property (HasInfo + DebianLike)
+downloads = annexWebSite "/srv/git/downloads.git"
 	"downloads.kitenet.net"
 	"840760dc-08f0-11e2-8c61-576b7e66acfd"
-	[("eubackup", "ssh://eubackup.kitenet.net/~/lib/downloads/")]
-	`requires` Ssh.knownHost hosts "eubackup.kitenet.net" (User "joey")
+	[]
 
 tmp :: Property (HasInfo + DebianLike)
 tmp = propertyList "tmp.joeyh.name" $ props
@@ -352,13 +199,7 @@ tmp = propertyList "tmp.joeyh.name" $ props
 		"tmp.joeyh.name"
 		"26fd6e38-1226-11e2-a75f-ff007033bdba"
 		[]
-	& pumpRss
-
--- Work around for expired ssl cert.
--- (Obsolete; need to revert this.)
-pumpRss :: Property DebianLike
-pumpRss = Cron.job "pump rss" (Cron.Times "15 * * * *") (User "joey") "/srv/web/tmp.joeyh.name/"
-	"wget https://pump2rss.com/feed/joeyh@identi.ca.atom -O pump.atom.new --no-check-certificate 2>/dev/null; sed 's/ & / /g' pump.atom.new > pump.atom"
+	& Cron.jobDropped "pump rss" (Cron.Times "15 * * * *")
 
 ircBouncer :: Property (HasInfo + DebianLike)
 ircBouncer = propertyList "IRC bouncer" $ props
@@ -374,18 +215,6 @@ ircBouncer = propertyList "IRC bouncer" $ props
 		`describe` "znc running"
   where
 	conf = "/home/znc/.znc/configs/znc.conf"
-
-kiteShellBox :: Property DebianLike
-kiteShellBox = propertyList "kitenet.net shellinabox" $ props
-	& Apt.installed ["openssl", "shellinabox", "openssh-client"]
-	& File.hasContent "/etc/default/shellinabox"
-		[ "# Deployed by propellor"
-		, "SHELLINABOX_DAEMON_START=1"
-		, "SHELLINABOX_PORT=443"
-		, "SHELLINABOX_ARGS=\"--no-beep --service=/:SSH:kitenet.net\""
-		]
-		`onChange` Service.restarted "shellinabox"
-	& Service.running "shellinabox"
 
 githubBackup :: Property (HasInfo + DebianLike)
 githubBackup = propertyList "github-backup box" $ props
@@ -413,37 +242,38 @@ rsyncNetBackup hosts = Cron.niceJob "rsync.net copied in daily" (Cron.Times "30 
 	(User "joey") "/home/joey/lib/backup" "mkdir -p rsync.net && rsync --delete -az 2318@usw-s002.rsync.net: rsync.net"
 	`requires` Ssh.knownHost hosts "usw-s002.rsync.net" (User "joey")
 
-backupsBackedupFrom :: [Host] -> HostName -> FilePath -> Property DebianLike
-backupsBackedupFrom hosts srchost destdir = Cron.niceJob desc
-	(Cron.Times "@reboot") (User "joey") "/" cmd
-	`requires` Ssh.knownHost hosts srchost (User "joey")
-  where
-	desc = "backups copied from " ++ srchost ++ " on boot"
-	cmd = "sleep 30m && rsync -az --bwlimit=300K --partial --delete " ++ srchost ++ ":lib/backup/ " ++ destdir </> srchost
-
 podcatcher :: Property DebianLike
 podcatcher = Cron.niceJob "podcatcher run hourly" (Cron.Times "55 * * * *")
 	(User "joey") "/home/joey/lib/sound/podcasts"
-	"xargs git-annex importfeed -c annex.genmetadata=true < feeds; mr --quiet update"
+	"timeout 2h xargs git-annex importfeed -c annex.genmetadata=true < feeds; mr --quiet update"
 	`requires` Apt.installed ["git-annex", "myrepos"]
+
+spamdEnabled :: Property DebianLike
+spamdEnabled = Apt.serviceInstalledRunning "spamd"
+
+spamassassinConfigured :: Property DebianLike
+spamassassinConfigured = propertyList "spamassassin configured" $ props
+	& spamdEnabled
+	& "/etc/default/spamd" `File.containsLines`
+		[ "# Propellor deployed"
+		, "OPTIONS=\"--create-prefs --max-children 5 --helper-home-dir\""
+		, "NICE=\"--nicelevel 15\""
+		] 
+		`describe` "spamd configured"
+		`onChange` Service.restarted "spamd"
+	& "/etc/default/spamassassin" `File.containsLines`
+		[ "# Propellor deployed"
+		, "CRON=1"
+		]
+		`describe` "spamassassin configured"
+		`requires` Apt.serviceInstalledRunning "cron"
 
 kiteMailServer :: Property (HasInfo + DebianLike)
 kiteMailServer = propertyList "kitenet.net mail server" $ props
 	& Postfix.installed
 	& Apt.installed ["postfix-pcre"]
 	& Apt.serviceInstalledRunning "postgrey"
-
-	& Apt.serviceInstalledRunning "spamassassin"
-	& "/etc/default/spamassassin" `File.containsLines`
-		[ "# Propellor deployed"
-		, "ENABLED=1"
-		, "OPTIONS=\"--create-prefs --max-children 5 --helper-home-dir\""
-		, "CRON=1"
-		, "NICE=\"--nicelevel 15\""
-		] `onChange` Service.restarted "spamassassin"
-		`describe` "spamd enabled"
-		`requires` Apt.serviceInstalledRunning "cron"
-
+	& spamassassinConfigured
 	& Apt.serviceInstalledRunning "spamass-milter"
 	-- Add -m to prevent modifying messages Subject or body.
 	& "/etc/default/spamass-milter" `File.containsLine`
@@ -463,7 +293,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 	& Apt.serviceInstalledRunning "clamav-freshclam"
 	-- Workaround https://bugs.debian.org/569150
 	& Cron.niceJob "amavis-expire" Cron.Daily (User "root") "/"
-		"find /var/lib/amavis/virusmails/ -type f -ctime +7 -delete"
+		"find /var/lib/amavis/virusmails/ -type f -ctime +2 -delete"
 
 	& dkimInstalled
 
@@ -561,7 +391,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "smtpd_tls_received_header = yes"
 		, "smtpd_use_tls = yes"
 		, "smtpd_tls_ask_ccert = yes"
-		, "smtpd_tls_session_cache_database = sdbm:/etc/postfix/smtpd_scache"
+		, "smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache"
 
 		, "# TLS setup -- client"
 		, "smtp_tls_CAfile = /etc/ssl/certs/joeyca.pem"
@@ -569,7 +399,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 		, "smtp_tls_key_file = /etc/ssl/private/postfix.pem"
 		, "smtp_tls_loglevel = 1"
 		, "smtp_use_tls = yes"
-		, "smtp_tls_session_cache_database = sdbm:/etc/postfix/smtp_scache"
+		, "smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache"
 
 		, "# Allow larger attachments, up to 200 mb."
 		, "# (Avoid setting too high; the postfix queue must have"
@@ -612,14 +442,18 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
 	& "/etc/pine.conf" `File.hasContent`
 		[ "# deployed with propellor"
 		, "inbox-path={localhost}inbox"
-		, "rsh-command=/usr/lib/dovecot/imap"
+		, "rsh-command=" ++ imapalpinescript
 		]
 		`describe` "pine configured to use local imap server"
-
-	& Apt.serviceInstalledRunning "mailman"
-	-- Override the default http url. (Only affects new lists.)
-	& "/etc/mailman/mm_cfg.py" `File.containsLine`
-		"DEFAULT_URL_PATTERN = 'https://%s/cgi-bin/mailman/'"
+	& imapalpinescript `File.hasContent`
+		[ "#!/bin/sh"
+		, "# deployed with propellor"
+		, "set -e"
+		, "exec /usr/lib/dovecot/imap 2>/dev/null"
+		]
+		`onChange` (imapalpinescript `File.mode`
+			combineModes (readModes ++ executeModes))
+		`describe` "imap script for pine"
 
 	& Postfix.service ssmtp
 
@@ -627,6 +461,7 @@ kiteMailServer = propertyList "kitenet.net mail server" $ props
   where
 	ctx = Context "kitenet.net"
 	pinescript = "/usr/local/bin/pine"
+	imapalpinescript = "/usr/local/bin/imap-for-alpine"
 	dovecotusers = "/etc/dovecot/users"
 
 	ssmtp = Postfix.Service
@@ -684,7 +519,7 @@ postfixSaslPasswordClient = combineProperties "postfix uses SASL password to aut
 		, "smtp_sasl_auth_enable = yes"
 		, "smtp_tls_security_level = encrypt"
 		, "smtp_sasl_tls_security_options = noanonymous"
-		, "relayhost = [kitenet.net]"
+		, "relayhost = kitenet.net:587"
 		, "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
 		]
 		`onChange` Postfix.reloaded
@@ -771,10 +606,10 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "# Redirect all to joeyh.name."
 		, "rewriterule (.*) http://joeyh.name$1 [r]"
 		]
-	& alias "homepower.joeyh.name"
-	& apacheSite "homepower.joeyh.name"
-		[ "DocumentRoot /srv/web/homepower.joeyh.name"
-		, "<Directory /srv/web/homepower.joeyh.name>"
+	& alias "house.joeyh.name"
+	& apacheSite "house.joeyh.name"
+		[ "DocumentRoot /srv/web/house.joeyh.name"
+		, "<Directory /srv/web/house.joeyh.name>"
 		, "  Options Indexes ExecCGI"
 		, "  AllowOverride None"
 		, Apache.allowAll
@@ -789,27 +624,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "  AllowOverride None"
 		, Apache.allowAll
 		, "</Directory>"
-		, "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/"
-
-		-- for mailman cgi scripts
-		, "<Directory /usr/lib/cgi-bin>"
-		, "  AllowOverride None"
-		, "  Options ExecCGI"
-		, Apache.allowAll
-		, "</Directory>"
-		, "Alias /pipermail/ /var/lib/mailman/archives/public/"
-		, "<Directory /var/lib/mailman/archives/public/>"
-		, "  Options Indexes MultiViews FollowSymlinks"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-		, "Alias /images/ /usr/share/images/"
-		, "<Directory /usr/share/images/>"
-		, "  Options Indexes MultiViews"
-		, "  AllowOverride None"
-		, Apache.allowAll
-		, "</Directory>"
-
 		, "RewriteEngine On"
 		, "# Force hostname to kitenet.net"
 		, "RewriteCond %{HTTP_HOST} !^kitenet\\.net [NC]"
@@ -833,7 +647,7 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "RewriteRule /~anna/.* http://waldeneffect\\.org/ [R]"
 		, "RewriteRule /~anna/.* http://waldeneffect\\.org/ [R]"
 		, "RewriteRule /~anna http://waldeneffect\\.org/ [R]"
-		, "RewriteRule /simpleid/ http://openid.kitenet.net:8081/simpleid/"
+		, "RewriteRule /simpleid/ http://openid.kitenet.net:8086/simpleid/"
 		, "# Even the kite home page is not here any more!"
 		, "RewriteRule ^/$ http://www.kitenet.net/ [R]"
 		, "RewriteRule ^/index.html http://www.kitenet.net/ [R]"
@@ -845,7 +659,6 @@ legacyWebSites = propertyList "legacy web sites" $ props
 		, "# Old ikiwiki filenames for kitenet.net wiki."
 		, "rewritecond $1 !^/~"
 		, "rewritecond $1 !^/doc/"
-		, "rewritecond $1 !^/pipermail/"
 		, "rewritecond $1 !^/cgi-bin/"
 		, "rewritecond $1 !.*/index$"
 		, "rewriterule (.+).html$ $1/ [r]"
@@ -916,54 +729,58 @@ alarmClock oncalendar (User user) command = combineProperties "goodmorning timer
 	& "/etc/systemd/logind.conf" `ConfFile.containsIniSetting`
 		("Login", "LidSwitchIgnoreInhibited", "no")
 
-homePower :: IsContext c => User -> [Host] -> c -> (SshKeyType, Ssh.PubKeyText) -> Property (HasInfo + DebianLike)
-homePower user hosts ctx sshkey = propertyList "home power" $ props
+house :: IsContext c => User -> [Host] -> c -> (SshKeyType, Ssh.PubKeyText) -> Property (HasInfo + DebianLike)
+house user hosts ctx sshkey = propertyList "home automation" $ props
 	& Apache.installed
-	& Apt.installed ["python", "python-pymodbus", "rrdtool", "rsync"]
-	& File.ownerGroup "/var/www/html" user (userGroup user)
-	& Git.cloned user "https://git.joeyh.name/git/joey/homepower.git" d Nothing
-	& Git.cloned user "https://git.joeyh.name/git/reactive-banana-automation.git" (d </> "reactive-banana-automation") Nothing
+	& Apt.installed ["libmodbus-dev", "rrdtool", "rsync"]
+	& Git.cloned user "https://git.joeyh.name/git/joey/house.git" d Nothing
+	& websitesymlink
 	& build
 	& Systemd.enabled setupservicename
 		`requires` setupserviceinstalled
 		`onChange` Systemd.started setupservicename
-	& Systemd.enabled watchdogservicename
-		`requires` watchdogserviceinstalled
-		`onChange` Systemd.started watchdogservicename
 	& Systemd.enabled pollerservicename
 		`requires` pollerserviceinstalled
 		`onChange` Systemd.started pollerservicename
 	& Systemd.enabled controllerservicename
 		`requires` controllerserviceinstalled
 		`onChange` Systemd.started controllerservicename
-	& User.hasGroup user (Group "dialout")
+	& Systemd.enabled watchdogservicename
+		`requires` watchdogserviceinstalled
+		`onChange` Systemd.started watchdogservicename
+	& Apt.serviceInstalledRunning "watchdog"
+	& "/etc/watchdog.conf" `File.containsLines`
+		[ "watchdog-device = /dev/watchdog0"
+		, "watchdog-timeout = 16" -- maximum supported by cubietruck
+		, "interval = 1"
+		]
+		`onChange` Service.reloaded "watchdog"
 	& Group.exists (Group "gpio") Nothing
 	& User.hasGroup user (Group "gpio")
 	& Apt.installed ["i2c-tools"]
 	& User.hasGroup user (Group "i2c")
-	& "/etc/modules-load.d/homepower.conf" `File.hasContent` ["i2c-dev"]
-	& Cron.niceJob "homepower upload"
+	& "/etc/modules-load.d/house.conf" `File.hasContent` ["i2c-dev"]
+	& Cron.niceJob "house upload"
 		(Cron.Times "1 * * * *") user d rsynccommand
 		`requires` Ssh.userKeyAt (Just sshkeyfile) user ctx sshkey
 		`requires` File.ownerGroup (takeDirectory sshkeyfile)
 			user (userGroup user)
 		`requires` File.dirExists (takeDirectory sshkeyfile)
 		`requires` Ssh.knownHost hosts "kitenet.net" user
+	& File.hasPrivContentExposed "/etc/darksky-forecast-url" anyContext
   where
-	d = "/var/www/html/homepower"
+	d = "/home/joey/house"
 	sshkeyfile = d </> ".ssh/key"
 	build = check (not <$> doesFileExist (d </> "controller")) $
 		userScriptProperty (User "joey")
-			[ "cd " ++ d </> "reactive-banana-automation"
-			, "cabal install"
-			, "cd " ++ d
+			[ "cd " ++ d
+			, "cabal update"
 			, "make"
 			]
 		`assume` MadeChange
 		`requires` Apt.installed
 			[ "ghc", "cabal-install", "make"
 			, "libghc-http-types-dev"
-			, "libghc-stm-dev"
 			, "libghc-aeson-dev"
 			, "libghc-wai-dev"
 			, "libghc-warp-dev"
@@ -972,11 +789,11 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 			, "libghc-reactive-banana-dev"
 			, "libghc-hinotify-dev"
 			]
-	pollerservicename = "homepower"
+	pollerservicename = "house-poller"
 	pollerservicefile = "/etc/systemd/system/" ++ pollerservicename ++ ".service"
 	pollerserviceinstalled = pollerservicefile `File.hasContent`
 		[ "[Unit]"
-		, "Description=home power poller"
+		, "Description=house poller"
 		, ""
 		, "[Service]"
 		, "ExecStart=" ++ d ++ "/poller"
@@ -987,13 +804,13 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 		, ""
 		, "[Install]"
 		, "WantedBy=multi-user.target"
-		, "WantedBy=homepower-controller.target"
+		, "WantedBy=house-controller.target"
 		]
-	controllerservicename = "homepower-controller"
+	controllerservicename = "house-controller"
 	controllerservicefile = "/etc/systemd/system/" ++ controllerservicename ++ ".service"
 	controllerserviceinstalled = controllerservicefile `File.hasContent`
 		[ "[Unit]"
-		, "Description=home power controller"
+		, "Description=house controller"
 		, ""
 		, "[Service]"
 		, "ExecStart=" ++ d ++ "/controller"
@@ -1005,11 +822,11 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 		, "[Install]"
 		, "WantedBy=multi-user.target"
 		]
-	watchdogservicename = "homepower-watchdog"
+	watchdogservicename = "house-watchdog"
 	watchdogservicefile = "/etc/systemd/system/" ++ watchdogservicename ++ ".service"
 	watchdogserviceinstalled = watchdogservicefile `File.hasContent`
 		[ "[Unit]"
-		, "Description=home power watchdog"
+		, "Description=house watchdog"
 		, ""
 		, "[Service]"
 		, "ExecStart=" ++ d ++ "/watchdog"
@@ -1021,11 +838,11 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 		, "[Install]"
 		, "WantedBy=multi-user.target"
 		]
-	setupservicename = "homepower-setup"
+	setupservicename = "house-setup"
 	setupservicefile = "/etc/systemd/system/" ++ setupservicename ++ ".service"
 	setupserviceinstalled = setupservicefile `File.hasContent`
 		[ "[Unit]"
-		, "Description=home power monitor setup"
+		, "Description=house setup"
 		, ""
 		, "[Service]"
 		, "ExecStart=" ++ d ++ "/setup"
@@ -1036,29 +853,70 @@ homePower user hosts ctx sshkey = propertyList "home power" $ props
 		, ""
 		, "[Install]"
 		, "WantedBy=multi-user.target"
-		, "WantedBy=homepower.target"
+		, "WantedBy=house-poller.target"
+		, "WantedBy=house-controller.target"
+		, "WantedBy=house-watchdog.target"
 		]
 	-- Any changes to the rsync command will need my .authorized_keys
 	-- rsync server command to be updated too.
-	rsynccommand = "rsync -e 'ssh -i" ++ sshkeyfile ++ "' -avz rrds/ joey@kitenet.net:/srv/web/homepower.joeyh.name/rrds/"
+	rsynccommand = "rsync -e 'ssh -i" ++ sshkeyfile ++ "' -avz rrds/ joey@kitenet.net:/srv/web/house.joeyh.name/rrds/ >/dev/null 2>&1"
 
--- My home router, running hostapd and dnsmasq for wlan0,
--- with eth0 connected to a satellite modem, and a fallback ppp connection.
-homeRouter :: Property (HasInfo + DebianLike)
-homeRouter = propertyList "home router" $ props
-	& Network.static "wlan0" (IPv4 "10.1.1.1") Nothing
+	websitesymlink :: Property UnixLike
+	websitesymlink = check (not . isSymbolicLink <$> getSymbolicLinkStatus "/var/www/html")
+		(property "website symlink" $ makeChange $ do
+			removeDirectoryRecursive "/var/www/html"
+			createSymbolicLink d "/var/www/html"
+		)
+
+data Interfaces = Interfaces
+	{ ethernetInterface :: String
+	, wifiInterface :: String
+	, wifiInterfaceOld :: String
+	}
+
+-- Connect to the starlink dish directly (no starlink router)
+connectStarlinkDish :: Interfaces -> Property DebianLike
+connectStarlinkDish ifs = propertyList "connected via starlink dish" $ props
+	-- Use dhcpcd for ipv6 prefix delegation to the wifi interface.
+	& Apt.installed ["dhcpcd"]
+	-- dhcpcd is run by ifup on boot. When the daemon was enabled,
+	-- that somehow prevented prefix delegation from happening,
+	-- so disable the daemon from being run by systemd.
+	& Systemd.stopped "dhcpcd"
+	& Systemd.masked "dhcpcd"
+	& "/etc/dhcpcd.conf" `File.containsLine`
+		("ia_pd 1 " ++ wifiInterface ifs)
+	& "/etc/dhcpcd.conf" `File.lacksLine`
+		("ia_pd 1 " ++ wifiInterfaceOld ifs)
+	& Network.dhcp (ethernetInterface ifs)
+		`requires` Network.cleanInterfacesFile
+
+-- Connect to the starlink router with its ethernet adapter.
+--
+-- Static route because with dhcp it sometimes fails to get an address from
+-- starlink.
+connectStarlinkRouter :: Interfaces -> Property DebianLike
+connectStarlinkRouter ifs = propertyList "connected via starlink router" $ props
+	& Network.static (ethernetInterface ifs) (IPv4 "192.168.1.62")
+		(Just (Network.Gateway (IPv4 "192.168.1.1")))
+		`requires` Network.cleanInterfacesFile
+
+-- My home router, running hostapd and dnsmasq.
+homeRouter :: Interfaces -> String -> HostapdConfig -> Property DebianLike
+homeRouter ifs wifinetworkname (HostapdConfig hostapdconfig) = propertyList "home router" $ props
+	& File.notPresent (Network.interfaceDFile (wifiInterfaceOld ifs))
+	& Network.static (wifiInterface ifs) (IPv4 "10.1.1.1") Nothing
 		`requires` Network.cleanInterfacesFile
 	& Apt.installed ["hostapd"]
 	& File.hasContent "/etc/hostapd/hostapd.conf"
-			[ "interface=wlan0"
-			, "ssid=house"
-			, "hw_mode=g"
-			, "channel=8"
-			]
+			([ "interface=" ++ wifiInterface ifs
+			, "ssid=" ++ wifinetworkname
+			] ++ hostapdconfig)
 		`requires` File.dirExists "/etc/hostapd"
 		`requires` File.hasContent "/etc/default/hostapd"
 			[ "DAEMON_CONF=/etc/hostapd/hostapd.conf" ]
 		`onChange` Service.running "hostapd"
+	& Systemd.enabled "hostapd"
 	& File.hasContent "/etc/resolv.conf"
 		[ "domain kitenet.net"
 		, "search kitenet.net"
@@ -1069,39 +927,42 @@ homeRouter = propertyList "home router" $ props
 	& File.hasContent "/etc/dnsmasq.conf"
 		[ "domain-needed"
 		, "bogus-priv"
-		, "interface=wlan0"
-		, "domain=kitenet.net"
-		-- lease time is short because the homepower
+		, "interface=" ++ wifiInterface ifs
+		, "domain=lan"
+		-- lease time is short because the house
 		-- controller wants to know when clients disconnect
 		, "dhcp-range=10.1.1.100,10.1.1.150,10m"
 		, "no-hosts"
-		, "address=/honeybee.kitenet.net/10.1.1.1"
-		, "address=/house.kitenet.net/10.1.1.1"
+		, "address=/sky.lan/10.1.1.1"
+		, "address=/house.lan/10.1.1.2"
+		-- allow accessing starlink dish when it's not online yet
+		, "address=/dishy.starlink.com/192.168.100.1"
 		]
 		`onChange` Service.restarted "dnsmasq"
-	& ipmasq "wlan0"
-	& Apt.serviceInstalledRunning "netplug"
-	& Network.static' "eth0" (IPv4 "192.168.1.100")
-		(Just (Network.Gateway (IPv4 "192.168.1.1")))
-		-- When satellite is down, fall back to dialup
-		[ ("pre-up", "poff -a || true")
-		, ("post-down", "pon")
+	-- Avoid DHCPNAK of lease obtained at boot, after NTP slews clock
+	-- forward too far, causing that lease to not be valid.
+	& "/etc/default/dnsmasq" `File.containsLine` "DNSMASQ_OPTS=\"--dhcp-authoritative\""
+		`onChange` Service.restarted "dnsmasq"
+	& ipmasq (wifiInterface ifs)
+	& Apt.installed ["radvd"]
+	-- This needs ipv6 prefix delegation to the wifi interface to be
+	-- enabled.
+	& File.hasContent "/etc/radvd.conf"
+		[ "interface " ++ wifiInterface ifs ++ " {"
+		, "  AdvSendAdvert on;"
+		, "  MinRtrAdvInterval 3;"
+		, "  MaxRtrAdvInterval 10;"
+		, "  prefix ::/64 {"
+		, "    AdvOnLink on;"
+		, "    AdvAutonomous on;"
+		, "    AdvRouterAddr on;"
+		, "  };"
+		, "};"
 		]
-		`requires` Network.cleanInterfacesFile
-	& Apt.installed ["ppp"]
-		`before` File.hasContent "/etc/ppp/peers/provider"
-			[ "user \"joeyh@arczip.com\""
-			, "connect \"/usr/sbin/chat -v -f /etc/chatscripts/pap -T 3825441\""
-			, "/dev/ttyACM0"
-			, "115200"
-			, "noipdefault"
-			, "defaultroute"
-			, "persist"
-			, "noauth"
-			]
-		`before` File.hasPrivContent "/etc/ppp/pap-secrets" (Context "joeyh@arczip.com")
+		`onChange` Service.restarted "radvd"
+	& "/etc/sysctl.conf" `File.containsLine` "net.ipv6.conf.all.forwarding=1"
 
--- | Enable IP masqerading, on whatever other interfaces come up than the
+-- | Enable IP masqerading, on whatever other interfaces come up, besides the
 -- provided intif.
 ipmasq :: String -> Property DebianLike
 ipmasq intif = File.hasContent ifupscript
@@ -1117,21 +978,15 @@ ipmasq intif = File.hasContent ifupscript
 	, "echo 1 > /proc/sys/net/ipv4/ip_forward"
 	]
 	`before` scriptmode ifupscript
-	`before` File.hasContent pppupscript
-		[ "#!/bin/sh"
-		, "IFACE=$PPP_IFACE " ++ ifupscript
-		]
-	`before` scriptmode pppupscript
 	`requires` Apt.installed ["iptables"]
   where
 	ifupscript = "/etc/network/if-up.d/ipmasq"
-	pppupscript = "/etc/ppp/ip-up.d/ipmasq"
 	scriptmode f = f `File.mode` combineModes (readModes ++ executeModes)
 
 laptopSoftware :: Property DebianLike
 laptopSoftware = Apt.installed
 	[ "intel-microcode", "acpi"
-	, "procmeter3", "xfce4", "procmeter3", "unclutter"
+	, "procmeter3", "xfce4", "procmeter3", "unclutter-xfixes"
 	, "mplayer", "fbreader", "firefox", "chromium"
 	, "libdatetime-event-sunrise-perl", "libtime-duration-perl"
 	, "network-manager", "network-manager-openvpn-gnome", "openvpn"
@@ -1151,13 +1006,16 @@ laptopSoftware = Apt.installed
 	, "yeahconsole", "xkbset", "xinput"
 	, "assword", "pumpa"
 	, "vorbis-tools", "audacity"
+	, "ekiga"
+	, "bluez-firmware", "blueman", "pulseaudio-module-bluetooth"
+	, "fwupd"
 	, "xul-ext-ublock-origin", "xul-ext-pdf.js", "xul-ext-status4evar"
 	, "vim-syntastic", "vim-fugitive"
 	, "adb", "gthumb"
 	, "w3m", "sm", "weechat"
 	, "borgbackup", "wipe", "smartmontools", "libgfshare-bin"
 	, "units"
-	, "virtualbox", "qemu-kvm"
+	, "virtualbox", "virtualbox-guest-additions-iso", "qemu-kvm"
 	]
 	`requires` baseSoftware
 	`requires` devSoftware
@@ -1179,16 +1037,20 @@ devSoftware = Apt.installed
 	]
 
 cubieTruckOneWire :: Property DebianLike
-cubieTruckOneWire = 
-	File.hasContent "/etc/easy-peasy-devicetree-squeezy/my.dts" mydts
-		`onChange` utilitysetup
-		`requires` utilityinstalled
+cubieTruckOneWire = utilitysetup
+	`requires` dtsinstalled
+	`requires` utilityinstalled
   where
+	dtsinstalled = File.hasContent "/etc/easy-peasy-devicetree-squeezy/my.dts" mydts
+		`requires` File.dirExists "/etc/easy-peasy-devicetree-squeezy"
 	utilityinstalled = Git.cloned (User "root") "https://git.joeyh.name/git/easy-peasy-devicetree-squeezy.git" "/usr/local/easy-peasy-devicetree-squeezy" Nothing
-		`onChange` File.isSymlinkedTo "/usr/local/bin/easy-peasy-devicetree-squeezy" (File.LinkTarget "/usr/local/easy-peasy-devicetree-squeezy/easy-peasy-devicetree-squeezy")
-	utilitysetup = cmdProperty "easy-peasy-devicetree-squeezy"
-		["--debian", "sun7i-a20-cubietruck"]
-		`assume` MadeChange
+		`onChange` File.isSymlinkedTo "/usr/sbin/easy-peasy-devicetree-squeezy" (File.LinkTarget "/usr/local/easy-peasy-devicetree-squeezy/easy-peasy-devicetree-squeezy")
+		`requires` Apt.installed ["pv", "device-tree-compiler", "cpp", "linux-source"]
+	utilitysetup = check (not <$> doesFileExist dtb) $ 
+		cmdProperty "easy-peasy-devicetree-squeezy"
+			["--debian", "sun7i-a20-cubietruck"]
+			`assume` MadeChange
+	dtb = "/etc/flash-kernel/dtbs/sun7i-a20-cubietruck.dtb"
 	mydts =
 		[ "/* Device tree addition enabling onewire sensors on CubieTruck GPIO pin PC21 */"
 		, "#include <dt-bindings/gpio/gpio.h>"
@@ -1209,3 +1071,203 @@ cubieTruckOneWire =
 		, "\t};"
 		, "};"
 		]
+
+-- My home networked attached storage server.
+homeNAS :: Property DebianLike
+homeNAS = propertyList "home NAS" $ props
+	& Apt.installed ["uhubctl"]
+	& "/etc/udev/rules.d/52-startech-hub.rules" `File.hasContent`
+		[ "# let users power control startech hub with uhubctl"
+		, "ATTR{idVendor}==\"" ++ hubvendor ++ "\", ATTR{idProduct}==\"005a\", MODE=\"0666\""
+		]
+	& autoMountDrivePort "archive-10"
+		(USBHubPort hubvendor 1)
+		(USBDriveId wd "1230")
+		(Just "archive-oldest")
+	& autoMountDrivePort "archive-11"
+		(USBHubPort hubvendor 2)
+		(USBDriveId wd "25ee")
+		(Just "archive-older")
+	& autoMountDrivePort "archive-12"
+		(USBHubPort hubvendor 3)
+		(USBDriveId seagate "3322")
+		(Just "archive-old")
+	& autoMountDrivePort "archive-13"
+		(USBHubPort hubvendor 4)
+		(USBDriveId wd "25a3")
+		(Just "archive")
+	& autoMountDrivePort "archive-14"
+		(USBHubPort hubvendor 2)
+		(USBDriveId wd "25a3")
+		Nothing
+	& autoMountDrive "passport" Nothing
+	& Apt.installed ["git-annex", "borgbackup"]
+  where
+	hubvendor = "0409"
+	wd = "1058"
+	seagate = "0bc2"
+
+data USBHubPort = USBHubPort
+	{ hubVendor :: String
+	, hubPort :: Int
+	}
+
+data USBDriveId = USBDriveId
+	{ driveVendorId :: String
+	, driveProductId :: String
+	}
+
+-- Makes a USB drive with the given label automount, and unmount after idle
+-- for a while.
+--
+-- The hub port is turned on and off automatically as needed, using
+-- uhubctl.
+autoMountDrivePort :: Mount.Label -> USBHubPort -> USBDriveId -> Maybe FilePath -> Property DebianLike
+autoMountDrivePort label hp drive malias = propertyList desc $ props
+	& File.hasContent ("/etc/systemd/system/" ++ hub)
+		[ "[Unit]"
+		, "Description=Startech usb hub port " ++ show (hubPort hp) ++ " vendor " ++ driveVendorId drive ++ " driveid " ++ driveProductId drive
+		, "PartOf=" ++ mount
+		, "[Service]"
+		, "Type=oneshot"
+		, "RemainAfterExit=true"
+		, "ExecStart=/bin/sh -c 'uhubctl -a on " ++ selecthubport ++ "'"
+		, "ExecStop=/bin/sh -c 'uhubctl -a off " ++ selecthubport
+			-- Powering off the port does not remove device
+			-- files, so ask udev to remove the devfile; it will
+			-- be added back after the drive next spins up
+			-- and so avoid mount happening before the drive is
+			-- spun up.
+			-- (This only works when the devfile is in
+			-- by-label.)
+			++ "; udevadm trigger --action=remove " ++ devfile ++ " || true'"
+		, "[Install]"
+		, "WantedBy="
+		]
+		`onChange` Systemd.daemonReloaded
+	& autoMountDrive' 
+		[ "Requires=" ++ hub
+		, "After=" ++ hub
+		] label malias
+  where
+	devfile = "/dev/disk/by-label/" ++ label
+	mountpoint = "/media/joey/" ++ label
+	desc = "auto mount with hub port power control " ++ mountpoint
+	hub = "startech-hub-port-" ++ show (hubPort hp) ++ "-vendor-" ++ driveVendorId drive ++ "-drivedid-" ++ driveProductId drive ++ ".service"
+	mount = svcbase ++ ".mount"
+	svcbase = Systemd.escapePath mountpoint
+	selecthubport = unwords
+		[ "-p", show (hubPort hp)
+		, "-n", hubVendor hp
+		, "-l", concat
+			-- The hub's location id, eg "1-1.4", does not seem
+			-- as stable as uhubctl claims it will be,
+			-- and the vendor is not sufficient since I have 2
+			-- hubs from the same vendor. So search for the
+			-- drive lsusb to find that. This works even if the
+			-- port is powered off, as long as it's been on at
+			-- some point before.
+			[ "$(lsusb -tvv | perl -lne \"if (\\\\$h && m!/sys/bus/usb/devices/(.*?) !) {\\\\$v=\\\\$1}; if (m/Hub/) { \\\\$h=1 } else { \\\\$h=0 }; if (/"
+			, driveVendorId drive ++ ":" ++ driveProductId drive
+			++ "/) { print \\\\$v; last}\")"
+			]
+		]
+
+-- Makes a USB drive with the given label automount, and unmount after idle
+-- for a while.
+autoMountDrive :: Mount.Label -> Maybe FilePath -> Property DebianLike
+autoMountDrive = autoMountDrive' []
+
+autoMountDrive' :: [String] -> Mount.Label -> Maybe FilePath -> Property DebianLike
+autoMountDrive' mountunitadd label malias = propertyList desc $ props
+	& File.ownerGroup mountpoint (User "joey") (Group "joey")
+		`requires` File.dirExists mountpoint
+	& case malias of
+		Just t -> ("/media/joey/" ++ t) `File.isSymlinkedTo`
+			File.LinkTarget mountpoint
+		Nothing -> doNothing <!> doNothing
+	& File.hasContent ("/etc/systemd/system/" ++ mount)
+		([ "[Unit]"
+		, "Description=" ++ label
+		] ++ mountunitadd ++
+		[ "[Mount]"
+		-- avoid mounting whenever the block device is available,
+		-- only want to automount on demand
+		, "Options=noauto"
+		, "What=" ++ devfile
+		, "Where=" ++ mountpoint
+		, "[Install]"
+		, "WantedBy="
+		])
+		`onChange` Systemd.daemonReloaded
+	& File.hasContent ("/etc/systemd/system/" ++ automount)
+		[ "[Unit]"
+		, "Description=Automount " ++ label
+		, "[Automount]"
+		, "Where=" ++ mountpoint
+		, "TimeoutIdleSec=300"
+		, "[Install]"
+		, "WantedBy=multi-user.target"
+		]
+		`onChange` Systemd.daemonReloaded
+	& Systemd.enabled automount
+	& Systemd.started automount
+	& Sudo.sudoersDFile ("automount-" ++ label)
+		[ "joey ALL= NOPASSWD: " ++ sudocommands
+		]
+  where
+	devfile = "/dev/disk/by-label/" ++ label
+	mountpoint = "/media/joey/" ++ label
+	desc = "auto mount " ++ mountpoint
+	automount = svcbase ++ ".automount"
+	mount = svcbase ++ ".mount"
+	svcbase = Systemd.escapePath mountpoint
+	sudocommands = intercalate " , " $ map (\c -> "/bin/systemctl " ++ c)
+		[ "stop " ++ mountpoint
+		, "start " ++ mountpoint
+		]
+
+rsyncNetBorgRepo :: String -> [Borg.BorgRepoOpt] -> Borg.BorgRepo
+rsyncNetBorgRepo d os = Borg.BorgRepoUsing os' ("2318@usw-s002.rsync.net:" ++ d)
+  where
+	-- rsync.net has a newer borg here
+	os' = Borg.UsesEnvVar ("BORG_REMOTE_PATH", "borg1") : os
+
+noExim :: Property DebianLike
+noExim = Apt.removed ["exim4", "exim4-base", "exim4-daemon-light"]
+	`onChange` Apt.autoRemove
+
+data HostapdConfig = HostapdConfig [String]
+
+hostapd2GhzConfig :: HostapdConfig
+hostapd2GhzConfig = HostapdConfig
+	[ "hw_mode=g"
+	, "channel=5"
+	, "country_code=US"
+	, "ieee80211d=1"
+	, "ieee80211n=1"
+	, "wmm_enabled=1"
+	]
+
+-- For wifi adapters such as the Alfa AWUS036ACHM
+--
+-- Note that for maximum speed, this needs channel 5 or 6.
+-- This should make it be capable of 150 Mb/s.
+hostapd2GhzConfig_mt76 :: HostapdConfig
+hostapd2GhzConfig_mt76 = HostapdConfig $ c ++ 
+	[ "ht_capab=[HT40+][HT40-][GF][SHORT-GI-20][SHORT-GI-40]"
+	]
+  where
+	HostapdConfig c = hostapd2GhzConfig
+
+hostapd5GhzConfig :: HostapdConfig
+hostapd5GhzConfig = HostapdConfig
+	[ "hw_mode=a"
+	, "channel=36"
+	, "country_code=US"
+	, "ieee80211d=1"
+	, "ieee80211n=1"
+	, "ieee80211ac=1"
+	, "wmm_enabled=1"
+	]
+

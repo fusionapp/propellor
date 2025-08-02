@@ -11,9 +11,8 @@ module Propellor.Spin (
 
 import Data.List
 import System.Exit
-import System.PosixCompat
+import System.Posix
 import System.Posix.IO
-import System.Posix.Directory
 import Control.Concurrent.Async
 import qualified Data.ByteString as B
 import qualified Data.Set as S
@@ -29,9 +28,8 @@ import Propellor.Gpg
 import Propellor.Bootstrap
 import Propellor.Types.CmdLine
 import Propellor.Types.Info
-import Propellor.Property.PropellorRepo (OriginUrl(..))
+import Propellor.Property.Localdir (OriginUrl(..))
 import qualified Propellor.Shim as Shim
-import Utility.FileMode
 import Utility.SafeCommand
 import Utility.Process.NonConcurrent
 

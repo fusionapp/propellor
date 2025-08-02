@@ -6,6 +6,7 @@ module Propellor.Property.Borg
 	( BorgParam
 	, BorgRepo(..)
 	, BorgRepoOpt(..)
+	, BorgEnc(..)
 	, installed
 	, repoExists
 	, init
@@ -14,11 +15,17 @@ module Propellor.Property.Borg
 	, KeepPolicy (..)
 	) where
 
-import Propellor.Base hiding (init)
+import Propellor.Base hiding (init, last)
 import Prelude hiding (init)
 import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Cron as Cron
-import Data.List (intercalate)
+import Data.List (intercalate, isSuffixOf)
+import Data.Char (intToDigit)
+import Numeric (showIntAtBase)
+import Utility.SafeCommand (boolSystem', toCommand)
+
+-- | Borg command.
+type BorgCommand = String
 
 -- | Parameter to pass to a borg command.
 type BorgParam = String
@@ -36,45 +43,108 @@ data BorgRepoOpt
 	-- | Use to specify a ssh private key to use when accessing a
 	-- BorgRepo.
 	= UseSshKey FilePath
+	-- | Use to specify a umask to use when accessing BorgRepo.
+	| UseUmask FileMode
+	-- | Use to specify an environment variable to set when running
+	-- borg on a BorgRepo.
+	| UsesEnvVar (String, String)
+
+-- | Borg Encryption type.
+data BorgEnc
+	-- | No encryption, no authentication.
+	= BorgEncNone
+	-- | Authenticated, using SHA-256 for hash/MAC.
+	| BorgEncAuthenticated
+	-- | Authenticated, using Blake2b for hash/MAC.
+	| BorgEncAuthenticatedBlake2
+	-- | Encrypted, storing the key in the repository, using SHA-256 for
+	-- hash/MAC.
+	| BorgEncRepokey
+	-- | Encrypted, storing the key in the repository, using Blake2b for
+	-- hash/MAC.
+	| BorgEncRepokeyBlake2
+	-- | Encrypted, storing the key outside of the repository, using
+	-- SHA-256 for hash/MAC.
+	| BorgEncKeyfile
+	-- | Encrypted, storing the key outside of the repository, using
+	-- Blake2b for hash/MAC.
+	| BorgEncKeyfileBlake2
 
 repoLoc :: BorgRepo -> String
 repoLoc (BorgRepo s) = s
 repoLoc (BorgRepoUsing _ s) = s
 
-runBorg :: BorgRepo -> [CommandParam] -> IO Bool
-runBorg repo ps = case runBorgEnv repo of
-	[] -> boolSystem "borg" ps
+runBorg :: BorgRepo -> BorgCommand -> [CommandParam] -> Maybe FilePath -> IO Bool
+runBorg repo cmd ps chdir = case runBorgEnv repo of
+	[] -> runBorg' Nothing
 	environ -> do
 		environ' <- addEntries environ <$> getEnvironment
-		boolSystemEnv "borg" ps (Just environ')
+		runBorg' (Just environ')
+  where
+	runBorg' environ = boolSystem' "borg" params $
+		\p -> p { cwd = chdir, env = environ }
+	params = runBorgParam repo cmd ps
+
+readBorg :: BorgRepo -> BorgCommand -> [CommandParam] -> IO String
+readBorg repo cmd ps = case runBorgEnv repo of
+	[] -> readProcess "borg" params
+	environ -> do
+		environ' <- addEntries environ <$> getEnvironment
+		readProcessEnv "borg" params (Just environ')
+  where
+	params = toCommand (runBorgParam repo cmd ps)
+
+runBorgParam :: BorgRepo -> BorgCommand -> [CommandParam] -> [CommandParam]
+runBorgParam (BorgRepo _) cmd ps = Param cmd : ps
+runBorgParam (BorgRepoUsing os _) cmd ps = Param cmd : (concatMap go os ++ ps)
+  where
+	go (UseUmask i) = [Param "--umask", Param (showIntAtBase 8 intToDigit i "")]
+	go _ = []
 
 runBorgEnv :: BorgRepo -> [(String, String)]
 runBorgEnv (BorgRepo _) = []
-runBorgEnv (BorgRepoUsing os _) = map go os
+runBorgEnv (BorgRepoUsing os _) = mapMaybe go os
   where
-	go (UseSshKey k) = ("BORG_RSH", "ssh -i " ++ k)
+	go (UseSshKey k) = Just ("BORG_RSH", "ssh -i " ++ k)
+	go (UsesEnvVar (k, v)) = Just (k, v)
+	go _ = Nothing
 
 installed :: Property DebianLike
-installed = withOS desc $ \w o -> case o of
-	(Just (System (Debian _ (Stable "jessie")) _)) -> ensureProperty w $
-		Apt.backportInstalled ["borgbackup", "python3-msgpack"]
-	_ -> ensureProperty w $
-		Apt.installed ["borgbackup"]
+installed = pickOS installdebian aptinstall
   where
+	installdebian :: Property Debian
+	installdebian = withOS desc $ \w o -> case o of
+		(Just (System (Debian _ (Stable "jessie")) _)) -> ensureProperty w $
+			Apt.backportInstalled ["borgbackup", "python3-msgpack"]
+		_ -> ensureProperty w $
+			Apt.installed ["borgbackup"]
+	aptinstall = Apt.installed ["borgbackup"] `describe` desc
         desc = "installed borgbackup"
 
 repoExists :: BorgRepo -> IO Bool
-repoExists repo = runBorg repo [Param "list", Param (repoLoc repo)]
+repoExists repo = runBorg repo "list" [Param (repoLoc repo)] Nothing
+
+-- | Get the name of the latest archive.
+latestArchive :: BorgRepo -> IO (Maybe String)
+latestArchive repo = getLatest <$> readBorg repo "list" listargs
+  where
+	getLatest = maybeLast . filter (not . isSuffixOf ".checkpoint") . lines
+	maybeLast [] = Nothing
+	maybeLast ps = Just $ last ps
+	listargs =
+		[ Param "--short"
+		, Param (repoLoc repo)
+		]
 
 -- | Inits a new borg repository
-init :: BorgRepo -> Property DebianLike
-init repo = check (not <$> repoExists repo)
+init :: BorgRepo -> BorgEnc -> Property DebianLike
+init repo enc = check (not <$> repoExists repo)
 	(cmdPropertyEnv "borg" initargs (runBorgEnv repo))
 		`requires` installed
   where
-	initargs =
-		[ "init"
-		, repoLoc repo
+	initargs = toCommand $ runBorgParam repo "init"
+		[ encParam enc
+		, Param (repoLoc repo)
 		]
 
 -- | Restores a directory from a borg backup.
@@ -91,18 +161,22 @@ restored dir repo = go `requires` installed
 	go = property (dir ++ " restored by borg") $ ifM (liftIO needsRestore)
 		( do
 			warningMessage $ dir ++ " is empty/missing; restoring from backup ..."
-			liftIO restore
+			latest <- liftIO (latestArchive repo)
+			case latest of
+				Nothing -> do
+					warningMessage $ "no archive to extract"
+					return FailedChange
+				Just l -> liftIO (restore l)
 		, noChange
 		)
 
 	needsRestore = isUnpopulated dir
 
-	restore = withTmpDirIn (takeDirectory dir) "borg-restore" $ \tmpdir -> do
-		ok <- runBorg repo $
-			[ Param "extract"
-			, Param (repoLoc repo)
-			, Param tmpdir
-			]
+	restore :: String -> IO Result
+	restore latest = withTmpDirIn (takeDirectory dir) "borg-restore" $ \tmpdir -> do
+		ok <- runBorg repo "extract"
+			[ Param (repoLoc repo ++ "::" ++ latest) ]
+			(Just tmpdir)
 		let restoreddir = tmpdir ++ "/" ++ dir
 		ifM (pure ok <&&> doesDirectoryExist restoreddir)
 			( do
@@ -151,39 +225,41 @@ backup' dir repo crontimes extraargs kp = cronjob
 	backupcmd = intercalate "&&" $ concat
 		[ concatMap exportenv (runBorgEnv repo)
 		, [createCommand]
-		, if null kp then [] else [pruneCommand]
+		, if null kp then [] else [pruneCommand, compactCommand]
 		]
 	exportenv (k, v) = 
 		[ k ++ "=" ++ shellEscape v
 		, "export " ++ k
 		]
-	createCommand = unwords $
-		[ "borg"
-		, "create"
-		, "--stats"
+	createCommand = unwords ("borg" : createCommandParams)
+	createCommandParams = map shellEscape $ toCommand $ runBorgParam repo "create" $
+		[ Param "--stats" ]
+		++ map Param extraargs ++
+		[ Param (repoLoc repo ++ "::{now}")
+		, File dir
 		]
-		++ map shellEscape extraargs ++
-		[ shellEscape (repoLoc repo) ++ "::" ++ "$(date --iso-8601=ns --utc)"
-		, shellEscape dir
-		]
-	pruneCommand = unwords $
-		[ "borg"
-		, "prune"
-		, shellEscape (repoLoc repo)
-		]
-		++
-		map keepParam kp
+	pruneCommand = unwords ("borg" : pruneCommandParams)
+	pruneCommandParams = map shellEscape $ toCommand $ runBorgParam repo "prune" $
+		[ Param (repoLoc repo) ]
+		++ map keepParam kp
+	-- borg compact is needed after version 1.2 to actually free
+	-- pruned space, but is not supported by older versions.
+	compactCommand = "(" ++ unwords ("borg" : compactCommandParams)
+		++ " 2>/dev/null || true)"
+	compactCommandParams = 
+		map shellEscape $ toCommand $ runBorgParam repo "compact" $
+			[ Param (repoLoc repo) ]
 
 -- | Constructs an BorgParam that specifies which old backup generations to
 -- keep. By default, all generations are kept. However, when this parameter is
 -- passed to the `backup` property, it will run borg prune to clean out
 -- generations not specified here.
-keepParam :: KeepPolicy -> BorgParam
-keepParam (KeepHours n) = "--keep-hourly=" ++ val n
-keepParam (KeepDays n) = "--keep-daily=" ++ val n
-keepParam (KeepWeeks n) = "--keep-daily=" ++ val n
-keepParam (KeepMonths n) = "--keep-monthly=" ++ val n
-keepParam (KeepYears n) = "--keep-yearly=" ++ val n
+keepParam :: KeepPolicy -> CommandParam
+keepParam (KeepHours n) = Param ("--keep-hourly=" ++ val n)
+keepParam (KeepDays n) = Param ("--keep-daily=" ++ val n)
+keepParam (KeepWeeks n) = Param ("--keep-daily=" ++ val n)
+keepParam (KeepMonths n) = Param ("--keep-monthly=" ++ val n)
+keepParam (KeepYears n) = Param ("--keep-yearly=" ++ val n)
 
 -- | Policy for backup generations to keep. For example, KeepDays 30 will
 -- keep the latest backup for each day when a backup was made, and keep the
@@ -195,3 +271,13 @@ data KeepPolicy
 	| KeepWeeks Int
 	| KeepMonths Int
 	| KeepYears Int
+
+-- | Construct the encryption type parameter.
+encParam :: BorgEnc -> CommandParam
+encParam BorgEncNone = Param "--encryption=none"
+encParam BorgEncAuthenticated = Param "--encryption=authenticated"
+encParam BorgEncAuthenticatedBlake2 = Param "--encryption=authenticated-blake2"
+encParam BorgEncRepokey = Param "--encryption=repokey"
+encParam BorgEncRepokeyBlake2 = Param "--encryption=repokey-blake2"
+encParam BorgEncKeyfile = Param "--encryption=keyfile"
+encParam BorgEncKeyfileBlake2 = Param "--encryption=keyfile-blake2"

@@ -6,7 +6,7 @@ module Propellor.CmdLine (
 import System.Environment (getArgs)
 import Data.List
 import System.Exit
-import System.PosixCompat
+import System.Posix.User
 import Network.Socket
 
 import Propellor.Base
@@ -129,7 +129,7 @@ defaultMain hostlist = withConcurrentOutput $ do
 	go _ ListFields = listPrivDataFields hostlist
 	go _ (AddKey keyid) = addKey keyid
 	go _ (RmKey keyid) = rmKey keyid
-	go _ c@(ChrootChain _ _ _ _) = Chroot.chain hostlist c
+	go _ c@(ChrootChain _ _ _ _ _) = Chroot.chain hostlist c
 	go _ (DockerChain hn cid) = Docker.chain hostlist hn cid
 	go _ (DockerInit hn) = Docker.init hn
 	go _ (GitPush fin fout) = gitPushHelper fin fout

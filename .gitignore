@@ -1,7 +1,10 @@
 /propellor
+/propellor.built
 dist/*
 .built/*
+dist-newstyle/*
 tags
+configured
 privdata/local
 privdata/keyring.gpg~
 Setup
@@ -18,4 +21,5 @@ cabal.sandbox.config
 .cabal-sandbox/
 .dir-locals.el
 cabal.sandbox.config
+cabal.project.local
 *~

@@ -4,7 +4,7 @@ import Propellor.Base
 import Utility.UserInfo
 import Utility.FileSystemEncoding
 
-import System.PosixCompat
+import System.Posix
 import Data.Time.Clock.POSIX
 import Data.Hashable
 
@@ -19,7 +19,7 @@ sshCachingParams :: HostName -> IO [CommandParam]
 sshCachingParams hn = do
 	home <- myHomeDir
 	let socketfile = socketFile home hn
-	createDirectoryIfMissing False (takeDirectory socketfile)
+	createDirectoryIfMissing True (takeDirectory socketfile)
 	let ps =
 		[ Param "-o"
 		, Param ("ControlPath=" ++ socketfile)

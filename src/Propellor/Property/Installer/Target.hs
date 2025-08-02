@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators, RankNTypes, TypeFamilies, FlexibleContexts #-}
 
 -- | Installation to a target disk.
 -- 
@@ -24,6 +24,7 @@
 -- > seed ver = host "debian.local" $ props
 -- > 	& osDebian Unstable X86_64
 -- > 	& Hostname.sane
+-- >	& Hostname.mailname
 -- > 	& Apt.stdSourcesList
 -- > 	& Apt.installed ["linux-image-amd64"]
 -- > 	& Grub.installed PC

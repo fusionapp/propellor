@@ -1,11 +1,11 @@
 Name: propellor
-Version: 5.4.1
+Version: 5.17
 Cabal-Version: 1.20
 License: BSD2
 Maintainer: Joey Hess <id@joeyh.name>
 Author: Joey Hess
 Stability: Stable
-Copyright: 2014 Joey Hess
+Copyright: 2014-2023 Joey Hess
 License-File: LICENSE
 Build-Type: Simple
 Homepage: https://propellor.branchable.com/
@@ -35,21 +35,29 @@ Description:
  .
  It is configured using haskell.
 
+Flag WithTypeErrors
+  Description: Build with type-errors library for better error messages
+
 Library
-  Default-Language: Haskell98
+  Default-Language: Haskell2010
   GHC-Options: -Wall -fno-warn-tabs -O0
-  if impl(ghc >= 8.0)
-    GHC-Options: -fno-warn-redundant-constraints
   Default-Extensions: TypeOperators
   Hs-Source-Dirs: src
   Build-Depends:
     -- propellor needs to support the ghc shipped in Debian stable,
     -- and also only depends on packages in Debian stable.
     base >= 4.9, base < 5,
-    directory, filepath, IfElse, process, bytestring, hslogger, split,
-    unix, unix-compat, ansi-terminal, containers (>= 0.5), network, async,
-    time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable,
-    template-haskell, file-embed
+    --directory, filepath, IfElse, process, bytestring, hslogger, split,
+    --unix, unix-compat, ansi-terminal, containers (>= 0.5), network, async,
+    --time, mtl, transformers, exceptions (>= 0.6), stm, text, hashable,
+    --template-haskell, file-embed
+    directory, filepath, IfElse, process, bytestring, hslogger,
+    split (>= 0.2.0.0), unix, unix-compat, ansi-terminal, containers (>= 0.5),
+    network, async (>= 2.0.0.0), time, mtl, transformers, exceptions (>= 0.6),
+    stm, text, hashable
+  if flag(WithTypeErrors)
+    Build-Depends: type-errors
+    CPP-Options: -DWITH_TYPE_ERRORS
 
   Exposed-Modules:
     Propellor
@@ -102,8 +110,10 @@ Library
     Propellor.Property.Kerberos
     Propellor.Property.Laptop
     Propellor.Property.LetsEncrypt
+    Propellor.Property.Libvirt
     Propellor.Property.List
     Propellor.Property.LightDM
+    Propellor.Property.Localdir
     Propellor.Property.Locale
     Propellor.Property.Logcheck
     Propellor.Property.Lvm
@@ -112,7 +122,6 @@ Library
     Propellor.Property.Network
     Propellor.Property.Nginx
     Propellor.Property.Obnam
-    Propellor.Property.OpenId
     Propellor.Property.Openssl
     Propellor.Property.OS
     Propellor.Property.Pacman
@@ -120,7 +129,6 @@ Library
     Propellor.Property.Parted.Types
     Propellor.Property.Partition
     Propellor.Property.Postfix
-    Propellor.Property.PropellorRepo
     Propellor.Property.Prosody
     Propellor.Property.Qemu
     Propellor.Property.Reboot
@@ -145,7 +153,6 @@ Library
     Propellor.Property.ZFS
     Propellor.Property.ZFS.Process
     Propellor.Property.ZFS.Properties
-    Propellor.Property.HostingProvider.CloudAtCost
     Propellor.Property.HostingProvider.DigitalOcean
     Propellor.Property.HostingProvider.Exoscale
     Propellor.Property.HostingProvider.Linode
@@ -203,7 +210,11 @@ Library
     Utility.Data
     Utility.DataUnits
     Utility.Directory
+    Utility.Directory.Stream
+    Utility.Directory.TestDirectory
     Utility.Env
+    Utility.Env.Basic
+    Utility.Env.Set
     Utility.Exception
     Utility.FileSystemEncoding
     Utility.HumanNumber
@@ -212,18 +223,18 @@ Library
     Utility.Monad
     Utility.Path
     Utility.PartialPrelude
-    Utility.PosixFiles
     Utility.Process
     Utility.Process.Shim
     Utility.Process.NonConcurrent
+    Utility.Process.Transcript
     Utility.SafeCommand
-    Utility.Scheduled
     Utility.Scheduled
     Utility.Split
     Utility.SystemDirectory
     Utility.Table
     Utility.ThreadScheduler
     Utility.Tmp
+    Utility.Tmp.Dir
     Utility.Tuple
     Utility.UserInfo
     System.Console.Concurrent
@@ -232,7 +243,7 @@ Library
     Paths_propellor
 
 Executable propellor-config
-  Default-Language: Haskell98
+  Default-Language: Haskell2010
   Hs-Source-Dirs: executables
   Main-Is: propellor-config.hs
   GHC-Options: -threaded -Wall -fno-warn-tabs
@@ -240,7 +251,7 @@ Executable propellor-config
   Build-Depends: propellor, base, unix
 
 Executable propellor
-  Default-Language: Haskell98
+  Default-Language: Haskell2010
   Hs-Source-Dirs: executables
   Main-Is: wrapper.hs
   GHC-Options: -threaded -Wall -fno-warn-tabs

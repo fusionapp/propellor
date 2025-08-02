@@ -23,7 +23,7 @@ module Propellor.Types.OS (
 
 import Propellor.Types.ConfigurableValue
 
-import Network.BSD (HostName)
+import Network.Socket (HostName)
 import Data.Typeable
 import Data.String
 
@@ -59,7 +59,7 @@ data DebianKernel = Linux | KFreeBSD | Hurd
 	deriving (Show, Eq)
 
 -- | Debian has several rolling suites, and a number of stable releases,
--- such as Stable "stretch".
+-- such as Stable "bookworm".
 data DebianSuite = Experimental | Unstable | Testing | Stable Release
 	deriving (Show, Eq)
 

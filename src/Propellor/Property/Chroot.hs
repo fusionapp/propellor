@@ -9,8 +9,8 @@ module Propellor.Property.Chroot (
 	ChrootBootstrapper(..),
 	Debootstrapped(..),
 	ChrootTarball(..),
-	inChroot,
 	exposeTrueLocaldir,
+	useHostProxy,
 	-- * Internal use
 	provisioned',
 	propagateChrootInfo,
@@ -23,9 +23,11 @@ import Propellor.Base
 import Propellor.Container
 import Propellor.Types.CmdLine
 import Propellor.Types.Chroot
+import Propellor.Types.Container
 import Propellor.Types.Info
 import Propellor.Types.Core
 import Propellor.Property.Chroot.Util
+import qualified Propellor.Property.Apt as Apt
 import qualified Propellor.Property.Debootstrap as Debootstrap
 import qualified Propellor.Property.Systemd.Core as Systemd
 import qualified Propellor.Property.File as File
@@ -60,7 +62,11 @@ class ChrootBootstrapper b where
 	-- | Do initial bootstrapping of an operating system in a chroot.
 	-- If the operating System is not supported, return
 	-- Left error message.
-	buildchroot :: b -> Maybe System -> FilePath -> Either String (Property Linux)
+	buildchroot 
+		:: b
+		-> Info -- ^ info of the Properties of the chroot
+		-> FilePath -- ^ where to bootstrap the chroot
+		-> Either String (Property Linux)
 
 -- | Use this to bootstrap a chroot by extracting a tarball.
 --
@@ -91,20 +97,39 @@ extractTarball target src = check (isUnpopulated target) $
 data Debootstrapped = Debootstrapped Debootstrap.DebootstrapConfig
 
 instance ChrootBootstrapper Debootstrapped where
-	buildchroot (Debootstrapped cf) system loc = case system of
+	buildchroot (Debootstrapped cf) info loc = case system of
 		(Just s@(System (Debian _ _) _)) -> Right $ debootstrap s
 		(Just s@(System (Buntish _) _)) -> Right $ debootstrap s
 		(Just (System ArchLinux _)) -> Left "Arch Linux not supported by debootstrap."
 		(Just (System (FreeBSD _) _)) -> Left "FreeBSD not supported by debootstrap."
 		Nothing -> Left "Cannot debootstrap; OS not specified"
 	  where
-		debootstrap s = Debootstrap.built loc s cf
+		debootstrap s = Debootstrap.built loc s
+			(cf <> proxyConf <> mirrorConf)
+		system = fromInfoVal (fromInfo info)
+		-- If the chroot has a configured apt proxy and/or mirror, pass
+		-- these on to debootstrap.  Note that Debootstrap.built does
+		-- not get passed the Chroot, so the info inspection has to
+		-- happen here, not there
+		proxyConf = case (fromInfoVal . fromInfo) info of
+			Just (Apt.HostAptProxy u) ->
+				Debootstrap.DebootstrapProxy u
+			Nothing -> mempty
+		mirrorConf = case (fromInfoVal . fromInfo) info of
+			Just (Apt.HostMirror u) ->
+				Debootstrap.DebootstrapMirror u
+			Nothing -> mempty
 
 -- | Defines a Chroot at the given location, built with debootstrap.
 --
 -- Properties can be added to configure the Chroot. At a minimum,
 -- add a property such as `osDebian` to specify the operating system
 -- to bootstrap.
+--
+-- If the 'Debootstrap.DebootstrapConfig' does not include a 
+-- 'Debootstrap.DebootstrapMirror',
+-- any 'Apt.mirror' property of the chroot will configure debootstrap.
+-- Same for 'Debootstrap.DebootstrapProxy' and 'Apt.proxy'.
 --
 -- > debootstrapped Debootstrap.BuildD "/srv/chroot/ghc-dev" $ props
 -- >	& osDebian Unstable X86_64
@@ -115,6 +140,10 @@ debootstrapped conf = bootstrapped (Debootstrapped conf)
 
 -- | Defines a Chroot at the given location, bootstrapped with the
 -- specified ChrootBootstrapper.
+--
+-- Like 'Chroot.debootstrapped', if the 'ChrootBootstrapper' is
+-- 'Debootstrapped', this property respects the Chroot's
+-- 'Apt.proxy' and 'Apt.mirror' properties.
 bootstrapped :: ChrootBootstrapper b => b -> FilePath -> Props metatypes -> Chroot
 bootstrapped bootstrapper location ps = c
   where
@@ -127,22 +156,23 @@ bootstrapped bootstrapper location ps = c
 -- is first unmounted. Note that it does not ensure that any processes
 -- that might be running inside the chroot are stopped.
 provisioned :: Chroot -> RevertableProperty (HasInfo + Linux) Linux
-provisioned c = provisioned' c False
+provisioned c = provisioned' c False [FilesystemContained]
 
 provisioned'
 	:: Chroot
 	-> Bool
+	-> [ContainerCapability]
 	-> RevertableProperty (HasInfo + Linux) Linux
-provisioned' c@(Chroot loc bootstrapper infopropigator _) systemdonly =
+provisioned' c@(Chroot loc bootstrapper infopropigator _) systemdonly caps =
 	(infopropigator c normalContainerInfo $ setup `describe` chrootDesc c "exists")
 		<!>
 	(teardown `describe` chrootDesc c "removed")
   where
 	setup :: Property Linux
-	setup = propellChroot c (inChrootProcess (not systemdonly) c) systemdonly
+	setup = propellChroot c (inChrootProcess (not systemdonly) c) systemdonly caps
 		`requires` built
 
-	built = case buildchroot bootstrapper (chrootSystem c) loc of
+	built = case buildchroot bootstrapper (containerInfo c) loc of
 		Right p -> p
 		Left e -> cantbuild e
 
@@ -165,8 +195,8 @@ chrootInfo (Chroot loc _ _ h) = mempty `addInfo`
 	mempty { _chroots = M.singleton loc h }
 
 -- | Propellor is run inside the chroot to provision it.
-propellChroot :: Chroot -> ([String] -> IO (CreateProcess, IO ())) -> Bool -> Property UnixLike
-propellChroot c@(Chroot loc _ _ _) mkproc systemdonly = property (chrootDesc c "provisioned") $ do
+propellChroot :: Chroot -> ([String] -> IO (CreateProcess, IO ())) -> Bool -> [ContainerCapability] -> Property UnixLike
+propellChroot c@(Chroot loc _ _ _) mkproc systemdonly caps = property (chrootDesc c "provisioned") $ do
 	let d = localdir </> shimdir c
 	let me = localdir </> "propellor"
 	shim <- liftIO $ Shim.setup me Nothing d
@@ -188,7 +218,7 @@ propellChroot c@(Chroot loc _ _ _) mkproc systemdonly = property (chrootDesc c "
 
 	chainprovision shim = do
 		parenthost <- asks hostName
-		cmd <- liftIO $ toChain parenthost c systemdonly
+		cmd <- liftIO $ toChain parenthost c systemdonly caps
 		pe <- liftIO standardPathEnv
 		(p, cleanup) <- liftIO $ mkproc
 			[ shim
@@ -199,13 +229,13 @@ propellChroot c@(Chroot loc _ _ _) mkproc systemdonly = property (chrootDesc c "
 		liftIO cleanup
 		return r
 
-toChain :: HostName -> Chroot -> Bool -> IO CmdLine
-toChain parenthost (Chroot loc _ _ _) systemdonly = do
+toChain :: HostName -> Chroot -> Bool -> [ContainerCapability] -> IO CmdLine
+toChain parenthost (Chroot loc _ _ _) systemdonly caps = do
 	onconsole <- isConsole <$> getMessageHandle
-	return $ ChrootChain parenthost loc systemdonly onconsole
+	return $ ChrootChain parenthost loc systemdonly onconsole caps
 
 chain :: [Host] -> CmdLine -> IO ()
-chain hostlist (ChrootChain hn loc systemdonly onconsole) =
+chain hostlist (ChrootChain hn loc systemdonly onconsole caps) =
 	case findHostNoAlias hostlist hn of
 		Nothing -> errorMessage ("cannot find host " ++ hn)
 		Just parenthost -> case M.lookup loc (_chroots $ fromInfo $ hostInfo parenthost) of
@@ -216,11 +246,12 @@ chain hostlist (ChrootChain hn loc systemdonly onconsole) =
 		changeWorkingDirectory localdir
 		when onconsole forceConsole
 		onlyProcess (provisioningLock loc) $
-			runChainPropellor (setInChroot h) $
+			runChainPropellor (setcaps h) $
 				ensureChildProperties $
 					if systemdonly
 						then [toChildProperty Systemd.installed]
 						else hostProperties h
+	setcaps h = h { hostInfo = hostInfo h `addInfo` caps }
 chain _ _ = errorMessage "bad chain command"
 
 inChrootProcess :: Bool -> Chroot -> [String] -> IO (CreateProcess, IO ())
@@ -252,21 +283,6 @@ mungeloc = replace "/" "_"
 chrootDesc :: Chroot -> String -> String
 chrootDesc (Chroot loc _ _ _) desc = "chroot " ++ loc ++ " " ++ desc
 
--- | Check if propellor is currently running within a chroot.
---
--- This allows properties to check and avoid performing actions that
--- should not be done in a chroot.
-inChroot :: Propellor Bool
-inChroot = extract . fromMaybe (InChroot False) . fromInfoVal <$> askInfo
-  where
-	extract (InChroot b) = b
-
-setInChroot :: Host -> Host
-setInChroot h = h { hostInfo = hostInfo h `addInfo` InfoVal (InChroot True) }
-
-newtype InChroot = InChroot Bool
-	deriving (Typeable, Show)
-
 -- | Runs an action with the true localdir exposed,
 -- not the one bind-mounted into a chroot. The action is passed the
 -- path containing the contents of the localdir outside the chroot.
@@ -276,7 +292,7 @@ newtype InChroot = InChroot Bool
 -- we unmount the localdir to expose the true localdir. Finally, to cleanup,
 -- the temp directory is bind mounted back to the localdir.
 exposeTrueLocaldir :: (FilePath -> Propellor a) -> Propellor a
-exposeTrueLocaldir a = ifM inChroot
+exposeTrueLocaldir a = ifM (hasContainerCapability FilesystemContained)
 	( withTmpDirIn (takeDirectory localdir) "propellor.tmp" $ \tmpdir ->
 		bracket_
 			(movebindmount localdir tmpdir)
@@ -317,3 +333,18 @@ propagateHostChrootInfo :: Host -> InfoPropagator
 propagateHostChrootInfo h c pinfo p =
 	propagateContainer (hostName h) c pinfo $
 		p `setInfoProperty` chrootInfo c
+
+-- | Ensure that a chroot uses the host's Apt proxy.
+--
+-- This property is often used for 'Sbuild.built' chroots, when the host has
+-- 'Apt.useLocalCacher'.
+useHostProxy :: Host -> Property DebianLike
+useHostProxy h = property' "use host's apt proxy" $ \w ->
+	-- Note that we can't look at getProxyInfo outside the property,
+	-- as that would loop, but it's ok to look at it inside the
+	-- property. Thus the slightly strange construction here.
+	case getProxyInfo h of
+		Just (Apt.HostAptProxy u) -> ensureProperty w (Apt.proxy' u)
+		Nothing -> noChange
+  where
+	getProxyInfo = fromInfoVal . fromInfo . hostInfo

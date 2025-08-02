@@ -40,9 +40,9 @@ import qualified Propellor.Property.Service as Service
 import qualified Propellor.Property.Apt as Apt
 import Propellor.Property.User
 import Propellor.Types.Info
-import Utility.FileMode
 
-import System.PosixCompat
+import System.Posix.User
+import System.Posix.Files
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Semigroup as Sem
@@ -280,9 +280,12 @@ userKeys user@(User name) context ks = combineProperties desc $ toProps $
 -- | Sets up a user with the specified pubic key, and a private
 -- key from the privdata.
 --
--- A file can be specified to write the key to somewhere other than
+-- A FilePath can be specified to write the key to somewhere other than
 -- the default locations. Allows a user to have multiple keys for
 -- different roles.
+--
+-- When the FilePath is relative, is put inside the User's 
+-- ~/.ssh/ directory.
 userKeyAt :: IsContext c => Maybe FilePath -> User -> c -> (SshKeyType, PubKeyText) -> Property (HasInfo + UnixLike)
 userKeyAt dest user@(User u) context (keytype, pubkeytext) =
 	combineProperties desc $ props
@@ -307,14 +310,18 @@ userKeyAt dest user@(User u) context (keytype, pubkeytext) =
 	installprop writer ext key = do
 		f <- liftIO $ keyfile ext
 		return $ combineProperties desc $ props
+			& File.dirExists (takeDirectory f)
 			& writer f (keyFileContent key)
 			& File.ownerGroup f user (userGroup user)
 			& File.ownerGroup (takeDirectory f) user (userGroup user)
 	keyfile ext = case dest of
-		Nothing -> do
-			home <- homeDirectory <$> getUserEntryForName u
-			return $ home </> ".ssh" </> "id_" ++ fromKeyType keytype ++ ext
-		Just f -> return $ f ++ ext
+		Nothing -> relhomessh $ "id_" ++ fromKeyType keytype ++ ext
+		Just f
+			| isRelative f -> relhomessh (f ++ ext)
+			| otherwise -> return (f ++ ext)
+	relhomessh f = do
+		home <- homeDirectory <$> getUserEntryForName u
+		return $ home </> ".ssh" </> f
 
 fromKeyType :: SshKeyType -> String
 fromKeyType SshRsa = "rsa"

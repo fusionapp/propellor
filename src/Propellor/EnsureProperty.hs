@@ -1,14 +1,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Propellor.EnsureProperty
 	( ensureProperty
 	, property'
-	, OuterMetaTypesWitness(..)
-	, Cannot_ensureProperty_WithInfo
+	, OuterMetaTypesWitness
+	, EnsurePropertyAllowed
 	) where
 
 import Propellor.Types
@@ -16,6 +17,9 @@ import Propellor.Types.Core
 import Propellor.Types.MetaTypes
 import Propellor.Exception
 
+import GHC.TypeLits
+import GHC.Exts (Constraint)
+import Data.Type.Bool
 import Data.Monoid
 import Prelude
 
@@ -41,19 +45,40 @@ ensureProperty
 		-- -Wredundant-constraints is turned off because
 		-- this constraint appears redundant, but is actually
 		-- crucial.
-		( Cannot_ensureProperty_WithInfo inner ~ 'True
-		, (Targets inner `NotSuperset` Targets outer) ~ 'CanCombine
-		)
+		( EnsurePropertyAllowed inner outer)
 	=> OuterMetaTypesWitness outer
 	-> Property (MetaTypes inner)
 	-> Propellor Result
 ensureProperty _ = maybe (return NoChange) catchPropellor . getSatisfy
 
--- The name of this was chosen to make type errors a bit more understandable.
-type family Cannot_ensureProperty_WithInfo (l :: [a]) :: Bool where
-	Cannot_ensureProperty_WithInfo '[] = 'True
-	Cannot_ensureProperty_WithInfo (t ': ts) =
-		Not (t `EqT` 'WithInfo) && Cannot_ensureProperty_WithInfo ts
+type family EnsurePropertyAllowed inner outer :: Constraint where
+	EnsurePropertyAllowed inner outer = 'True ~
+		((EnsurePropertyNoInfo inner)
+			&&
+		(EnsurePropertyTargetOSMatches inner outer))
+
+type family EnsurePropertyNoInfo (l :: [a]) :: Bool where
+	EnsurePropertyNoInfo '[] = 'True
+	EnsurePropertyNoInfo (t ': ts) = If (Not (t `EqT` 'WithInfo))
+		(EnsurePropertyNoInfo ts)
+		(TypeError ('Text "Cannot use ensureProperty with a Property that HasInfo."))
+
+type family EnsurePropertyTargetOSMatches inner outer where
+	EnsurePropertyTargetOSMatches inner outer = 
+		If (Targets outer `IsSubset` Targets inner)
+			'True
+			(IfStuck (Targets outer)
+				(DelayError
+					('Text "ensureProperty outer Property type is not able to be inferred here."
+					 ':$$: 'Text "Consider adding a type annotation."
+					)
+				)
+				(DelayErrorFcf
+					('Text "ensureProperty inner Property is missing support for: "
+					 ':$$: PrettyPrintMetaTypes (Difference (Targets outer) (Targets inner))
+					)
+				)
+			)
 
 -- | Constructs a property, like `property`, but provides its
 -- `OuterMetaTypesWitness`.

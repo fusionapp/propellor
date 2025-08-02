@@ -16,6 +16,7 @@ import qualified Propellor.Property.File as File
 import qualified Propellor.Property.Service as Service
 import Propellor.Property.File (Line)
 import Propellor.Types.Info
+import Utility.SafeCommand
 
 data HostMirror = HostMirror Url
 	deriving (Eq, Show, Typeable)
@@ -81,8 +82,26 @@ srcLine l = case words l of
 	("deb":rest) -> unwords $ "deb-src" : rest
 	_ -> ""
 
-stdSections :: [Section]
-stdSections = ["main", "contrib", "non-free"]
+stdSections :: DebianSuite -> [Section]
+stdSections s = ["main", "contrib", "non-free"] ++ case s of
+	Stable r | r `elem` oldstables -> []
+	-- Suite added in debian bookworm.
+	_ -> ["non-free-firmware"]
+  where
+	oldstables = 
+		[ "bullseye"
+		, "buster"
+		, "stretch"
+		, "jessie"
+		, "wheezy"
+		, "lenny"
+		, "etch"
+		, "sarge"
+		, "woody"
+		, "potato"
+		, "slink"
+		, "hamm"
+		]
 
 binandsrc :: String -> SourcesGenerator
 binandsrc url suite = catMaybes
@@ -94,25 +113,31 @@ binandsrc url suite = catMaybes
 	, srcLine <$> bl
 	]
   where
-	l = debLine (showSuite suite) url stdSections
+	l = debLine (showSuite suite) url (stdSections suite)
 	bl = do
 		bs <- backportSuite suite
-		return $ debLine bs url stdSections
+		return $ debLine bs url (stdSections suite)
 	-- formerly known as 'volatile'
 	sul = do
 		sus <- stableUpdatesSuite suite
-		return $ debLine sus url stdSections
+		return $ debLine sus url (stdSections suite)
 
 stdArchiveLines :: Propellor SourcesGenerator
 stdArchiveLines = return . binandsrc =<< getMirror
 
--- | Only available for Stable and Testing
+-- | Only available for Stable suites, not for Testing or Unstable.
 securityUpdates :: SourcesGenerator
 securityUpdates suite
-	| isStable suite || suite == Testing =
-		let l = "deb http://security.debian.org/ " ++ showSuite suite ++ "/updates " ++ unwords stdSections
+	| isStable suite =
+		let l = "deb http://security.debian.org/debian-security " ++ securitysuite ++ " " ++ unwords (stdSections suite)
 		in [l, srcLine l]
 	| otherwise = []
+  where
+	securitysuite
+		| suite `elem` map Stable releasesusingoldname =
+			showSuite suite ++ "/updates"
+		| otherwise = showSuite suite ++ "-security"
+	releasesusingoldname = ["jessie", "buster", "stretch"]
 
 -- | Makes sources.list have a standard content using the Debian mirror CDN
 -- (or other host specified using the `mirror` property), with the
@@ -207,10 +232,21 @@ noninteractiveEnv =
 
 -- | Have apt update its lists of packages, but without upgrading anything.
 update :: Property DebianLike
-update = combineProperties ("apt update") $ props
+update = combineProperties desc $ props
 	& pendingConfigured
-	& runApt ["update"]
-		`assume` MadeChange
+	& aptupdate
+  where
+	desc = "apt update"
+	aptupdate :: Property DebianLike
+	aptupdate = withOS desc $ \w o -> case o of
+		(Just (System (Debian _ suite) _))
+			| not (isStable suite) -> ensureProperty w $
+				-- rolling suites' release info can change
+				runApt ["update", "--allow-releaseinfo-change"]
+					`assume` MadeChange
+		_ -> ensureProperty w $ 
+			runApt ["update"]
+				`assume` MadeChange
 
 -- | Have apt upgrade packages, adding new packages and removing old as
 -- necessary. Often used in combination with the `update` property.
@@ -241,6 +277,10 @@ type Package = String
 installed :: [Package] -> Property DebianLike
 installed = installed' ["-y"]
 
+-- | Minimal install of package, without recommends.
+installedMin :: [Package] -> Property DebianLike
+installedMin = installed' ["--no-install-recommends", "-y"]
+
 installed' :: [String] -> [Package] -> Property DebianLike
 installed' params ps = robustly $ check (not <$> isInstalled' ps) go
 	`describe` unwords ("apt installed":ps)
@@ -253,19 +293,22 @@ installed' params ps = robustly $ check (not <$> isInstalled' ps) go
 -- dependencies from stable-backports too, you will need to include those
 -- dependencies in the list of packages passed to this function.
 backportInstalled :: [Package] -> Property Debian
-backportInstalled ps = withOS desc $ \w o -> case o of
+backportInstalled = backportInstalled' ["-y"]
+
+-- | Minimal install from the stable-backports suite, without recommends.
+backportInstalledMin :: [Package] -> Property Debian
+backportInstalledMin = backportInstalled' ["--no-install-recommends", "-y"]
+
+backportInstalled' :: [String] -> [Package] -> Property Debian
+backportInstalled' params ps = withOS desc $ \w o -> case o of
 	(Just (System (Debian _ suite) _)) -> case backportSuite suite of
 		Nothing -> unsupportedOS'
 		Just bs -> ensureProperty w $
-			runApt (["install", "-y"] ++ ((++ '/':bs) <$> ps))
+			runApt (("install":params) ++ ((++ '/':bs) <$> ps))
 				`changesFile` dpkgStatus
 	_ -> unsupportedOS'
   where
 	desc = unwords ("apt installed backport":ps)
-
--- | Minimal install of package, without recommends.
-installedMin :: [Package] -> Property DebianLike
-installedMin = installed' ["--no-install-recommends", "-y"]
 
 removed :: [Package] -> Property DebianLike
 removed ps = check (any (== IsInstalled) <$> getInstallStatus ps)
@@ -283,11 +326,22 @@ buildDep ps = robustly $ go
 -- in the specifed directory, with a dummy package also
 -- installed so that autoRemove won't remove them.
 buildDepIn :: FilePath -> Property DebianLike
-buildDepIn dir = cmdPropertyEnv "sh" ["-c", cmd] noninteractiveEnv
+buildDepIn dir = go
 	`changesFile` dpkgStatus
 	`requires` installedMin ["devscripts", "equivs"]
   where
-	cmd = "cd '" ++ dir ++ "' && mk-build-deps debian/control --install --tool 'apt-get -y --no-install-recommends' --remove"
+	-- mk-build-deps may leave files behind sometimes, eg on failure,
+	-- so run it in a temp directory, passing the path to the control
+	-- file
+	go :: UncheckedProperty DebianLike
+	go = unchecked $ property ("build-dep in " ++ dir) $ liftIO $
+		withTmpDir "build-dep" $ \tmpdir -> do
+			cmdResult <$> boolSystem' "mk-build-deps"
+				[ File $ dir </> "debian" </> "control"
+				, Param "--install"
+				, Param "--tool"
+				, Param "apt-get -y --no-install-recommends"
+				] (\p -> p { cwd = Just tmpdir })
 
 -- | The name of a package, a glob to match the names of packages, or a regexp
 -- surrounded by slashes to match the names of packages.  See

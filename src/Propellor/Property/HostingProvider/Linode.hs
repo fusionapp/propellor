@@ -3,7 +3,6 @@ module Propellor.Property.HostingProvider.Linode where
 import Propellor.Base
 import qualified Propellor.Property.Grub as Grub
 import qualified Propellor.Property.File as File
-import Utility.FileMode
 
 -- | Configures grub to use the serial console as set up by Linode.
 -- Useful when running a distribution supplied kernel.
@@ -26,9 +25,14 @@ chainPVGrub :: Grub.TimeoutSecs -> Property (HasInfo + DebianLike)
 chainPVGrub = Grub.chainPVGrub "hd0" "xen/xvda"
 
 -- | Linode disables mlocate's cron job's execute permissions,
--- presumably to avoid disk IO. This ensures it's executable.
-mlocateEnabled :: Property DebianLike
-mlocateEnabled = tightenTargets $
-	"/etc/cron.daily/mlocate"
-		`File.mode` combineModes (readModes ++ executeModes)
-
+-- presumably to avoid disk IO. This ensures it's executable,
+-- if it's installed. It does the same for its replacement plocate,
+-- in cae Linode starts messing with that.
+locateEnabled :: Property DebianLike
+locateEnabled = tightenTargets $
+	propertyList "locate enabled" $ props
+		& go "/etc/cron.daily/mlocate"
+		& go "/etc/cron.daily/plocate"
+  where
+	go f = check (doesFileExist f)
+			(f `File.mode` combineModes (readModes ++ executeModes))

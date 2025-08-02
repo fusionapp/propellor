@@ -81,12 +81,20 @@ buildCommand bs = intercalate " && " (go (getBuilder bs))
 	go Cabal =
 		[ "cabal configure"
 		, "cabal build -j1 propellor-config"
-		, "ln -sf dist/build/propellor-config/propellor-config propellor"
+		, "ln -sf" `commandCabalBuildTo` "propellor"
 		]
 	go Stack =
 		[ "stack build :propellor-config"
 		, "ln -sf $(stack path --dist-dir)/build/propellor-config/propellor-config propellor"
 		]
+
+commandCabalBuildTo :: ShellCommand -> FilePath -> ShellCommand
+commandCabalBuildTo cmd dest = intercalate "; "
+	[ "if [ -d dist-newstyle ]"
+	, "then " ++ cmd ++ " $(cabal exec -- sh -c 'command -v propellor-config') " ++ shellEscape dest
+	, "else " ++ cmd ++ " dist/build/propellor-config/propellor-config " ++ shellEscape dest
+	, "fi"
+	]
 
 -- Check if all dependencies are installed; if not, run the depsCommand.
 checkDepsCommand :: Bootstrapper -> Maybe System -> ShellCommand
@@ -94,6 +102,8 @@ checkDepsCommand bs sys = go (getBuilder bs)
   where
 	go Cabal = "if ! cabal configure >/dev/null 2>&1; then " ++ depsCommand bs sys ++ "; fi"
 	go Stack = "if ! stack build --dry-run >/dev/null 2>&1; then " ++ depsCommand bs sys ++ "; fi"
+
+data Dep = Dep String | OptDep String | OldDep String
 
 -- Install build dependencies of propellor, using the specified
 -- Bootstrapper.
@@ -128,32 +138,37 @@ depsCommand bs msys = "( " ++ intercalate " ; " (go bs) ++ ") || true"
 
 	useapt builder = "apt-get update" : map aptinstall (debdeps builder)
 
-	aptinstall p = "DEBIAN_FRONTEND=noninteractive apt-get -qq --no-upgrade --no-install-recommends -y install " ++ p
+	aptinstall (Dep p) = "DEBIAN_FRONTEND=noninteractive apt-get -qq --no-upgrade --no-install-recommends -y install " ++ p
+	aptinstall (OptDep p) = "if LANG=C apt-cache policy " ++ p ++ "| grep -q Candidate:; then " ++ aptinstall (Dep p) ++ "; fi"
+	aptinstall (OldDep p) = aptinstall (OptDep p)
 	pkginstall p = "ASSUME_ALWAYS_YES=yes pkg install " ++ p
 	pacmaninstall p = "pacman -S --noconfirm --needed " ++ p
 
 	debdeps Cabal =
-		[ "gnupg"
+		[ Dep "gnupg"
 		-- Below are the same deps listed in debian/control.
-		, "ghc"
-		, "cabal-install"
-		, "libghc-async-dev"
-		, "libghc-split-dev"
-		, "libghc-hslogger-dev"
-		, "libghc-unix-compat-dev"
-		, "libghc-ansi-terminal-dev"
-		, "libghc-ifelse-dev"
-		, "libghc-network-dev"
-		, "libghc-mtl-dev"
-		, "libghc-transformers-dev"
-		, "libghc-exceptions-dev"
-		, "libghc-stm-dev"
-		, "libghc-text-dev"
-		, "libghc-hashable-dev"
+		, Dep "ghc"
+		, Dep "cabal-install"
+		, Dep "libghc-async-dev"
+		, Dep "libghc-split-dev"
+		, Dep "libghc-hslogger-dev"
+		, Dep "libghc-unix-compat-dev"
+		, Dep "libghc-ansi-terminal-dev"
+		, Dep "libghc-ifelse-dev"
+		, Dep "libghc-network-dev"
+		, Dep "libghc-mtl-dev"
+		, Dep "libghc-transformers-dev"
+		, Dep "libghc-exceptions-dev"
+		, Dep "libghc-text-dev"
+		, Dep "libghc-hashable-dev"
+		-- Deps that can be skipped on old systems.
+		, OptDep "libghc-type-errors-dev"
+		-- Deps that are only needed on old systems.
+		, OldDep "libghc-stm-dev"
 		]
 	debdeps Stack =
-		[ "gnupg"
-		, "haskell-stack"
+		[ Dep "gnupg"
+		, Dep "haskell-stack"
 		]
 
 	fbsddeps Cabal =
@@ -196,7 +211,8 @@ depsCommand bs msys = "( " ++ intercalate " ; " (go bs) ++ ") || true"
 		, "haskell-exceptions"
 		, "haskell-stm"
 		, "haskell-text"
-		, "hashell-hashable"
+		, "haskell-hashable"
+		, "haskell-type-errors"
 		]
 	archlinuxdeps Stack = 
 		[ "gnupg"
@@ -252,32 +268,28 @@ buildPropellor mh = unlessM (actionMessage "Propellor build" build) $
 -- dependencies and retries.
 cabalBuild :: Maybe System -> IO Bool
 cabalBuild msys = do
-	make "dist/setup-config" ["propellor.cabal"] cabal_configure
+	make "configured" ["propellor.cabal"] cabal_configure
 	unlessM cabal_build $
 		unlessM (cabal_configure <&&> cabal_build) $
 			error "cabal build failed"
-	-- For safety against eg power loss in the middle of the build,
-	-- make a copy of the binary, and move it into place atomically.
-	-- This ensures that the propellor symlink only ever points at
-	-- a binary that is fully built. Also, avoid ever removing
-	-- or breaking the symlink.
-	--
-	-- Need cp -a to make build timestamp checking work.
-	unlessM (boolSystem "cp" [Param "-af", Param cabalbuiltbin, Param (tmpfor safetycopy)]) $
+	-- Make a copy of the binary, and move it into place atomically.
+	let safetycopy = "propellor.built"
+	let cpcmd = "cp -pfL" `commandCabalBuildTo` safetycopy
+	unlessM (boolSystem "sh" [Param "-c", Param cpcmd]) $
 		error "cp of binary failed"
-	rename (tmpfor safetycopy) safetycopy
-	symlinkPropellorBin safetycopy
+	rename safetycopy "propellor"
 	return True
   where
-	cabalbuiltbin = "dist/build/propellor-config/propellor-config"
-	safetycopy = cabalbuiltbin ++ ".built"
 	cabal_configure = ifM (cabal ["configure"])
-		( return True
+		( do
+			writeFile "configured" ""
+			return True
 		, case msys of
 			Nothing -> return False
 			Just sys ->
 				boolSystem "sh" [Param "-c", Param (depsCommand (Robustly Cabal) (Just sys))]
 					<&&> cabal ["configure"]
+					<&&> (writeFile "configured" "" >> return True)
 		)
 	-- The -j1 is to only run one job at a time -- in some situations,
 	-- eg in qemu, ghc does not run reliably in parallel.

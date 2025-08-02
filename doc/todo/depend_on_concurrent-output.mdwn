@@ -27,3 +27,41 @@ Waiting on concurrent-output reaching Debian stable.
 > from debian. That is a somewhat old version and perhaps it was buggy?
 > However, I have not had any luck reproducing the problem there running
 > readProcess in ghci. --[[Joey]]
+> 
+> > Tried again in 2020, same bugs still happened. On a system running
+> > debian unstable with concurrent-output 1.10.9, and a system running stable that
+> > had cabal installed concurrent-output 1.10.11.
+> > 
+> > The former system (kite) had the strange output problem.
+> > 
+> > The latter system (keysafe) seemed ok but crashed at the end with
+> > a STM transaction deadlock. Seemed to only happen when spinning the
+> > host remotely, or not always; I tried to reproduce it running propellor
+> > manually to bisect concurrent-output but without success.
+> > 
+> > This is really looking like a reversion, or several, in newer
+> > versions of concurrent-output. The code bundled with propellor is
+> > the same as concurrent-output 1.7.4.
+
+> > > I think I've fixed it, concurrent-output (>= 1.10.12 || <= 1.7.4)
+> > > will be needed to avoid the bug. Will be several years until that's
+> > > in debian stable..
+> > > 
+> > > I've updated the embedded concurrent-output copy, and it should
+> > > be kept up-to-date as concurrent-output changes, to avoid more
+> > > such reversions. --[[Joey]]
+
+> > > > Unforunately, the embedded concurrent-output copy had to be
+> > > > downgraded again, because it turns out the new version
+> > > > of concurrent-output depends on process-1.6, while propellor
+> > > > neeeds to also work with older versions.
+> > > >
+> > > > So, propellor will embed the old concurrent-output until
+> > > > process-1.6 is in debian oldstable, and then revert
+> > > > [[!commit 9c08fa24f2e2bf07413b151656c373d873de7298]] and version propellor's dep on process,
+> > > > and then, finally, once concurrent-output 1.10.12 is in oldstable
+> > > > propellor can stop embedding it. --[[Joey]]
+> > > > 
+> > > > > process-1.6 is in ghc-8.2.2, and oldstable (buster) has 8.4.4, so
+> > > > > the above reversion can be done now, as long as it's ok to break
+> > > > > support for oldoldstable (stretch). --[[Joey]]

@@ -1,8 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Propellor.Property.Hostname where
 
 import Propellor.Base
 import qualified Propellor.Property.File as File
-import Propellor.Property.Chroot (inChroot)
+import Propellor.Types.Container
 import Utility.Split
 
 import Data.List
@@ -13,8 +15,6 @@ import Data.List
 -- Configures both </etc/hostname> and the current hostname.
 -- (However, when used inside a chroot, avoids setting the current hostname
 -- as that would impact the system outside the chroot.)
---
--- Configures </etc/mailname> with the domain part of the hostname.
 --
 -- </etc/hosts> is also configured, with an entry for 127.0.1.1, which is
 -- standard at least on Debian to set the FDQN.
@@ -43,17 +43,19 @@ setTo' extractdomain hn = combineProperties desc $ toProps
 			else Just ("127.0.1.1", [hn, basehost])
 		, Just ("127.0.0.1", ["localhost"])
 		]
-	, check (not <$> inChroot) $
+	, check safetochange $
 		cmdProperty "hostname" [basehost]
 			`assume` NoChange
-	, "/etc/mailname" `File.hasContent`
-		[if null domain then hn else domain]
 	]
   where
 	desc = "hostname " ++ hn
 	basehost = takeWhile (/= '.') hn
 	domain = extractdomain hn
 	
+	safetochange = askInfo >>= return . \case
+		[] -> True
+		caps -> HostnameContained `elem` caps
+
 	hostslines ipsnames = 
 		File.fileProperty desc (addhostslines ipsnames) "/etc/hosts"
 	addhostslines :: [(String, [String])] -> [String] -> [String]
@@ -84,6 +86,19 @@ searchDomain' extractdomain = property' desc $ \w ->
 			| "domain " `isPrefixOf` l = False
 			| "search " `isPrefixOf` l = False
 			| otherwise = True
+
+-- Configures </etc/mailname> with the domain part of the hostname of the
+-- `Host` it's used in.
+mailname :: Property UnixLike
+mailname = mailname' extractDomain
+
+mailname' :: ExtractDomain -> Property UnixLike
+mailname' extractdomain = property' ("mailname set from hostname") $ \w ->
+	ensureProperty w . go =<< asks hostName
+  where
+	go mn = "/etc/mailname" `File.hasContent` [if null mn' then mn else mn']
+	  where
+	 	mn' = extractdomain mn
 
 -- | Function to extract the domain name from a HostName.
 type ExtractDomain = HostName -> String

@@ -2,5 +2,6 @@
 resolver: lts-9.21
 packages:
 - '.'
-ghc-options:
-  propellor: -O0
+extra-deps:
+- type-errors-0.1.0.0
+- first-class-families-0.5.0.0
