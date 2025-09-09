@@ -43,6 +43,7 @@ scarlet = host "scarlet.fusionapp.com" $ props
           & File.hasPrivContent "/srv/certs/private/fusiontest.net-fusionca.crt.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/scarlet.fusionapp.com.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-uat.pem" hostContext
+          & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-web-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-uat.pem" hostContext
           & File.hasPrivContent "/srv/certs/private/ariva.pem" (Context "fusion production")
@@ -76,6 +77,7 @@ onyx = host "onyx.fusionapp.com" $ props
        & File.hasPrivContent "/srv/certs/private/prod.fusionapp.com.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-prod.pem" (Context "fusion production")
+       & File.hasPrivContent "/srv/certs/private/sbvaf-fusion-web-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/mfc-fusion-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/mfc-fusion-jwt-prod.pem" (Context "fusion production")
        & File.hasPrivContent "/srv/certs/private/fusiontest.net.pem" (Context "fusion production")
